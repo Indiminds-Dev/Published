@@ -1,0 +1,20 @@
+name: Sync Local Folder
+
+on:
+  push:
+    branches:
+      - main  # Trigger on push to main branch
+  schedule:
+    - cron: '0 * * * *'  # Optional: Run hourly
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Pull Latest Changes
+        run: |
+          git pull origin main
+          echo "Local folder synced with remote repository"

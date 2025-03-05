@@ -1,0 +1,1 @@
+C:\Span4\Bin\spanit.exe C:\influx_installation\Application\ExportFiles\NSE_FILE\SpanScript.txt

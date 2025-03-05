@@ -1,0 +1,1473 @@
+
+ALTER procedure [dbo].[CDSL_VerifyDPAccount]				
+				@CallBy Varchar(100),
+				@FromDate datetime,
+				@ToDate datetime,				
+				@FormNo Varchar(16),				
+				@Company varchar(max),
+				@CDSLXML nVarchar(Max)	
+As
+Begin
+				--============Full XML Node=============================				
+				--RowID,CompanyID,DPID,KRAFormNO,KRAAplicatnNo,ClientType,ClientTypeText,
+				--ClientUCC,BranchID,FinYear,ProductType,
+				--FHlderTitle,FHlderFName,FHlderMName,FHlderLName,FHlderSufx,FHlderFatherName,
+				--FHlderCAdrs1,FHlderCAdrs2,FHlderCAdrs3,FHlderCCity,FHlderCCityText,FHlderCPin,
+				--FHlderCState,FHlderCStateText,FHlderCCountry,FHlderCCountryText,SameAddress,
+				--FHlderPAdrs1,FHlderPAdrs2,FHlderPAdrs3,FHlderPCity,FHlderPCityText,FHlderPPin,
+				--FHlderPState,FHlderPStateText,FHlderPCountry,FHlderPCountryText,
+				--NameAddress,TelOfc,TelRes,FaxNo,MobileNo,EmailID,
+				--FHldrIsPanExmpt,FHlderExmptnType,FHlderPanNo,FHlderPanVerificatn,
+				--FHlderUID,FHlderITCircle,ContactPan,UserFld1,UserFld2,UserFld3,UserFld,
+				--SkipSHlder,SHlderTitle,SHlderFName,SHlderMName,SHlderLName,SHlderSufx,
+				--SHlderFatherName,SHldrIsPanExmpt,SHlderExmptnType,SHlderPanNo,
+				--SHlderPanVerificatn,SHlderUID,SHlderITCircle,SHlder,
+				--SkipTHlder,THlderTitle,THlderFName,THlderMName,THlderLName,THlderSufx,
+				--THlderFatherName,THldrIsPanExmpt,THlderExmptnType,THlderPanNo,THlderPanVerificatn,
+				--THlderUID,THlderITCircle,THlder,DPIntrnlRefNo,MaturityDt,DOB,Gender,GenderText,
+				--Occupation,OccupationText,LifeStyle,GeoCodeText,GeoCodeValue,EducationText,EducationValue,
+				--AnnualIncomeValue,AnnualIncomeText,Nationality,NationalityText,Status,StatusText,
+				--BOFeeType,LanguageText,LanguageValue,Catagory4,Bank5,RelativeText,RelativeValue,
+				--StaffCode,RGESS,AnnualRpt,PSIFlag,ERDFlag,BSDACFlag,SecurityAccessText,SecurityAccessValue,
+				--BOCategoryText,BOCategoryValue,BOSettPlng,DBIFSC,RBIRefNo,RBIAprvlDt,SEBIRegNo,
+				--BenTaxDeductStatusText,BenTaxDeductStatusValue,SmartCardReq,SmartCardNo,SmartCardPin,
+				--ECS,ElectronicCnfrmatn,DividndCurncyText,DividndCurncyValue,GroupCode,
+				--BOSubStatusText,BOSubStatusValue,ClrngCorporatnIDText,ClrngCorporatnIDValue,
+				--ClrngMembrID,StckExchng,ConfrmatnWavd,TradngID,BOStatemntCycleText,BOStatemntCycleValue,
+				--BENFBnkCode,BENFBnkAcTypeText,BENFBnkAcTypeValue,BENFBnkAcNo,BENFBnkCCYText,BENFBnkCCYValue,
+				--DIVNDBnkAcTypeText,DIVNDBnkAcTypeValue,DIVNDBnkCode,DIVNDAcNo,DIVNDBnkCCYText,DIVNDBnkCCYValue,
+				--ProductDtls,SkipPOA,POAIDText,POAIDValue,POARegNo,PurposeCode,GPABPA,FrmDt,ToDt,
+				--POAUserFld1,POAUserFld2,Remarks,POADtls,SkipNominee,
+				--NomineeTitle,NomineeFName,NomineeMName,NomineeLName,NomineeSufx,NomineeFatherName,NomineeDOB,
+				--NomineeAdrs1,NomineeAdrs2,NomineeAdrs3,NomineeCity,NomineePin,
+				--NomineeState,NomineeCountry,NomineeTelOfc,NomineeTelRes,NomineeFaxNo,NomineeMobileNo,
+				--NomineeEmailID,NomineePanNo,NomineeUID,NomineeITCircle,NomineeNameAdrs,
+				--SkipGurdian,GurdianTitle,GurdianFName,GurdianMName,GurdianLName,GurdianSufx,
+				--GurdianFatherName,GurdianDOB,GurdianAdrs1,GurdianAdrs2,GurdianAdrs3,GurdianCity,GurdianPin,
+				--GurdianState,GurdianCountry,GurdianTelOfc,GurdianTelRes,GurdianFaxNo,GurdianMobileNo,
+				--GurdianEmailID,GurdianPanNo,GurdianUID,GurdianITCircle,GurdianNameAdrs,
+				--SkipNomGurdian,NomGurdianTitle,NomGurdianFName,NomGurdianMName,NomGurdianLName,NomGurdianSufx,
+				--NomGurdianFatherName,NomGurdianDOB,NomGurdianAdrs1,NomGurdianAdrs2,NomGurdianAdrs3,
+				--NomGurdianCity,NomGurdianPin,NomGurdianState,NomGurdianCountry,
+				--NomGurdianTelOfc,NomGurdianTelRes,NomGurdianFaxNo,NomGurdianMobileNo,NomGurdianEmailID,
+				--NomGurdianPanNo,NomGurdianUID,NomGurdianITCircle,NomGurdianNameAdrs,
+				--CreateUser,CreateDateTime,EntryProfileStatus,EntryType,VerifyUser,VerifyDateTime 
+				--========================================
+				
+				DECLARE @XMLDoc int				
+				EXEC SP_XML_PREPAREDOCUMENT @XMLDoc OUTPUT,@CDSLXML
+				Select * into #TempCDSLDataFromXML
+				from OPENXML (@XMLDoc,'/NewDataSet/CDSLReg',2)
+				WITH (RowID int,CompanyID varchar(10),DPID varchar(8),KRAFormNO varchar(16),KRAAplicatnNo varchar(16),ClientType char(1),ClientTypeText varchar(20),
+				ClientUCC varchar(10),BranchID int,FinYear varchar(10),ProductType varchar(20),ProductTypeValue Varchar(200),
+				----***First Account Holder Name And Addresses Details***-----------From Trans_CDSLOfflineAccount Table--------------
+				FHlderTitle varchar(10),FHlderFName varchar(120),FHlderMName varchar(50),FHlderLName varchar(50),FHlderSufx varchar(10),
+				FHlderFatherName varchar(120),FHlderCAdrs1 varchar(120),FHlderCAdrs2 varchar(80),FHlderCAdrs3 varchar(80),FHlderCCity int,FHlderCCityText varchar(100),
+				FHlderCPin varchar(10),FHlderCState int,FHlderCStateText varchar(100),FHlderCCountry int,FHlderCCountryText varchar(100),SameAddress char(1),FHlderPAdrs1 varchar(120),FHlderPAdrs2 varchar(80),
+				FHlderPAdrs3 varchar(80),FHlderPCity int,FHlderPCityText varchar(100),FHlderPPin varchar(10),FHlderPState int,FHlderPStateText varchar(100),FHlderPCountry int,FHlderPCountryText varchar(100),
+				NameAddress char(1),
+				----***First Account Holder Contact And Pan Details***-----------From Trans_CDSLOfflineAccount Table-----------------
+				TelOfc varchar(20),TelRes varchar(20),FaxNo varchar(10),MobileNo varchar(100),EmailID varchar(100),
+				FHldrIsPanExmpt char(1),FHlderExmptnType Varchar(10),FHlderPanNo varchar(10),FHlderPanVerificatn char(1),
+				FHlderUID varchar(15),FHlderITCircle varchar(15),
+				ContactPan char(1),
+				----***User Defined Field Details***-----------From Trans_CDSLOfflineAccount Table------------------------------------
+				UserFld1 Varchar(50),UserFld2 Varchar(50),UserFld3 Varchar(50),
+				UserFld char(1),
+				----***Second Account Holder Details***-----From Trans_CDSLOfflineAccount Table---------------------------------------
+				SkipSHlder varchar(10),
+				SHlderTitle varchar(10),SHlderFName varchar(200),SHlderMName varchar(40),SHlderLName varchar(40),SHlderSufx varchar(10),
+				SHlderFatherName varchar(120),SHldrIsPanExmpt char(1),SHlderExmptnType char(1),SHlderPanNo varchar(10),SHlderPanVerificatn char(1),
+				SHlderUID varchar(30),SHlderITCircle varchar(30),
+				SHlder char(1),
+				----***Third Account Holder Details***-----From Trans_CDSLOfflineAccount Table----------------------------------------
+				SkipTHlder varchar(10),
+				THlderTitle varchar(10),THlderFName varchar(200),THlderMName varchar(40),THlderLName varchar(40),THlderSufx varchar(10),
+				THlderFatherName varchar(120),THldrIsPanExmpt char(1),THlderExmptnType char(1),THlderPanNo varchar(10),THlderPanVerificatn char(1),
+				THlderUID varchar(30),THlderITCircle varchar(30),
+				THlder char(1),
+				----***Product Details***------------------From Trans_CDSLOfflineAccount Table----------------------------------------
+				DPIntrnlRefNo varchar(4),MaturityDt datetime,DOB Varchar(15),DOBDate datetime,Gender char(1),GenderText varchar(20),
+				Occupation int,OccupationText varchar(100),LifeStyle varchar(50),GeoCodeText varchar(100),GeoCodeValue Varchar(200),EducationText varchar(100),EducationValue Varchar(200),
+				AnnualIncomeValue Varchar(200),AnnualIncomeText varchar(100),Nationality int,NationalityText varchar(100),Status int,StatusText varchar(100),
+				BOFeeType varchar(4),LanguageText varchar(100),LanguageValue Varchar(200),Catagory4 varchar(4),Bank5 varchar(2),RelativeText varchar(100),RelativeValue Varchar(200),
+				StaffCode varchar(10),RGESS varchar(1),AnnualRpt char(1),PSIFlag char(1),ERDFlag char(1),BSDACFlag char(1),SecurityAccessText varchar(100),SecurityAccessValue varchar(200),
+				BOCategoryText varchar(100),BOCategoryValue Varchar(200),BOSettPlng char(1),DBIFSC varchar(15),RBIRefNo varchar(30),RBIAprvlDt datetime,SEBIRegNo varchar(25),BenTaxDeductStatusText varchar(100),BenTaxDeductStatusValue varchar(200),
+				SmartCardReq char(1),SmartCardNo varchar(20),SmartCardPin numeric(10, 0),ECS char(1),ElectronicCnfrmatn char(1),DividndCurncyText varchar(100),DividndCurncyValue Varchar(200),
+				GroupCode varchar(8),BOSubStatusText varchar(100),BOSubStatusValue Varchar(200),ClrngCorporatnIDText varchar(100),ClrngCorporatnIDValue Varchar(200),ClrngMembrID varchar(8),StckExchng varchar(2),ConfrmatnWavd char(1),
+				TradngID varchar(8),BOStatemntCycleText varchar(100),BOStatemntCycleValue Varchar(200),BENFBnkCode varchar(12),BENFBnkAcTypeText varchar(100),BENFBnkAcTypeValue Varchar(200),BENFBnkAcNo varchar(20),BENFBnkCCYText varchar(100),BENFBnkCCYValue Varchar(200),
+				DIVNDBnkAcTypeText varchar(100),DIVNDBnkAcTypeValue Varchar(200),DIVNDBnkCode varchar(12),DIVNDAcNo varchar(20),DIVNDBnkCCYText varchar(100),DIVNDBnkCCYValue Varchar(200),
+				ProductDtls char(1),
+				----***POA Detail***----------From Trans_CdslOfflinePOA Table-------------POARegNo(MainID)----------------------------
+				SkipPOA varchar(10),POAIDText varchar(100),POAIDValue Varchar(200),POARegNo varchar(10),PurposeCode varchar(4),GPABPA char(1),
+				FrmDt datetime,ToDt datetime,POAUserFld1 varchar(20),POAUserFld2 varchar(20),Remarks varchar(50),
+				POADtls char(1),				
+				----***Nominee Details***-----From Trans_CDSLOfflineNominee Table-----------------------------------------------------
+				SkipNominee varchar(10),NomineeTitle varchar(10),NomineeFName varchar(120),NomineeMName varchar(50),NomineeLName varchar(50),
+				NomineeSufx varchar(10),NomineeFatherName varchar(120),NomineeDOB datetime,
+				NomineeAdrs1 varchar(120),NomineeAdrs2 varchar(80),NomineeAdrs3 varchar(80),
+				NomineeCity varchar(25),NomineePin varchar(10),NomineeState varchar(25),NomineeCountry varchar(25),
+				NomineeTelOfc varchar(20),NomineeTelRes varchar(20),NomineeFaxNo varchar(20),NomineeMobileNo varchar(20),
+				NomineeEmailID varchar(100),NomineePanNo varchar(10),NomineeUID varchar(15),NomineeITCircle varchar(15),
+				NomineeNameAdrs char(1),
+				----***Main Gurdian***---From Trans_CDSLOfflineAccount Table----------------------------------------------------------
+				SkipGurdian varchar(10),GurdianTitle varchar(10),GurdianFName varchar(120),GurdianMName varchar(50),GurdianLName varchar(50),
+				GurdianSufx varchar(10),GurdianFatherName varchar(120),GurdianDOB datetime,
+				GurdianAdrs1 varchar(120),GurdianAdrs2 varchar(80),GurdianAdrs3 varchar(80),
+				GurdianCity varchar(25),GurdianPin varchar(10),GurdianState varchar(25),GurdianCountry varchar(25),
+				GurdianTelOfc varchar(20),GurdianTelRes varchar(20),GurdianFaxNo varchar(20),GurdianMobileNo varchar(20),
+				GurdianEmailID varchar(100),GurdianPanNo varchar(10),GurdianUID varchar(15),GurdianITCircle varchar(15),
+				GurdianNameAdrs char(1),
+				----***Nominee Gurdian Details***-----From Trans_CDSLOfflineNominee Table---------------------------------------------
+				SkipNomGurdian varchar(10),NomGurdianTitle varchar(10),NomGurdianFName varchar(120),NomGurdianMName varchar(50),NomGurdianLName varchar(50),
+				NomGurdianSufx varchar(10),NomGurdianFatherName varchar(120),NomGurdianDOB datetime,
+				NomGurdianAdrs1 varchar(120),NomGurdianAdrs2 varchar(80),NomGurdianAdrs3 varchar(80),
+				NomGurdianCity varchar(25),NomGurdianPin varchar(10),NomGurdianState varchar(25),NomGurdianCountry varchar(25),
+				NomGurdianTelOfc varchar(20),NomGurdianTelRes varchar(20),NomGurdianFaxNo varchar(20),NomGurdianMobileNo varchar(20),
+				NomGurdianEmailID varchar(100),NomGurdianPanNo varchar(10),NomGurdianUID varchar(15),NomGurdianITCircle varchar(15),
+				NomGurdianNameAdrs char(1),
+				----***Creator and Verifier***------------From Trans_CDSLOfflineAccount Table-----------------------------------------
+				CreateUser int,CreateDateTime DateTime,EntryProfileStatus char(1),EntryType Varchar(10),VerifyUser int)
+
+--Select * from #TempCDSLDataFromXML				
+												
+				Create Table #TempCDSL(RowID int,CompanyID varchar(10),DPID varchar(8),KRAFormNO varchar(16),KRAAplicatnNo varchar(16),ClientType char(1),
+				BranchID int,FinYear varchar(10),ProductTypeValue int,
+				----***First Account Holder Name And Addresses Details***-----------From Trans_CDSLOfflineAccount Table--------------
+				FHlderTitle varchar(10),FHlderFName varchar(120),FHlderMName varchar(50),FHlderLName varchar(50),FHlderSufx varchar(10),FHlderFatherName varchar(120),
+				FHlderCAdrs1 varchar(120),FHlderCAdrs2 varchar(80),FHlderCAdrs3 varchar(80),FHlderCCity int,FHlderCPin varchar(10),FHlderCState int,FHlderCCountry int,
+				SameAddress char(1),
+				FHlderPAdrs1 varchar(120),FHlderPAdrs2 varchar(80),FHlderPAdrs3 varchar(80),FHlderPCity int,FHlderPPin varchar(10),FHlderPState int,FHlderPCountry int,				
+				----***First Account Holder Contact And Pan Details***-----------From Trans_CDSLOfflineAccount Table-----------------
+				TelOfc varchar(20),TelRes varchar(20),FaxNo varchar(10),MobileNo varchar(100),EmailID varchar(100),
+				FHldrIsPanExmpt char(1),FHlderExmptnType Varchar(10),FHlderPanNo varchar(10),FHlderPanVerificatn char(1),
+				FHlderUID varchar(15),FHlderITCircle varchar(15),				
+				----***User Defined Field Details***-----------From Trans_CDSLOfflineAccount Table------------------------------------
+				UserFld1 Varchar(50),UserFld2 Varchar(50),UserFld3 Varchar(50),
+				----***Second Account Holder Details***-----From Trans_CDSLOfflineAccount Table---------------------------------------
+				SkipSHlder varchar(10),
+				SHlderTitle varchar(10),SHlderFName varchar(200),SHlderMName varchar(40),SHlderLName varchar(40),SHlderSufx varchar(10),
+				SHlderFatherName varchar(120),SHldrIsPanExmpt char(1),SHlderExmptnType char(1),SHlderPanNo varchar(10),SHlderPanVerificatn char(1),
+				SHlderUID varchar(30),SHlderITCircle varchar(30),				
+				----***Third Account Holder Details***-----From Trans_CDSLOfflineAccount Table----------------------------------------
+				SkipTHlder varchar(10),
+				THlderTitle varchar(10),THlderFName varchar(200),THlderMName varchar(40),THlderLName varchar(40),THlderSufx varchar(10),
+				THlderFatherName varchar(120),THldrIsPanExmpt char(1),THlderExmptnType char(1),THlderPanNo varchar(10),THlderPanVerificatn char(1),
+				THlderUID varchar(30),THlderITCircle varchar(30),				
+				----***Product Details***------------------From Trans_CDSLOfflineAccount Table----------------------------------------
+				DPIntrnlRefNo varchar(4),MaturityDt datetime,DOBDate datetime,Gender char(1),Occupation int,LifeStyle varchar(50),
+				GeoCodeValue int,EducationValue int,AnnualIncomeValue int,Nationality int,Status int,BOFeeType varchar(4),LanguageValue int,
+				Catagory4 varchar(4),Bank5 varchar(2),RelativeValue int,StaffCode varchar(10),RGESS varchar(1),AnnualRpt char(1),
+				PSIFlag char(1),ERDFlag char(1),BSDACFlag char(1),SecurityAccessValue int,BOCategoryValue int,BOSettPlng char(1),
+				DBIFSC varchar(15),RBIRefNo varchar(30),RBIAprvlDt datetime,SEBIRegNo varchar(25),BenTaxDeductStatusValue int,
+				SmartCardReq char(1),SmartCardNo varchar(20),SmartCardPin numeric(10,0),ECS char(1),ElectronicCnfrmatn char(1),
+				DividndCurncyValue int,GroupCode varchar(8),BOSubStatusValue int,ClrngCorporatnIDValue int,ClrngMembrID varchar(8),
+				StckExchng varchar(2),ConfrmatnWavd char(1),TradngID varchar(8),BOStatemntCycleValue int,
+				BENFBnkCode varchar(12),BENFBnkAcTypeValue int,BENFBnkAcNo varchar(20),BENFBnkCCYValue int,
+				DIVNDBnkAcTypeValue int,DIVNDBnkCode varchar(12),DIVNDAcNo varchar(20),DIVNDBnkCCYValue int,				
+				----***POA Detail***----------From Trans_CdslOfflinePOA Table-----------------------------------------
+				SkipPOA varchar(10),POAIDValue int,POARegNo varchar(10),PurposeCode varchar(4),GPABPA char(1),
+				FrmDt datetime,ToDt datetime,POAUserFld1 varchar(20),POAUserFld2 varchar(20),Remarks varchar(50),							
+				----***Nominee Details***-----From Trans_CDSLOfflineNominee Table-----------------------------------------------------
+				SkipNominee varchar(10),NomineeTitle varchar(10),NomineeFName varchar(120),NomineeMName varchar(50),NomineeLName varchar(50),
+				NomineeSufx varchar(10),NomineeFatherName varchar(120),NomineeDOB datetime,
+				NomineeAdrs1 varchar(120),NomineeAdrs2 varchar(80),NomineeAdrs3 varchar(80),
+				NomineeCity varchar(25),NomineePin varchar(10),NomineeState varchar(25),NomineeCountry varchar(25),
+				NomineeTelOfc varchar(20),NomineeTelRes varchar(20),NomineeFaxNo varchar(20),NomineeMobileNo varchar(20),
+				NomineeEmailID varchar(100),NomineePanNo varchar(10),NomineeUID varchar(15),NomineeITCircle varchar(15),				
+				----***Main Gurdian***----From Trans_CDSLOfflineAccount Table---------------------------------------------------------
+				SkipGurdian varchar(10),GurdianTitle varchar(10),GurdianFName varchar(120),GurdianMName varchar(50),GurdianLName varchar(50),
+				GurdianSufx varchar(10),GurdianFatherName varchar(120),GurdianDOB datetime,
+				GurdianAdrs1 varchar(120),GurdianAdrs2 varchar(80),GurdianAdrs3 varchar(80),
+				GurdianCity varchar(25),GurdianPin varchar(10),GurdianState varchar(25),GurdianCountry varchar(25),
+				GurdianTelOfc varchar(20),GurdianTelRes varchar(20),GurdianFaxNo varchar(20),GurdianMobileNo varchar(20),
+				GurdianEmailID varchar(100),GurdianPanNo varchar(10),GurdianUID varchar(15),GurdianITCircle varchar(15),				
+				----***Nominee Gurdian Details***-----From Trans_CDSLOfflineNominee Table---------------------------------------------
+				SkipNomGurdian varchar(10),NomGurdianTitle varchar(10),NomGurdianFName varchar(120),NomGurdianMName varchar(50),NomGurdianLName varchar(50),
+				NomGurdianSufx varchar(10),NomGurdianFatherName varchar(120),NomGurdianDOB datetime,
+				NomGurdianAdrs1 varchar(120),NomGurdianAdrs2 varchar(80),NomGurdianAdrs3 varchar(80),
+				NomGurdianCity varchar(25),NomGurdianPin varchar(10),NomGurdianState varchar(25),NomGurdianCountry varchar(25),
+				NomGurdianTelOfc varchar(20),NomGurdianTelRes varchar(20),NomGurdianFaxNo varchar(20),NomGurdianMobileNo varchar(20),
+				NomGurdianEmailID varchar(100),NomGurdianPanNo varchar(10),NomGurdianUID varchar(15),NomGurdianITCircle varchar(15),				
+				----***Creator and Verifier***------------From Trans_CDSLOfflineAccount Table-----------------------------------------
+				CreateUser int,CreateDateTime DateTime,EntryProfileStatus char(1),VerifyUser int)
+				
+				Declare @TotalRowCount int,@RowCount int
+				Set @RowCount=1
+				Select @TotalRowCount=COUNT(*) From #TempCDSLDataFromXML
+				----Start Split and Obtain Value Field----------
+				Declare   @ProductTypeValue Varchar(200),						 
+						  @GeoCodeValue Varchar(200),@EducationValue Varchar(200),@LanguageValue Varchar(200),
+						  @RelativeValue Varchar(200),@SecurityAccessValue varchar(200),@BOCategoryValue Varchar(200),
+						  @BenTaxDeductStatusValue varchar(200),@DividndCurncyValue Varchar(200),@BOSubStatusValue Varchar(200),
+						  @ClrngCorporatnIDValue Varchar(200),@BOStatemntCycleValue Varchar(200),@BENFBnkAcTypeValue Varchar(200),
+						  @DIVNDBnkAcTypeValue Varchar(200),					  
+						  @POAIDValue Varchar(200)
+						  
+				While(@RowCount<=@TotalRowCount)
+				Begin				
+					Select    @ProductTypeValue =(Select dbo.fnSplit(ProductTypeValue,'~',1)),						 
+							  @GeoCodeValue =(Select dbo.fnSplit(GeoCodeValue,'~',1)),
+							  @EducationValue =(Select dbo.fnSplit(EducationValue,'~',1)),						 
+							  @LanguageValue =(Select dbo.fnSplit(LanguageValue,'~',1)),
+							  @RelativeValue =(Select dbo.fnSplit(RelativeValue,'~',1)),
+							  @SecurityAccessValue =(Select dbo.fnSplit(SecurityAccessValue,'~',1)),
+							  @BOCategoryValue =(Select dbo.fnSplit(BOCategoryValue,'~',1)),
+							  @BenTaxDeductStatusValue =(Select dbo.fnSplit(BenTaxDeductStatusValue,'~',1)),
+							  @DividndCurncyValue =(Select dbo.fnSplit(DividndCurncyValue,'~',1)),
+							  @BOSubStatusValue =(Select dbo.fnSplit(BOSubStatusValue,'~',1)),
+							  @ClrngCorporatnIDValue =(Select dbo.fnSplit(ClrngCorporatnIDValue,'~',1)),
+							  @BOStatemntCycleValue =(Select dbo.fnSplit(BOStatemntCycleValue,'~',1)),
+							  @BENFBnkAcTypeValue =(Select dbo.fnSplit(BENFBnkAcTypeValue,'~',1)),
+							  @DIVNDBnkAcTypeValue =(Select dbo.fnSplit(DIVNDBnkAcTypeValue,'~',1)),
+							  @POAIDValue =POAIDValue --(Select dbo.fnSplit(POAIDValue,'~',1))
+					  From (SELECT ROW_NUMBER() OVER (ORDER BY RowID) AS Row,* 
+						   From #TempCDSLDataFromXML) as kk 
+					Where Row=@RowCount	
+					
+					--Select    @ProductTypeValue as ProductTypeValue,
+					--		  @GeoCodeValue as GeoCodeValue,
+					--		  @EducationValue as EducationValue,					  
+					--		  @LanguageValue as LanguageValue,
+					--		  @RelativeValue as RelativeValue,
+					--		  @SecurityAccessValue as SecurityAccessValue,
+					--		  @BOCategoryValue as BOCategoryValue,
+					--		  @BenTaxDeductStatusValue as BenTaxDeductStatusValue,
+					--		  @DividndCurncyValue as DividndCurncyValue,
+					--		  @BOSubStatusValue as BOSubStatusValue,
+					--		  @ClrngCorporatnIDValue as ClrngCorporatnIDValue,
+					--		  @BOStatemntCycleValue as BOStatemntCycleValue,
+					--		  @BENFBnkAcTypeValue as BENFBnkAcTypeValue,
+					--		  @BENFBnkCCYValue as BENFBnkCCYValue,
+					--		  @DIVNDBnkAcTypeValue as DIVNDBnkAcTypeValue,
+					--		  @DIVNDBnkCCYValue as DIVNDBnkCCYValue,
+					--		  @POAIDValue as POAIDValue	
+					----End Split and Obtain Value Field----------
+					Insert Into #TempCDSL   ----***Basic Columns***----
+					Select RowID,CompanyID,DPID,KRAFormNO,KRAAplicatnNo,ClientType,BranchID,FinYear,@ProductTypeValue,
+							----***First Account Holder Name Address  Details***----
+							FHlderTitle,FHlderFName,FHlderMName,FHlderLName,FHlderSufx,FHlderFatherName,
+							FHlderCAdrs1,FHlderCAdrs2,FHlderCAdrs3,FHlderCCity,FHlderCPin,FHlderCState,FHlderCCountry,
+							SameAddress,
+							FHlderPAdrs1,FHlderPAdrs2,FHlderPAdrs3,FHlderPCity,FHlderPPin,FHlderPState,FHlderPCountry,
+							----***First Account Holder Contact Pan  Details***----
+							TelOfc,TelRes,FaxNo,MobileNo,EmailID,FHldrIsPanExmpt,FHlderExmptnType,FHlderPanNo,
+							FHlderPanVerificatn,FHlderUID,FHlderITCircle,
+							----***First Account Holder User Defined Field Details***----
+							UserFld1,UserFld2,UserFld3,
+							----***Second Account Holder Details***-----
+							SkipSHlder,SHlderTitle,SHlderFName,SHlderMName,SHlderLName,SHlderSufx,
+							SHlderFatherName,SHldrIsPanExmpt,SHlderExmptnType,SHlderPanNo,
+							SHlderPanVerificatn,SHlderUID,SHlderITCircle,
+							----***Third Account Holder Details***----
+							SkipTHlder,THlderTitle,THlderFName,THlderMName,THlderLName,THlderSufx,
+							THlderFatherName,THldrIsPanExmpt,THlderExmptnType,THlderPanNo,THlderPanVerificatn,
+							THlderUID,THlderITCircle,
+							----***Product Details***----
+							DPIntrnlRefNo,MaturityDt,DOBDate,Gender,Occupation,LifeStyle,
+							@GeoCodeValue,@EducationValue,AnnualIncomeValue,Nationality,Status,BOFeeType,@LanguageValue,
+							Catagory4,Bank5,@RelativeValue,StaffCode,RGESS,AnnualRpt,
+							PSIFlag,ERDFlag,BSDACFlag,@SecurityAccessValue,@BOCategoryValue,BOSettPlng,
+							DBIFSC,RBIRefNo,RBIAprvlDt,SEBIRegNo,@BenTaxDeductStatusValue,
+							SmartCardReq,SmartCardNo,SmartCardPin,ECS,ElectronicCnfrmatn,
+							@DividndCurncyValue,GroupCode,@BOSubStatusValue,@ClrngCorporatnIDValue,ClrngMembrID,
+							StckExchng,ConfrmatnWavd,TradngID,@BOStatemntCycleValue,
+							BENFBnkCode,@BENFBnkAcTypeValue,BENFBnkAcNo,BENFBnkCCYValue,
+							@DIVNDBnkAcTypeValue,DIVNDBnkCode,DIVNDAcNo,DIVNDBnkCCYValue,
+							----***POA Detail***----
+							SkipPOA,@POAIDValue,POARegNo,PurposeCode,GPABPA,FrmDt,ToDt,POAUserFld1,POAUserFld2,Remarks,
+							----***Nominee Details***----
+							SkipNominee,NomineeTitle,NomineeFName,NomineeMName,NomineeLName,
+							NomineeSufx,NomineeFatherName,NomineeDOB,
+							NomineeAdrs1,NomineeAdrs2,NomineeAdrs3,
+							NomineeCity,NomineePin,NomineeState,NomineeCountry,
+							NomineeTelOfc,NomineeTelRes,NomineeFaxNo,NomineeMobileNo,
+							NomineeEmailID,NomineePanNo,NomineeUID,NomineeITCircle,
+							----***Main Gurdian***----
+							SkipGurdian,GurdianTitle,GurdianFName,GurdianMName,GurdianLName,
+							GurdianSufx,GurdianFatherName,GurdianDOB,
+							GurdianAdrs1,GurdianAdrs2,GurdianAdrs3,
+							GurdianCity,GurdianPin,GurdianState,GurdianCountry,
+							GurdianTelOfc,GurdianTelRes,GurdianFaxNo,GurdianMobileNo,
+							GurdianEmailID,GurdianPanNo,GurdianUID,GurdianITCircle,
+							----***Nominee Gurdian Details***----
+							SkipNomGurdian,NomGurdianTitle,NomGurdianFName,NomGurdianMName,NomGurdianLName,
+							NomGurdianSufx,NomGurdianFatherName,NomGurdianDOB,
+							NomGurdianAdrs1,NomGurdianAdrs2,NomGurdianAdrs3,
+							NomGurdianCity,NomGurdianPin,NomGurdianState,NomGurdianCountry,
+							NomGurdianTelOfc,NomGurdianTelRes,NomGurdianFaxNo,NomGurdianMobileNo,
+							NomGurdianEmailID,NomGurdianPanNo,NomGurdianUID,NomGurdianITCircle,
+							----***Creator and Verifier***----
+							CreateUser,CreateDateTime,EntryProfileStatus,VerifyUser
+					From (SELECT ROW_NUMBER() OVER (ORDER BY RowID) AS Row,* 
+						   From #TempCDSLDataFromXML) as kk 
+					Where Row=@RowCount
+					
+					Set @RowCount=@RowCount+1
+				End
+				
+				Drop Table #TempCDSLDataFromXML				
+--Select * From #TempCDSL
+									
+				Declare @MatchedCheckerFormNo varchar(Max)
+				Declare @SingleVerifyFormNo Varchar(Max)				
+		
+				Set @Company=REPLACE(@Company,'''','')				
+				Set @FromDate=CAST(@FromDate as datetime)
+				Set @ToDate=CAST(@ToDate as datetime)			
+					
+--Select @Company as Company,@FromDate as FromDate,@ToDate as ToDate
+				Set @SingleVerifyFormNo='-1'				
+				Select @SingleVerifyFormNo=coalesce(@SingleVerifyFormNo+ ',', '')+Convert(varchar,KRAFormNO) 
+					From #TempCDSL where EntryProfileStatus in ('F','P') 
+									And CompanyID in (Select * from dbo.fnSplitReturnTable(@Company,','))
+									And (CreateDateTime Between @FromDate and @ToDate)		
+
+--Select @SingleVerifyFormNo as SingleVerifyFormNo
+				Set @MatchedCheckerFormNo='-1'
+				Select @MatchedCheckerFormNo=coalesce(@MatchedCheckerFormNo+ ',', '')+Convert(varchar,Checker.KRAFormNO) 
+				From		
+				  (Select * From #TempCDSL where EntryProfileStatus='C' 
+												And (CreateDateTime Between @FromDate and @ToDate)
+												And CompanyID in (Select * from dbo.fnSplitReturnTable(@Company,','))
+				  ) Checker
+				 Inner Join
+				 (Select * From #TempCDSL where EntryProfileStatus='M' 
+												And (CreateDateTime Between @FromDate and @ToDate)
+												And CompanyID in (Select * from dbo.fnSplitReturnTable(@Company,','))
+				  ) Maker	----Basic Conditions----------------------------------------------------------
+				    ON  isnull(Checker.CompanyID,'')				=isnull(Maker.CompanyID,'')
+					And isnull(Checker.DPID,'')						=isnull(Maker.DPID,'')
+					And isnull(Checker.KRAFormNO,'')				=isnull(Maker.KRAFormNO,'')
+					And isnull(Checker.KRAAplicatnNo,'')			=isnull(Maker.KRAAplicatnNo,'')
+					And isnull(Checker.ClientType,'')				=isnull(Maker.ClientType,'')
+					And isnull(Checker.BranchID,'0')					=isnull(Maker.BranchID,'0')
+					And isnull(Checker.FinYear,'')					=isnull(Maker.FinYear,'')
+					And isnull(Checker.ProductTypeValue,'0')			=isnull(Maker.ProductTypeValue,'0')
+					----First Account Holder Name Address-------------------------------------------------
+					And isnull(Checker.FHlderTitle,'')				=isnull(Maker.FHlderTitle,'')
+					And isnull(Checker.FHlderFName,'')				=isnull(Maker.FHlderFName,'')
+					And isnull(Checker.FHlderMName,'')				=isnull(Maker.FHlderMName,'')
+					And isnull(Checker.FHlderLName,'')				=isnull(Maker.FHlderLName,'')
+					And isnull(Checker.FHlderSufx,'')				=isnull(Maker.FHlderSufx,'') 
+					And isnull(Checker.FHlderFatherName,'')			=isnull(Maker.FHlderFatherName,'')
+					And isnull(Checker.FHlderCAdrs1,'')				=isnull(Maker.FHlderCAdrs1,'')
+					And isnull(Checker.FHlderCAdrs2,'')				=isnull(Maker.FHlderCAdrs2,'')
+					And isnull(Checker.FHlderCAdrs3,'')				=isnull(Maker.FHlderCAdrs3,'')
+					And isnull(Checker.FHlderCCity,'0')				=isnull(Maker.FHlderCCity,'0') 
+					And isnull(Checker.FHlderCPin,'')				=isnull(Maker.FHlderCPin,'') 
+					And isnull(Checker.FHlderCState,'0')				=isnull(Maker.FHlderCState,'0')
+					And isnull(Checker.FHlderCCountry,'0')			=isnull(Maker.FHlderCCountry,'0')
+					And isnull(Checker.SameAddress,'')				=isnull(Maker.SameAddress,'') 
+					And isnull(Checker.FHlderPAdrs1,'')				=isnull(Maker.FHlderPAdrs1,'')
+					And isnull(Checker.FHlderPAdrs2,'')				=isnull(Maker.FHlderPAdrs2,'')
+					And isnull(Checker.FHlderPAdrs3,'')				=isnull(Maker.FHlderPAdrs3,'')
+					And isnull(Checker.FHlderPCity,'0')				=isnull(Maker.FHlderPCity,'0') 
+					And isnull(Checker.FHlderPPin,'')				=isnull(Maker.FHlderPPin,'') 
+					And isnull(Checker.FHlderPState,'0')				=isnull(Maker.FHlderPState,'0')
+					And isnull(Checker.FHlderPCountry,'0')			=isnull(Maker.FHlderPCountry,'0')
+					----First Account Holder Contact Pan--------------------------------------------------
+					And isnull(Checker.TelOfc,'')					=isnull(Maker.TelOfc,'') 
+					And isnull(Checker.TelRes,'')					=isnull(Maker.TelRes,'') 
+					And isnull(Checker.FaxNo,'')					=isnull(Maker.FaxNo,'') 
+					And isnull(Checker.MobileNo,'')					=isnull(Maker.MobileNo,'')
+					And isnull(Checker.EmailID,'')					=isnull(Maker.EmailID,'') 
+					And isnull(Checker.FHldrIsPanExmpt,'')			=isnull(Maker.FHldrIsPanExmpt,'') 
+					And isnull(Checker.FHlderExmptnType,'')			=isnull(Maker.FHlderExmptnType,'')
+					And isnull(Checker.FHlderPanNo,'')				=isnull(Maker.FHlderPanNo,'') 
+					And isnull(Checker.FHlderPanVerificatn,'')		=isnull(Maker.FHlderPanVerificatn,'') 
+					And isnull(Checker.FHlderUID,'')				=isnull(Maker.FHlderUID,'')
+					And isnull(Checker.FHlderITCircle,'')			=isnull(Maker.FHlderITCircle,'') 
+					----First Account Holder User Defined Field-------------------------------------------
+					And isnull(Checker.UserFld1,'')					=isnull(Maker.UserFld1,'') 
+					And isnull(Checker.UserFld2,'')					=isnull(Maker.UserFld2,'') 
+					And isnull(Checker.UserFld3,'')					=isnull(Maker.UserFld3,'') 
+					----Second Account Holder-------------------------------------------------------------
+					And isnull(Checker.SkipSHlder,'')				=isnull(Maker.SkipSHlder,'') 
+					And isnull(Checker.SHlderTitle,'')				=isnull(Maker.SHlderTitle,'')
+					And isnull(Checker.SHlderFName,'')				=isnull(Maker.SHlderFName,'')
+					And isnull(Checker.SHlderMName,'')				=isnull(Maker.SHlderMName,'')
+					And isnull(Checker.SHlderLName,'')				=isnull(Maker.SHlderLName,'')
+					And isnull(Checker.SHlderSufx,'')				=isnull(Maker.SHlderSufx,'') 
+					And isnull(Checker.SHlderFatherName,'')			=isnull(Maker.SHlderFatherName,'')
+					And isnull(Checker.SHldrIsPanExmpt,'')			=isnull(Maker.SHldrIsPanExmpt,'') 
+					And isnull(Checker.SHlderExmptnType,'')			=isnull(Maker.SHlderExmptnType,'')
+					And isnull(Checker.SHlderPanNo,'')				=isnull(Maker.SHlderPanNo,'') 
+					And isnull(Checker.SHlderPanVerificatn,'')		=isnull(Maker.SHlderPanVerificatn,'') 
+					And isnull(Checker.SHlderUID,'')				=isnull(Maker.SHlderUID,'') 
+					And isnull(Checker.SHlderITCircle,'')			=isnull(Maker.SHlderITCircle,'') 
+					----Third Account Holder--------------------------------------------------------------	
+					And isnull(Checker.SkipTHlder,'')				=isnull(Maker.SkipTHlder,'')
+					And isnull(Checker.THlderTitle,'')				=isnull(Maker.THlderTitle,'') 
+					And isnull(Checker.THlderFName,'')				=isnull(Maker.THlderFName,'') 
+					And isnull(Checker.THlderMName,'')				=isnull(Maker.THlderMName,'') 
+					And isnull(Checker.THlderLName,'')				=isnull(Maker.THlderLName,'') 
+					And isnull(Checker.THlderSufx,'')				=isnull(Maker.THlderSufx,'') 
+					And isnull(Checker.THlderFatherName,'')			=isnull(Maker.THlderFatherName,'')
+					And isnull(Checker.THldrIsPanExmpt,'')			=isnull(Maker.THldrIsPanExmpt,'') 
+					And isnull(Checker.THlderExmptnType,'')			=isnull(Maker.THlderExmptnType,'')
+					And isnull(Checker.THlderPanNo,'')				=isnull(Maker.THlderPanNo,'')
+					And isnull(Checker.THlderPanVerificatn,'')		=isnull(Maker.THlderPanVerificatn,'')
+					And isnull(Checker.THlderUID,'')				=isnull(Maker.THlderUID,'') 
+					And isnull(Checker.THlderITCircle,'')			=isnull(Maker.THlderITCircle,'') 
+					---- Product Details------------------------------------------------------------------	
+					And isnull(Checker.DPIntrnlRefNo,'')			=isnull(Maker.DPIntrnlRefNo,'') 
+					And isnull(Checker.MaturityDt,'')				=isnull(Maker.MaturityDt,'') 
+					And isnull(Checker.DOBDate,'')					=isnull(Maker.DOBDate,'') 
+					And isnull(Checker.Gender,'')					=isnull(Maker.Gender,'') 
+					And isnull(Checker.Occupation,'0')				=isnull(Maker.Occupation,'0') 
+					And isnull(Checker.LifeStyle,'')				=isnull(Maker.LifeStyle,'') 
+					And isnull(Checker.GeoCodeValue,'0')			=isnull(Maker.GeoCodeValue,'0') 
+					And isnull(Checker.EducationValue,'0')			=isnull(Maker.EducationValue,'0')  
+					And isnull(Checker.AnnualIncomeValue,'0')		=isnull(Maker.AnnualIncomeValue,'0') 
+					And isnull(Checker.Nationality,'0')				=isnull(Maker.Nationality,'0') 
+					And isnull(Checker.Status,'0')					=isnull(Maker.Status,'0') 
+					And isnull(Checker.BOFeeType,'')				=isnull(Maker.BOFeeType,'') 
+					And isnull(Checker.LanguageValue,'0')			=isnull(Maker.LanguageValue,'0') 
+					And isnull(Checker.Catagory4,'')				=isnull(Maker.Catagory4,'') 
+					And isnull(Checker.Bank5,'')					=isnull(Maker.Bank5,'')
+					And isnull(Checker.RelativeValue,'0')			=isnull(Maker.RelativeValue,'0') 
+					And isnull(Checker.StaffCode,'')				=isnull(Maker.StaffCode,'') 
+					And isnull(Checker.RGESS,'')					=isnull(Maker.RGESS,'') 
+					And isnull(Checker.AnnualRpt,'')				=isnull(Maker.AnnualRpt,'') 
+					And isnull(Checker.PSIFlag,'')					=isnull(Maker.PSIFlag,'') 
+					And isnull(Checker.ERDFlag,'')					=isnull(Maker.ERDFlag,'') 
+					And isnull(Checker.BSDACFlag,'')				=isnull(Maker.BSDACFlag,'') 
+					And isnull(Checker.SecurityAccessValue,'0')		=isnull(Maker.SecurityAccessValue,'0') 
+					And isnull(Checker.BOCategoryValue,'0')			=isnull(Maker.BOCategoryValue,'0') 
+					And isnull(Checker.BOSettPlng,'')				=isnull(Maker.BOSettPlng,'') 
+					And isnull(Checker.DBIFSC,'')					=isnull(Maker.DBIFSC,'') 
+					And isnull(Checker.RBIRefNo,'')					=isnull(Maker.RBIRefNo,'') 
+					And isnull(Checker.RBIAprvlDt,'')				=isnull(Maker.RBIAprvlDt,'') 
+					And isnull(Checker.SEBIRegNo,'')				=isnull(Maker.SEBIRegNo,'') 
+					And isnull(Checker.BenTaxDeductStatusValue,'0')	=isnull(Maker.BenTaxDeductStatusValue,'0')
+					And isnull(Checker.SmartCardReq,'')				=isnull(Maker.SmartCardReq,'') 
+					And isnull(Checker.SmartCardNo,'')				=isnull(Maker.SmartCardNo,'')
+					And isnull(Checker.SmartCardPin,'0')			=isnull(Maker.SmartCardPin,'0') 
+					And isnull(Checker.ECS,'')						=isnull(Maker.ECS,'') 
+					And isnull(Checker.ElectronicCnfrmatn,'')		=isnull(Maker.ElectronicCnfrmatn,'') 
+					And isnull(Checker.DividndCurncyValue,'0')		=isnull(Maker.DividndCurncyValue,'0')
+					And isnull(Checker.GroupCode,'')				=isnull(Maker.GroupCode,'') 
+					And isnull(Checker.BOSubStatusValue,'0')		=isnull(Maker.BOSubStatusValue,'0') 
+					And isnull(Checker.ClrngCorporatnIDValue,'0')	=isnull(Maker.ClrngCorporatnIDValue,'0')
+					And isnull(Checker.ClrngMembrID,'')				=isnull(Maker.ClrngMembrID,'')  
+					And isnull(Checker.StckExchng,'')				=isnull(Maker.StckExchng,'') 
+					And isnull(Checker.ConfrmatnWavd,'')			=isnull(Maker.ConfrmatnWavd,'') 
+					And isnull(Checker.TradngID,'')					=isnull(Maker.TradngID,'') 
+					And isnull(Checker.BOStatemntCycleValue,'0')	=isnull(Maker.BOStatemntCycleValue,'0') 
+					And isnull(Checker.BENFBnkCode,'')				=isnull(Maker.BENFBnkCode,'') 
+					And isnull(Checker.BENFBnkAcTypeValue,'0')		=isnull(Maker.BENFBnkAcTypeValue,'0') 
+					And isnull(Checker.BENFBnkAcNo,'')				=isnull(Maker.BENFBnkAcNo,'') 
+					And isnull(Checker.BENFBnkCCYValue,'')			=isnull(Maker.BENFBnkCCYValue,'') 
+					And isnull(Checker.DIVNDBnkAcTypeValue,'')		=isnull(Maker.DIVNDBnkAcTypeValue,'') 
+					And isnull(Checker.DIVNDBnkCode,'')				=isnull(Maker.DIVNDBnkCode,'') 
+					And isnull(Checker.DIVNDAcNo,'')				=isnull(Maker.DIVNDAcNo,'') 
+					And isnull(Checker.DIVNDBnkCCYValue,'')			=isnull(Maker.DIVNDBnkCCYValue,'') 
+					----POA Detail--------------------------------------------------------------------------	
+					And isnull(Checker.SkipPOA,'')					=isnull(Maker.SkipPOA,'') 
+					And isnull(Checker.POAIDValue,'0')				=isnull(Maker.POAIDValue,'0') 
+					And isnull(Checker.POARegNo,'')					=isnull(Maker.POARegNo,'') 
+					And isnull(Checker.PurposeCode,'')				=isnull(Maker.PurposeCode,'') 
+					And isnull(Checker.GPABPA,'')					=isnull(Maker.GPABPA,'')
+					And isnull(Checker.FrmDt,'')					=isnull(Maker.FrmDt,'') 
+					And isnull(Checker.ToDt,'')						=isnull(Maker.ToDt,'') 
+					And isnull(Checker.POAUserFld1,'')				=isnull(Maker.POAUserFld1,'') 
+					And isnull(Checker.POAUserFld2,'')				=isnull(Maker.POAUserFld2,'') 
+					And isnull(Checker.Remarks,'')					=isnull(Maker.Remarks,'') 
+					----Nominee Name Address Details--------------------------------------------------------					
+					And isnull(Checker.SkipNominee,'')				=isnull(Maker.SkipNominee,'') 
+					And isnull(Checker.NomineeTitle,'')				=isnull(Maker.NomineeTitle,'') 
+					And isnull(Checker.NomineeFName,'')				=isnull(Maker.NomineeFName,'') 
+					And isnull(Checker.NomineeMName,'')				=isnull(Maker.NomineeMName,'') 
+					And isnull(Checker.NomineeLName,'')				=isnull(Maker.NomineeLName,'') 
+					And isnull(Checker.NomineeSufx,'')				=isnull(Maker.NomineeSufx,'') 
+					And isnull(Checker.NomineeFatherName,'')		=isnull(Maker.NomineeFatherName,'') 
+					And isnull(Checker.NomineeDOB,'')				=isnull(Maker.NomineeDOB,'') 
+					And	isnull(Checker.NomineeAdrs1,'')				=isnull(Maker.NomineeAdrs1,'') 
+					And isnull(Checker.NomineeAdrs2,'')				=isnull(Maker.NomineeAdrs2,'') 
+					And isnull(Checker.NomineeAdrs3,'')				=isnull(Maker.NomineeAdrs3,'') 
+					And isnull(Checker.NomineeCity,'')				=isnull(Maker.NomineeCity,'') 
+					And isnull(Checker.NomineePin,'')				=isnull(Maker.NomineePin,'') 
+					And isnull(Checker.NomineeState,'')				=isnull(Maker.NomineeState,'') 
+					And isnull(Checker.NomineeCountry,'')			=isnull(Maker.NomineeCountry,'') 
+					And isnull(Checker.NomineeTelOfc,'')			=isnull(Maker.NomineeTelOfc,'') 
+					And isnull(Checker.NomineeTelRes,'')			=isnull(Maker.NomineeTelRes,'')
+					And isnull(Checker.NomineeFaxNo,'')				=isnull(Maker.NomineeFaxNo,'')
+					And isnull(Checker.NomineeMobileNo,'')			=isnull(Maker.NomineeMobileNo,'')
+					And isnull(Checker.NomineeEmailID,'')			=isnull(Maker.NomineeEmailID,'')
+					And isnull(Checker.NomineePanNo,'')				=isnull(Maker.NomineePanNo,'')
+					And isnull(Checker.NomineeUID,'')				=isnull(Maker.NomineeUID,'')
+					And isnull(Checker.NomineeITCircle,'')			=isnull(Maker.NomineeITCircle,'')
+					----Guardian Name Address Detail----------------------------------------------------
+					And isnull(Checker.SkipGurdian,'')				=isnull(Maker.SkipGurdian,'')
+					And isnull(Checker.GurdianTitle,'')				=isnull(Maker.GurdianTitle,'')
+					And isnull(Checker.GurdianFName,'')				=isnull(Maker.GurdianFName,'')
+					And isnull(Checker.GurdianMName,'')				=isnull(Maker.GurdianMName,'')
+					And isnull(Checker.GurdianLName,'')				=isnull(Maker.GurdianLName,'')
+					And isnull(Checker.GurdianSufx,'')				=isnull(Maker.GurdianSufx,'') 
+					And isnull(Checker.GurdianFatherName,'')		=isnull(Maker.GurdianFatherName,'') 
+					And isnull(Checker.GurdianDOB,'')				=isnull(Maker.GurdianDOB,'') 
+					And isnull(Checker.GurdianAdrs1,'')				=isnull(Maker.GurdianAdrs1,'')
+					And isnull(Checker.GurdianAdrs2,'')				=isnull(Maker.GurdianAdrs2,'')
+					And isnull(Checker.GurdianAdrs3,'')				=isnull(Maker.GurdianAdrs3,'')
+					And isnull(Checker.GurdianCity,'')				=isnull(Maker.GurdianCity,'')
+					And isnull(Checker.GurdianPin,'')				=isnull(Maker.GurdianPin,'') 
+					And isnull(Checker.GurdianState,'')				=isnull(Maker.GurdianState,'') 
+					And isnull(Checker.GurdianCountry,'')			=isnull(Maker.GurdianCountry,'')
+					And isnull(Checker.GurdianTelOfc,'')			=isnull(Maker.GurdianTelOfc,'')
+					And isnull(Checker.GurdianTelRes,'')			=isnull(Maker.GurdianTelRes,'')
+					And isnull(Checker.GurdianFaxNo,'')				=isnull(Maker.GurdianFaxNo,'')
+					And isnull(Checker.GurdianMobileNo,'')			=isnull(Maker.GurdianMobileNo,'')
+					And isnull(Checker.GurdianEmailID,'')			=isnull(Maker.GurdianEmailID,'')
+					And isnull(Checker.GurdianPanNo,'')				=isnull(Maker.GurdianPanNo,'')
+					And isnull(Checker.GurdianUID,'')				=isnull(Maker.GurdianUID,'') 
+					And isnull(Checker.GurdianITCircle,'')			=isnull(Maker.GurdianITCircle,'')
+					----Nominee Gurdian Name Address Detail----------------------------------------------
+					And isnull(Checker.SkipNomGurdian,'')			=isnull(Maker.SkipNomGurdian,'') 
+					And isnull(Checker.NomGurdianTitle,'')			=isnull(Maker.NomGurdianTitle,'')
+					And isnull(Checker.NomGurdianFName,'')			=isnull(Maker.NomGurdianFName,'')
+					And isnull(Checker.NomGurdianMName,'')			=isnull(Maker.NomGurdianMName,'')
+					And isnull(Checker.NomGurdianLName,'')			=isnull(Maker.NomGurdianLName,'')
+					And isnull(Checker.NomGurdianSufx,'')			=isnull(Maker.NomGurdianSufx,'')
+					And isnull(Checker.NomGurdianFatherName,'')		=isnull(Maker.NomGurdianFatherName,'') 
+					And isnull(Checker.NomGurdianDOB,'')			=isnull(Maker.NomGurdianDOB,'')
+					And isnull(Checker.NomGurdianAdrs1,'')			=isnull(Maker.NomGurdianAdrs1,'')
+					And isnull(Checker.NomGurdianAdrs2,'')			=isnull(Maker.NomGurdianAdrs2,'')
+					And isnull(Checker.NomGurdianAdrs3,'')			=isnull(Maker.NomGurdianAdrs3,'')
+					And isnull(Checker.NomGurdianCity,'')			=isnull(Maker.NomGurdianCity,'') 
+					And isnull(Checker.NomGurdianPin,'')			=isnull(Maker.NomGurdianPin,'')
+					And isnull(Checker.NomGurdianState,'')			=isnull(Maker.NomGurdianState,'')
+					And isnull(Checker.NomGurdianCountry,'')		=isnull(Maker.NomGurdianCountry,'')
+					And isnull(Checker.NomGurdianTelOfc,'')			=isnull(Maker.NomGurdianTelOfc,'')
+					And isnull(Checker.NomGurdianTelRes,'')			=isnull(Maker.NomGurdianTelRes,'')
+					And isnull(Checker.NomGurdianFaxNo,'')			=isnull(Maker.NomGurdianFaxNo,'')
+					And isnull(Checker.NomGurdianMobileNo,'')		=isnull(Maker.NomGurdianMobileNo,'') 
+					And isnull(Checker.NomGurdianEmailID,'')		=isnull(Maker.NomGurdianEmailID,'')
+					And isnull(Checker.NomGurdianPanNo,'')			=isnull(Maker.NomGurdianPanNo,'') 
+					And isnull(Checker.NomGurdianUID,'')			=isnull(Maker.NomGurdianUID,'')
+					And isnull(Checker.NomGurdianITCircle,'')		=isnull(Maker.NomGurdianITCircle,'') 
+												
+				If(@CallBy='SingleVerifyList')
+					Begin
+							Select KRAFormNO,(Select cmp_Name from tbl_master_company where cmp_internalid=CompanyID) as Company
+									,'Single' as MatchStatus,KRAAplicatnNo,CompanyID
+							From #TempCDSL 
+							where KRAFormNO in (Select * from dbo.fnSplitReturnTable(@SingleVerifyFormNo,','))
+						
+					End		
+				If(@CallBy='DoubleVerifyList')
+					Begin
+							Alter Table #TempCDSL
+							Add MatchStatus varchar(20) null
+							
+							Update #TempCDSL Set MatchStatus='Matched' 
+							Where KRAFormNO in (Select * From dbo.fnsplitReturntable(@MatchedCheckerFormNo,','))		
+															
+							Update #TempCDSL Set MatchStatus='UnMatched' 
+							Where KRAFormNO not in (Select * From dbo.fnsplitReturntable(@MatchedCheckerFormNo+','+@SingleVerifyFormNo,','))						
+									And CompanyID in (Select * from dbo.fnSplitReturnTable(@Company,','))
+									And (CreateDateTime Between @FromDate and @ToDate)	
+										
+	--select * From #TempCDSL
+								
+							Create Table #DoubleVerifyDetail(KRAFormNo Varchar(20),CompanyID Varchar(10),MatchStatus Varchar(20),
+							KraApplicatnNo Varchar(20))
+							
+							Insert into #DoubleVerifyDetail
+							Select KRAFormNO,CompanyID,MatchStatus,KRAAplicatnNo
+							From #TempCDSL Where EntryProfileStatus in ('C','M') 
+												And MatchStatus is not null
+							Group by KRAFormNO,CompanyID,MatchStatus,KRAAplicatnNo,CompanyID
+												
+							Select KRAFormNo,(Select cmp_Name from tbl_master_company where cmp_internalid=CompanyID) as Company,MatchStatus,
+								   KraApplicatnNo as KRAAplicatnNo,CompanyID from #DoubleVerifyDetail
+							Group by KRAFormNo,CompanyID,MatchStatus,KraApplicatnNo,CompanyID					
+							
+					End			
+				If(@CallBy='SingleVerifyDetail')
+					Begin
+							Select * From #TempCDSL where FormNo=@FormNo				
+					End	
+				If(@CallBy='DoubleVerifyDetail')
+					Begin							
+							Select Checker.KRAFormNO
+									----Basic Conditions----		
+									,case when isnull(Checker.CompanyID,'')					=isnull(Maker.CompanyID,'') then 'None' else 'Red' end as CompanyID		
+								    ,case when isnull(Checker.DPID,'')						=isnull(Maker.DPID,'') then 'None' else 'Red' end as DPID
+									,case when isnull(Checker.KRAFormNO,'')					=isnull(Maker.KRAFormNO,'') then 'None' else 'Red' end as KRAFormNO	 			
+									,case when isnull(Checker.KRAAplicatnNo,'')				=isnull(Maker.KRAAplicatnNo,'') then 'None' else 'Red' end as KRAAplicatnNo	 
+									,case when isnull(Checker.ClientType,'')				=isnull(Maker.ClientType,'') then 'None' else 'Red' end as ClientType
+									,case when isnull(Checker.BranchID,'0')					=isnull(Maker.BranchID,'0') then 'None' else 'Red' end as BranchID
+									,case when isnull(Checker.FinYear,'')					=isnull(Maker.FinYear,'') then 'None' else 'Red' end as FinYear
+									,case when isnull(Checker.ProductTypeValue,'0')			=isnull(Maker.ProductTypeValue,'0') then 'None' else 'Red' end as ProductTypeValue
+									----First Holder Name Address----	
+									,case when isnull(Checker.FHlderTitle,'')				=isnull(Maker.FHlderTitle,'') then 'None' else 'Red' end as FHlderTitle
+									,case when isnull(Checker.FHlderFName,'')				=isnull(Maker.FHlderFName,'') then 'None' else 'Red' end as FHlderFName
+									,case when isnull(Checker.FHlderMName,'')				=isnull(Maker.FHlderMName,'') then 'None' else 'Red' end as FHlderMName
+									,case when isnull(Checker.FHlderLName,'')				=isnull(Maker.FHlderLName,'') then 'None' else 'Red' end as FHlderLName
+									,case when isnull(Checker.FHlderSufx,'')				=isnull(Maker.FHlderSufx,'') then 'None' else 'Red' end as FHlderSufx
+									,case when isnull(Checker.FHlderFatherName,'')			=isnull(Maker.FHlderFatherName,'') then 'None' else 'Red' end as FHlderFatherName
+									,case when isnull(Checker.FHlderCAdrs1,'')				=isnull(Maker.FHlderCAdrs1,'') then 'None' else 'Red' end as FHlderCAdrs1
+									,case when isnull(Checker.FHlderCAdrs2,'')				=isnull(Maker.FHlderCAdrs2,'') then 'None' else 'Red' end as FHlderCAdrs2
+									,case when isnull(Checker.FHlderCAdrs3,'')				=isnull(Maker.FHlderCAdrs3,'') then 'None' else 'Red' end as FHlderCAdrs3
+									,case when isnull(Checker.FHlderCCity,'0')				=isnull(Maker.FHlderCCity,'0') then 'None' else 'Red' end as FHlderCCity
+									,case when isnull(Checker.FHlderCPin,'')				=isnull(Maker.FHlderCPin,'') then 'None' else 'Red' end as FHlderCPin
+									,case when isnull(Checker.FHlderCState,'0')				=isnull(Maker.FHlderCState,'0') then 'None' else 'Red' end as FHlderCState
+									,case when isnull(Checker.FHlderCCountry,'0')			=isnull(Maker.FHlderCCountry,'0') then 'None' else 'Red' end as FHlderCCountry
+									,case when isnull(Checker.SameAddress,'')				=isnull(Maker.SameAddress,'') then 'None' else 'Red' end as SameAddress
+									,case when isnull(Checker.FHlderPAdrs1,'')				=isnull(Maker.FHlderPAdrs1,'') then 'None' else 'Red' end as FHlderPAdrs1
+									,case when isnull(Checker.FHlderPAdrs2,'')				=isnull(Maker.FHlderPAdrs2,'') then 'None' else 'Red' end as FHlderPAdrs2
+									,case when isnull(Checker.FHlderPAdrs3,'')				=isnull(Maker.FHlderPAdrs3,'') then 'None' else 'Red' end as FHlderPAdrs3
+									,case when isnull(Checker.FHlderPCity,'0')				=isnull(Maker.FHlderPCity,'0') then 'None' else 'Red' end as FHlderPCity
+									,case when isnull(Checker.FHlderPPin,'')				=isnull(Maker.FHlderPPin,'') then 'None' else 'Red' end as FHlderPPin
+									,case when isnull(Checker.FHlderPState,'0')				=isnull(Maker.FHlderPState,'0') then 'None' else 'Red' end as FHlderPState
+									,case when isnull(Checker.FHlderPCountry,'0')			=isnull(Maker.FHlderPCountry,'0') then 'None' else 'Red' end as FHlderPCountry
+									----First Holder Contact Pan---- 		
+									,case when isnull(Checker.TelOfc,'')					=isnull(Maker.TelOfc,'') then 'None' else 'Red' end as TelOfc
+									,case when isnull(Checker.TelRes,'')					=isnull(Maker.TelRes,'') then 'None' else 'Red' end as TelRes
+									,case when isnull(Checker.FaxNo,'')						=isnull(Maker.FaxNo,'') then 'None' else 'Red' end as FaxNo
+									,case when isnull(Checker.MobileNo,'')					=isnull(Maker.MobileNo,'') then 'None' else 'Red' end as MobileNo
+									,case when isnull(Checker.EmailID,'')					=isnull(Maker.EmailID,'') then 'None' else 'Red' end as EmailID
+									,case when isnull(Checker.FHldrIsPanExmpt,'')			=isnull(Maker.FHldrIsPanExmpt,'') then 'None' else 'Red' end as FHldrIsPanExmpt
+									,case when isnull(Checker.FHlderExmptnType,'')			=isnull(Maker.FHlderExmptnType,'') then 'None' else 'Red' end as FHlderExmptnType
+									,case when isnull(Checker.FHlderPanNo,'')				=isnull(Maker.FHlderPanNo,'') then 'None' else 'Red' end as FHlderPanNo
+									,case when isnull(Checker.FHlderPanVerificatn,'')		=isnull(Maker.FHlderPanVerificatn,'') then 'None' else 'Red' end as FHlderPanVerificatn
+									,case when isnull(Checker.FHlderUID,'')					=isnull(Maker.FHlderUID,'') then 'None' else 'Red' end as FHlderUID
+									,case when isnull(Checker.FHlderITCircle,'')			=isnull(Maker.FHlderITCircle,'') then 'None' else 'Red' end as FHlderITCircle
+									----First Holder User Defined Field----					
+									,case when isnull(Checker.UserFld1,'')					=isnull(Maker.UserFld1,'') then 'None' else 'Red' end as UserFld1
+									,case when isnull(Checker.UserFld2,'')					=isnull(Maker.UserFld2,'') then 'None' else 'Red' end as UserFld2
+									,case when isnull(Checker.UserFld3,'')					=isnull(Maker.UserFld3,'') then 'None' else 'Red' end as UserFld3
+									----Second Holder----									
+									,case when isnull(Checker.SkipSHlder,'')				=isnull(Maker.SkipSHlder,'') then 'None' else 'Red' end as SkipSHlder
+									,case when isnull(Checker.SHlderTitle,'')				=isnull(Maker.SHlderTitle,'') then 'None' else 'Red' end as SHlderTitle
+									,case when isnull(Checker.SHlderFName,'')				=isnull(Maker.SHlderFName,'') then 'None' else 'Red' end as SHlderFName
+									,case when isnull(Checker.SHlderMName,'')				=isnull(Maker.SHlderMName,'') then 'None' else 'Red' end as SHlderMName
+									,case when isnull(Checker.SHlderLName,'')				=isnull(Maker.SHlderLName,'') then 'None' else 'Red' end as SHlderLName
+									,case when isnull(Checker.SHlderSufx,'')				=isnull(Maker.SHlderSufx,'') then 'None' else 'Red' end as SHlderSufx
+									,case when isnull(Checker.SHlderFatherName,'')			=isnull(Maker.SHlderFatherName,'') then 'None' else 'Red' end as SHlderFatherName
+									,case when isnull(Checker.SHldrIsPanExmpt,'')			=isnull(Maker.SHldrIsPanExmpt,'') then 'None' else 'Red' end as SHldrIsPanExmpt
+									,case when isnull(Checker.SHlderExmptnType,'')			=isnull(Maker.SHlderExmptnType,'') then 'None' else 'Red' end as SHlderExmptnType
+									,case when isnull(Checker.SHlderPanNo,'')				=isnull(Maker.SHlderPanNo,'') then 'None' else 'Red' end as SHlderPanNo
+									,case when isnull(Checker.SHlderPanVerificatn,'')		=isnull(Maker.SHlderPanVerificatn,'') then 'None' else 'Red' end as SHlderPanVerificatn
+									,case when isnull(Checker.SHlderUID,'')					=isnull(Maker.SHlderUID,'') then 'None' else 'Red' end as SHlderUID
+									,case when isnull(Checker.SHlderITCircle,'')			=isnull(Maker.SHlderITCircle,'') then 'None' else 'Red' end as SHlderITCircle
+									----Third Holder----	
+									,case when isnull(Checker.SkipTHlder,'')				=isnull(Maker.SkipTHlder,'') then 'None' else 'Red' end as SkipTHlder
+									,case when isnull(Checker.THlderTitle,'')				=isnull(Maker.THlderTitle,'') then 'None' else 'Red' end as THlderTitle
+									,case when isnull(Checker.THlderFName,'')				=isnull(Maker.THlderFName,'') then 'None' else 'Red' end as THlderFName
+									,case when isnull(Checker.THlderMName,'')				=isnull(Maker.THlderMName,'') then 'None' else 'Red' end as THlderMName
+									,case when isnull(Checker.THlderLName,'')				=isnull(Maker.THlderLName,'') then 'None' else 'Red' end as THlderLName
+									,case when isnull(Checker.THlderSufx,'')				=isnull(Maker.THlderSufx,'') then 'None' else 'Red' end as THlderSufx
+									,case when isnull(Checker.THlderFatherName,'')			=isnull(Maker.THlderFatherName,'') then 'None' else 'Red' end as THlderFatherName
+									,case when isnull(Checker.THldrIsPanExmpt,'')			=isnull(Maker.THldrIsPanExmpt,'') then 'None' else 'Red' end as THldrIsPanExmpt
+									,case when isnull(Checker.THlderExmptnType,'')			=isnull(Maker.THlderExmptnType,'') then 'None' else 'Red' end as THlderExmptnType
+									,case when isnull(Checker.THlderPanNo,'')				=isnull(Maker.THlderPanNo,'') then 'None' else 'Red' end as THlderPanNo
+									,case when isnull(Checker.THlderPanVerificatn,'')		=isnull(Maker.THlderPanVerificatn,'') then 'None' else 'Red' end as THlderPanVerificatn
+									,case when isnull(Checker.THlderUID,'')					=isnull(Maker.THlderUID,'') then 'None' else 'Red' end as THlderUID
+									,case when isnull(Checker.THlderITCircle,'')			=isnull(Maker.THlderITCircle,'') then 'None' else 'Red' end as THlderITCircle
+									----Product Details----
+					 				,case when isnull(Checker.DPIntrnlRefNo,'')				=isnull(Maker.DPIntrnlRefNo,'') then 'None' else 'Red' end as DPIntrnlRefNo
+									,case when isnull(Checker.MaturityDt,'')				=isnull(Maker.MaturityDt,'') then 'None' else 'Red' end as MaturityDt
+									,case when isnull(Checker.DOBDate,'')					=isnull(Maker.DOBDate,'') then 'None' else 'Red' end as DOBDate
+									,case when isnull(Checker.Gender,'')					=isnull(Maker.Gender,'') then 'None' else 'Red' end as Gender
+									,case when isnull(Checker.Occupation,'0')				=isnull(Maker.Occupation,'0') then 'None' else 'Red' end as Occupation
+									,case when isnull(Checker.LifeStyle,'')					=isnull(Maker.LifeStyle,'') then 'None' else 'Red' end as LifeStyle
+									,case when isnull(Checker.GeoCodeValue,'0')				=isnull(Maker.GeoCodeValue,'0') then 'None' else 'Red' end as GeoCodeValue
+									,case when isnull(Checker.EducationValue,'0')			=isnull(Maker.EducationValue,'0') then 'None' else 'Red' end as EducationValue
+									,case when isnull(Checker.AnnualIncomeValue,'0')		=isnull(Maker.AnnualIncomeValue,'0') then 'None' else 'Red' end as AnnualIncomeValue
+									,case when isnull(Checker.Nationality,'0')				=isnull(Maker.Nationality,'0') then 'None' else 'Red' end as Nationality
+									,case when isnull(Checker.Status,'0')					=isnull(Maker.Status,'0') then 'None' else 'Red' end as Status
+									,case when isnull(Checker.BOFeeType,'')					=isnull(Maker.BOFeeType,'') then 'None' else 'Red' end as BOFeeType
+									,case when isnull(Checker.LanguageValue,'0')			=isnull(Maker.LanguageValue,'0') then 'None' else 'Red' end as LanguageValue
+									,case when isnull(Checker.Catagory4,'')					=isnull(Maker.Catagory4,'') then 'None' else 'Red' end as Catagory4
+									,case when isnull(Checker.Bank5,'')						=isnull(Maker.Bank5,'') then 'None' else 'Red' end as Bank5
+									,case when isnull(Checker.RelativeValue,'0')			=isnull(Maker.RelativeValue,'0') then 'None' else 'Red' end as RelativeValue
+									,case when isnull(Checker.StaffCode,'')					=isnull(Maker.StaffCode,'') then 'None' else 'Red' end as StaffCode
+									,case when isnull(Checker.RGESS,'')						=isnull(Maker.RGESS,'') then 'None' else 'Red' end as RGESS
+									,case when isnull(Checker.AnnualRpt,'')					=isnull(Maker.AnnualRpt,'') then 'None' else 'Red' end as AnnualRpt
+									,case when isnull(Checker.PSIFlag,'')					=isnull(Maker.PSIFlag,'') then 'None' else 'Red' end as PSIFlag
+									,case when isnull(Checker.ERDFlag,'')					=isnull(Maker.ERDFlag,'') then 'None' else 'Red' end as ERDFlag
+									,case when isnull(Checker.BSDACFlag,'')					=isnull(Maker.BSDACFlag,'') then 'None' else 'Red' end as BSDACFlag
+									,case when isnull(Checker.SecurityAccessValue,'0')		=isnull(Maker.SecurityAccessValue,'0') then 'None' else 'Red' end as SecurityAccessValue
+									,case when isnull(Checker.BOCategoryValue,'0')			=isnull(Maker.BOCategoryValue,'0') then 'None' else 'Red' end as BOCategoryValue
+									,case when isnull(Checker.BOSettPlng,'')				=isnull(Maker.BOSettPlng,'') then 'None' else 'Red' end as BOSettPlng
+									,case when isnull(Checker.DBIFSC,'')					=isnull(Maker.DBIFSC,'') then 'None' else 'Red' end as DBIFSC
+									,case when isnull(Checker.RBIRefNo,'')					=isnull(Maker.RBIRefNo,'') then 'None' else 'Red' end as RBIRefNo
+									,case when isnull(Checker.RBIAprvlDt,'')				=isnull(Maker.RBIAprvlDt,'') then 'None' else 'Red' end as RBIAprvlDt
+									,case when isnull(Checker.SEBIRegNo,'')					=isnull(Maker.SEBIRegNo,'') then 'None' else 'Red' end as SEBIRegNo
+									,case when isnull(Checker.BenTaxDeductStatusValue,'0')	=isnull(Maker.BenTaxDeductStatusValue,'0') then 'None' else 'Red' end as BenTaxDeductStatusValue
+									,case when isnull(Checker.SmartCardReq,'')				=isnull(Maker.SmartCardReq,'') then 'None' else 'Red' end as SmartCardReq
+									,case when isnull(Checker.SmartCardNo,'')				=isnull(Maker.SmartCardNo,'') then 'None' else 'Red' end as SmartCardNo
+									,case when isnull(Checker.SmartCardPin,'0')				=isnull(Maker.SmartCardPin,'0') then 'None' else 'Red' end as SmartCardPin
+									,case when isnull(Checker.ECS,'')						=isnull(Maker.ECS,'') then 'None' else 'Red' end as ECS
+									,case when isnull(Checker.ElectronicCnfrmatn,'')		=isnull(Maker.ElectronicCnfrmatn,'') then 'None' else 'Red' end as ElectronicCnfrmatn
+									,case when isnull(Checker.DividndCurncyValue,'0')		=isnull(Maker.DividndCurncyValue,'0') then 'None' else 'Red' end as DividndCurncyValue
+									,case when isnull(Checker.GroupCode,'')					=isnull(Maker.GroupCode,'') then 'None' else 'Red' end as GroupCode
+									,case when isnull(Checker.BOSubStatusValue,'0')			=isnull(Maker.BOSubStatusValue,'0') then 'None' else 'Red' end as BOSubStatusValue
+									,case when isnull(Checker.ClrngCorporatnIDValue,'0')	=isnull(Maker.ClrngCorporatnIDValue,'0') then 'None' else 'Red' end as ClrngCorporatnIDValue
+									,case when isnull(Checker.ClrngMembrID,'')				=isnull(Maker.ClrngMembrID,'') then 'None' else 'Red' end as ClrngMembrID
+									,case when isnull(Checker.StckExchng,'')				=isnull(Maker.StckExchng,'') then 'None' else 'Red' end as StckExchng
+									,case when isnull(Checker.ConfrmatnWavd,'')				=isnull(Maker.ConfrmatnWavd,'') then 'None' else 'Red' end as ConfrmatnWavd
+									,case when isnull(Checker.TradngID,'')					=isnull(Maker.TradngID,'') then 'None' else 'Red' end as TradngID
+									,case when isnull(Checker.BOStatemntCycleValue,'0')		=isnull(Maker.BOStatemntCycleValue,'0') then 'None' else 'Red' end as BOStatemntCycleValue			
+									,case when isnull(Checker.BENFBnkCode,'')				=isnull(Maker.BENFBnkCode,'') then 'None' else 'Red' end as BENFBnkCode									
+									,case when isnull(Checker.BENFBnkAcTypeValue,'0')		=isnull(Maker.BENFBnkAcTypeValue,'0') then 'None' else 'Red' end as BENFBnkAcTypeValue
+									,case when isnull(Checker.BENFBnkAcNo,'')				=isnull(Maker.BENFBnkAcNo,'') then 'None' else 'Red' end as BENFBnkAcNo
+									,case when isnull(Checker.BENFBnkCCYValue,'0')			=isnull(Maker.BENFBnkCCYValue,'0') then 'None' else 'Red' end as BENFBnkCCYValue
+									,case when isnull(Checker.DIVNDBnkAcTypeValue,'0')		=isnull(Maker.DIVNDBnkAcTypeValue,'0') then 'None' else 'Red' end as DIVNDBnkAcTypeValue	
+									,case when isnull(Checker.DIVNDBnkCode,'')				=isnull(Maker.DIVNDBnkCode,'') then 'None' else 'Red' end as DIVNDBnkCode
+									,case when isnull(Checker.DIVNDAcNo,'')					=isnull(Maker.DIVNDAcNo,'') then 'None' else 'Red' end as DIVNDAcNo
+									,case when isnull(Checker.DIVNDBnkCCYValue,'0')			=isnull(Maker.DIVNDBnkCCYValue,'0') then 'None' else 'Red' end as DIVNDBnkCCYValue
+									----POA Detail----
+									,case when isnull(Checker.SkipPOA,'')					=isnull(Maker.SkipPOA,'') then 'None' else 'Red' end as SkipPOA
+									,case when isnull(Checker.POAIDValue,'0')				=isnull(Maker.POAIDValue,'0') then 'None' else 'Red' end as POAIDValue
+									,case when isnull(Checker.POARegNo,'')					=isnull(Maker.POARegNo,'') then 'None' else 'Red' end as POARegNo
+									,case when isnull(Checker.PurposeCode,'')				=isnull(Maker.PurposeCode,'') then 'None' else 'Red' end as PurposeCode	
+									,case when isnull(Checker.GPABPA,'')					=isnull(Maker.GPABPA,'') then 'None' else 'Red' end as GPABPA
+									,case when isnull(Checker.FrmDt,'')						=isnull(Maker.FrmDt,'') then 'None' else 'Red' end as FrmDt
+									,case when isnull(Checker.ToDt,'')						=isnull(Maker.ToDt,'') then 'None' else 'Red' end as ToDt
+									,case when isnull(Checker.POAUserFld1,'')				=isnull(Maker.POAUserFld1,'') then 'None' else 'Red' end as POAUserFld1
+									,case when isnull(Checker.POAUserFld2,'')				=isnull(Maker.POAUserFld2,'') then 'None' else 'Red' end as POAUserFld2	
+									,case when isnull(Checker.Remarks,'')					=isnull(Maker.Remarks,'') then 'None' else 'Red' end as Remarks
+									----Nominee Details----					
+									,case when isnull(Checker.SkipNominee,'')				=isnull(Maker.SkipNominee,'') then 'None' else 'Red' end as SkipNominee
+									,case when isnull(Checker.NomineeTitle,'')				=isnull(Maker.NomineeTitle,'') then 'None' else 'Red' end as NomineeTitle
+									,case when isnull(Checker.NomineeFName,'')				=isnull(Maker.NomineeFName,'') then 'None' else 'Red' end as NomineeFName
+									,case when isnull(Checker.NomineeMName,'')				=isnull(Maker.NomineeMName,'') then 'None' else 'Red' end as NomineeMName
+									,case when isnull(Checker.NomineeLName,'')				=isnull(Maker.NomineeLName,'') then 'None' else 'Red' end as NomineeLName
+									,case when isnull(Checker.NomineeSufx,'')				=isnull(Maker.NomineeSufx,'') then 'None' else 'Red' end as NomineeSufx
+									,case when isnull(Checker.NomineeFatherName,'')			=isnull(Maker.NomineeFatherName,'') then 'None' else 'Red' end as NomineeFatherName
+									,case when isnull(Checker.NomineeDOB,'')				=isnull(Maker.NomineeDOB,'') then 'None' else 'Red' end as NomineeDOB
+									,case when isnull(Checker.NomineeAdrs1,'')				=isnull(Maker.NomineeAdrs1,'') then 'None' else 'Red' end as NomineeAdrs1
+									,case when isnull(Checker.NomineeAdrs2,'')				=isnull(Maker.NomineeAdrs2,'') then 'None' else 'Red' end as NomineeAdrs2
+									,case when isnull(Checker.NomineeAdrs3,'')				=isnull(Maker.NomineeAdrs3,'') then 'None' else 'Red' end as NomineeAdrs3
+									,case when isnull(Checker.NomineeCity,'')				=isnull(Maker.NomineeCity,'') then 'None' else 'Red' end as NomineeCity
+									,case when isnull(Checker.NomineePin,'')				=isnull(Maker.NomineePin,'') then 'None' else 'Red' end as NomineePin
+									,case when isnull(Checker.NomineeState,'')				=isnull(Maker.NomineeState,'') then 'None' else 'Red' end as NomineeState
+									,case when isnull(Checker.NomineeCountry,'')			=isnull(Maker.NomineeCountry,'') then 'None' else 'Red' end as NomineeCountry
+									,case when isnull(Checker.NomineeTelOfc,'')				=isnull(Maker.NomineeTelOfc,'') then 'None' else 'Red' end as NomineeTelOfc
+									,case when isnull(Checker.NomineeTelRes,'')				=isnull(Maker.NomineeTelRes,'') then 'None' else 'Red' end as NomineeTelRes
+									,case when isnull(Checker.NomineeFaxNo,'')				=isnull(Maker.NomineeFaxNo,'') then 'None' else 'Red' end as NomineeFaxNo
+									,case when isnull(Checker.NomineeMobileNo,'')			=isnull(Maker.NomineeMobileNo,'') then 'None' else 'Red' end as NomineeMobileNo
+									,case when isnull(Checker.NomineeEmailID,'')			=isnull(Maker.NomineeEmailID,'') then 'None' else 'Red' end as NomineeEmailID
+									,case when isnull(Checker.NomineePanNo,'')				=isnull(Maker.NomineePanNo,'') then 'None' else 'Red' end as NomineePanNo
+									,case when isnull(Checker.NomineeUID,'')				=isnull(Maker.NomineeUID,'') then 'None' else 'Red' end as NomineeUID
+									,case when isnull(Checker.NomineeITCircle,'')			=isnull(Maker.NomineeITCircle,'') then 'None' else 'Red' end as NomineeITCircle
+									----Main Gurdian----
+									,case when isnull(Checker.SkipGurdian,'')				=isnull(Maker.SkipGurdian,'') then 'None' else 'Red' end as SkipGurdian
+									,case when isnull(Checker.GurdianTitle,'')				=isnull(Maker.GurdianTitle,'') then 'None' else 'Red' end as GurdianTitle
+									,case when isnull(Checker.GurdianFName,'')				=isnull(Maker.GurdianFName,'') then 'None' else 'Red' end as GurdianFName
+									,case when isnull(Checker.GurdianMName,'')				=isnull(Maker.GurdianMName,'') then 'None' else 'Red' end as GurdianMName
+									,case when isnull(Checker.GurdianLName,'')				=isnull(Maker.GurdianLName,'') then 'None' else 'Red' end as GurdianLName
+									,case when isnull(Checker.GurdianSufx,'')				=isnull(Maker.GurdianSufx,'') then 'None' else 'Red' end as GurdianSufx
+									,case when isnull(Checker.GurdianFatherName,'')			=isnull(Maker.GurdianFatherName,'') then 'None' else 'Red' end as GurdianFatherName
+									,case when isnull(Checker.GurdianDOB,'')				=isnull(Maker.GurdianDOB,'') then 'None' else 'Red' end as GurdianDOB
+									,case when isnull(Checker.GurdianAdrs1,'')				=isnull(Maker.GurdianAdrs1,'') then 'None' else 'Red' end as GurdianAdrs1
+									,case when isnull(Checker.GurdianAdrs2,'')				=isnull(Maker.GurdianAdrs2,'') then 'None' else 'Red' end as GurdianAdrs2
+									,case when isnull(Checker.GurdianAdrs3,'')				=isnull(Maker.GurdianAdrs3,'') then 'None' else 'Red' end as GurdianAdrs3
+									,case when isnull(Checker.GurdianCity,'')				=isnull(Maker.GurdianCity,'') then 'None' else 'Red' end as GurdianCity
+									,case when isnull(Checker.GurdianPin,'')				=isnull(Maker.GurdianPin,'') then 'None' else 'Red' end as GurdianPin
+									,case when isnull(Checker.GurdianState,'')				=isnull(Maker.GurdianState,'') then 'None' else 'Red' end as GurdianState
+									,case when isnull(Checker.GurdianCountry,'')			=isnull(Maker.GurdianCountry,'') then 'None' else 'Red' end as GurdianCountry
+									,case when isnull(Checker.GurdianTelOfc,'')				=isnull(Maker.GurdianTelOfc,'') then 'None' else 'Red' end as GurdianTelOfc
+									,case when isnull(Checker.GurdianTelRes,'')				=isnull(Maker.GurdianTelRes,'') then 'None' else 'Red' end as GurdianTelRes
+									,case when isnull(Checker.GurdianFaxNo,'')				=isnull(Maker.GurdianFaxNo,'') then 'None' else 'Red' end as GurdianFaxNo
+									,case when isnull(Checker.GurdianMobileNo,'')			=isnull(Maker.GurdianMobileNo,'') then 'None' else 'Red' end as GurdianMobileNo
+									,case when isnull(Checker.GurdianEmailID,'')			=isnull(Maker.GurdianEmailID,'') then 'None' else 'Red' end as GurdianEmailID
+									,case when isnull(Checker.GurdianPanNo,'')				=isnull(Maker.GurdianPanNo,'') then 'None' else 'Red' end as GurdianPanNo
+									,case when isnull(Checker.GurdianUID,'')				=isnull(Maker.GurdianUID,'') then 'None' else 'Red' end as GurdianUID
+									,case when isnull(Checker.GurdianITCircle,'')			=isnull(Maker.GurdianITCircle,'') then 'None' else 'Red' end as GurdianITCircle
+									----Nominee Gurdian Details----
+									,case when isnull(Checker.SkipNomGurdian,'')			=isnull(Maker.SkipNomGurdian,'') then 'None' else 'Red' end as SkipNomGurdian
+									,case when isnull(Checker.NomGurdianTitle,'')			=isnull(Maker.NomGurdianTitle,'') then 'None' else 'Red' end as NomGurdianTitle
+									,case when isnull(Checker.NomGurdianFName,'')			=isnull(Maker.NomGurdianFName,'') then 'None' else 'Red' end as NomGurdianFName
+									,case when isnull(Checker.NomGurdianMName,'')			=isnull(Maker.NomGurdianMName,'') then 'None' else 'Red' end as NomGurdianMName
+									,case when isnull(Checker.NomGurdianLName,'')			=isnull(Maker.NomGurdianLName,'') then 'None' else 'Red' end as NomGurdianLName
+									,case when isnull(Checker.NomGurdianSufx,'')			=isnull(Maker.NomGurdianSufx,'') then 'None' else 'Red' end as NomGurdianSufx
+									,case when isnull(Checker.NomGurdianFatherName,'')		=isnull(Maker.NomGurdianFatherName,'') then 'None' else 'Red' end as NomGurdianFatherName
+									,case when isnull(Checker.NomGurdianDOB,'')				=isnull(Maker.NomGurdianDOB,'') then 'None' else 'Red' end as NomGurdianDOB
+									,case when isnull(Checker.NomGurdianAdrs1,'')			=isnull(Maker.NomGurdianAdrs1,'') then 'None' else 'Red' end as NomGurdianAdrs1
+									,case when isnull(Checker.NomGurdianAdrs2,'')			=isnull(Maker.NomGurdianAdrs2,'') then 'None' else 'Red' end as NomGurdianAdrs2
+									,case when isnull(Checker.NomGurdianAdrs3,'')			=isnull(Maker.NomGurdianAdrs3,'') then 'None' else 'Red' end as NomGurdianAdrs3
+									,case when isnull(Checker.NomGurdianCity,'')			=isnull(Maker.NomGurdianCity,'') then 'None' else 'Red' end as NomGurdianCity
+									,case when isnull(Checker.NomGurdianPin,'')				=isnull(Maker.NomGurdianPin,'') then 'None' else 'Red' end as NomGurdianPin
+									,case when isnull(Checker.NomGurdianState,'')			=isnull(Maker.NomGurdianState,'') then 'None' else 'Red' end as NomGurdianState
+									,case when isnull(Checker.NomGurdianCountry,'')			=isnull(Maker.NomGurdianCountry,'') then 'None' else 'Red' end as NomGurdianCountry
+									,case when isnull(Checker.NomGurdianTelOfc,'')			=isnull(Maker.NomGurdianTelOfc,'') then 'None' else 'Red' end as NomGurdianTelOfc
+									,case when isnull(Checker.NomGurdianTelRes,'')			=isnull(Maker.NomGurdianTelRes,'') then 'None' else 'Red' end as NomGurdianTelRes
+									,case when isnull(Checker.NomGurdianFaxNo,'')			=isnull(Maker.NomGurdianFaxNo,'') then 'None' else 'Red' end as NomGurdianFaxNo
+									,case when isnull(Checker.NomGurdianMobileNo,'')		=isnull(Maker.NomGurdianMobileNo,'') then 'None' else 'Red' end as NomGurdianMobileNo
+									,case when isnull(Checker.NomGurdianEmailID,'')			=isnull(Maker.NomGurdianEmailID,'') then 'None' else 'Red' end as NomGurdianEmailID
+									,case when isnull(Checker.NomGurdianPanNo,'')			=isnull(Maker.NomGurdianPanNo,'') then 'None' else 'Red' end as NomGurdianPanNo
+									,case when isnull(Checker.NomGurdianUID,'')				=isnull(Maker.NomGurdianUID,'') then 'None' else 'Red' end as NomGurdianUID
+									,case when isnull(Checker.NomGurdianITCircle,'')		=isnull(Maker.NomGurdianITCircle,'') then 'None' else 'Red' end as NomGurdianITCircle
+							 from (Select * From #TempCDSL where KRAFormNO=@FormNo and EntryProfileStatus='C') Checker
+									Inner Join
+								  (Select * From #TempCDSL where KRAFormNO=@FormNo and EntryProfileStatus='M') Maker		
+							 on Checker.KRAFormNO=Maker.KRAFormNO and Checker.KRAFormNO=@FormNo	
+	--------For Test to Check Compare Value---------				 
+	--Select KRAFormNO
+	--   		----Basic Conditions----		
+	--   		,isnull(CompanyID,'')							as CompanyID				
+	--		,isnull(DPID,'')								as DPID				
+	--   		,isnull(KRAFormNO,'')							as KRAFormNO
+	--   		,isnull(KRAAplicatnNo,'')						as KRAAplicatnNo
+	--   		,isnull(ClientType,'')			    			as ClientType
+	--   		,isnull(BranchID,'0')							as BranchID
+	--   		,isnull(FinYear,'')								as FinYear
+	--   		,isnull(ProductTypeValue,'0')					as ProductTypeValue
+	--   		----First Holder Name Address----	
+	--   		,isnull(FHlderTitle,'')							as FHlderTitle			
+	--   		,isnull(FHlderFName,'')							as FHlderFName			
+	--   		,isnull(FHlderMName,'')							as FHlderMName			
+	--   		,isnull(FHlderLName,'')							as FHlderLName			
+	--   		,isnull(FHlderSufx,'')							as FHlderSufx			
+	--   		,isnull(FHlderFatherName,'')					as FHlderFatherName	
+	--   		,isnull(FHlderCAdrs1,'')						as FHlderCAdrs1		
+	--   		,isnull(FHlderCAdrs2,'')						as FHlderCAdrs2		
+	--   		,isnull(FHlderCAdrs3,'')						as FHlderCAdrs3		
+	--   		,isnull(FHlderCCity,'0')						as FHlderCCity
+	--   		,isnull(FHlderCPin,'')							as FHlderCPin			
+	--   		,isnull(FHlderCState,'0')						as FHlderCState
+	--   		,isnull(FHlderCCountry,'0')						as FHlderCCountry
+	--   		,isnull(SameAddress,'')							as SameAddress			
+	--   		,isnull(FHlderPAdrs1,'')						as FHlderPAdrs1		
+	--   		,isnull(FHlderPAdrs2,'')						as FHlderPAdrs2		
+	--   		,isnull(FHlderPAdrs3,'')						as FHlderPAdrs3		
+	--   		,isnull(FHlderPCity,'0')						as FHlderPCity
+	--   		,isnull(FHlderPPin,'')							as FHlderPPin			
+	--   		,isnull(FHlderPState,'0')						as FHlderPState
+	--   		,isnull(FHlderPCountry,'0')						as FHlderPCountry
+	--   		----First Holder Contact Pan---- 				
+	--   		,isnull(TelOfc,'')								as TelOfc				
+	--   		,isnull(TelRes,'')								as TelRes				
+	--   		,isnull(FaxNo,'')								as FaxNo				
+	--   		,isnull(MobileNo,'')							as MobileNo			
+	--   		,isnull(EmailID,'')								as EmailID				
+	--   		,isnull(FHldrIsPanExmpt,'')						as FHldrIsPanExmpt		
+	--   		,isnull(FHlderExmptnType,'')					as FHlderExmptnType	
+	--   		,isnull(FHlderPanNo,'')							as FHlderPanNo			
+	--   		,isnull(FHlderPanVerificatn,'')					as FHlderPanVerificatn
+	--   		,isnull(FHlderUID,'')							as FHlderUID
+	--   		,isnull(FHlderITCircle,'')						as FHlderITCircle
+	--   		----First Holder User Defined Field----			
+	--   		,isnull(UserFld1,'')							as UserFld1
+	--   		,isnull(UserFld2,'')							as UserFld2
+	--   		,isnull(UserFld3,'')							as UserFld3
+	--   		----Second Holder----							
+	--   		,isnull(SkipSHlder,'')							as SkipSHlder
+	--   		,isnull(SHlderTitle,'')							as SHlderTitle
+	--   		,isnull(SHlderFName,'')							as SHlderFName
+	--   		,isnull(SHlderMName,'')							as SHlderMName
+	--   		,isnull(SHlderLName,'')							as SHlderLName
+	--   		,isnull(SHlderSufx,'')							as SHlderSufx
+	--   		,isnull(SHlderFatherName,'')					as SHlderFatherName
+	--   		,isnull(SHldrIsPanExmpt,'')						as SHldrIsPanExmpt
+	--   		,isnull(SHlderExmptnType,'')					as SHlderExmptnType
+	--   		,isnull(SHlderPanNo,'')							as SHlderPanNo
+	--   		,isnull(SHlderPanVerificatn,'')					as SHlderPanVerificatn
+	--   		,isnull(SHlderUID,'')							as SHlderUID
+	--   		,isnull(SHlderITCircle,'')						as SHlderITCircle
+	--   		----Third Holder----							
+	--   		,isnull(SkipTHlder,'')							as SkipTHlder
+	--   		,isnull(THlderTitle,'')							as THlderTitle
+	--   		,isnull(THlderFName,'')							as THlderFName
+	--   		,isnull(THlderMName,'')							as THlderMName
+	--   		,isnull(THlderLName,'')							as THlderLName
+	--   		,isnull(THlderSufx,'')							as THlderSufx
+	--   		,isnull(THlderFatherName,'')					as THlderFatherName
+	--   		,isnull(THldrIsPanExmpt,'')						as THldrIsPanExmpt
+	--   		,isnull(THlderExmptnType,'')					as THlderExmptnType
+	--   		,isnull(THlderPanNo,'')							as THlderPanNo
+	--   		,isnull(THlderPanVerificatn,'')					as THlderPanVerificatn
+	--   		,isnull(THlderUID,'')							as THlderUID
+	--   		,isnull(THlderITCircle,'')						as THlderITCircle
+	--   		----Product Details----							
+	--   		,isnull(DPIntrnlRefNo,'')						as DPIntrnlRefNo
+	--   		,isnull(MaturityDt,'')							as MaturityDt
+	--   		,isnull(DOBDate,'')								as DOBDate
+	--   		,isnull(Gender,'')								as Gender
+	--   		,isnull(Occupation,'0')							as Occupation
+	--   		,isnull(LifeStyle,'')							as LifeStyle
+	--   		,isnull(GeoCodeValue,'0')						as GeoCodeValue
+	--   		,isnull(EducationValue,'0')						as EducationValue
+	--   		,isnull(AnnualIncomeValue,'0')					as AnnualIncomeValue
+	--   		,isnull(Nationality,'0')						as Nationality
+	--   		,isnull(Status,'0')								as Status
+	--   		,isnull(BOFeeType,'')							as BOFeeType
+	--   		,isnull(LanguageValue,'0')						as LanguageValue
+	--   		,isnull(Catagory4,'')							as Catagory4
+	--   		,isnull(Bank5,'')								as Bank5
+	--   		,isnull(RelativeValue,'0')						as RelativeValue
+	--   		,isnull(StaffCode,'')							as StaffCode
+	--   		,isnull(RGESS,'')								as RGESS
+	--   		,isnull(AnnualRpt,'')							as AnnualRpt
+	--   		,isnull(PSIFlag,'')								as PSIFlag
+	--   		,isnull(ERDFlag,'')								as ERDFlag
+	--   		,isnull(BSDACFlag,'')							as BSDACFlag
+	--   		,isnull(SecurityAccessValue,'0')				as SecurityAccessValue
+	--   		,isnull(BOCategoryValue,'0')					as BOCategoryValue
+	--   		,isnull(BOSettPlng,'')							as BOSettPlng
+	--   		,isnull(DBIFSC,'')								as DBIFSC
+	--   		,isnull(RBIRefNo,'')							as RBIRefNo
+	--   		,isnull(RBIAprvlDt,'')							as RBIAprvlDt
+	--   		,isnull(SEBIRegNo,'')							as SEBIRegNo
+	--   		,isnull(BenTaxDeductStatusValue,'0')			as BenTaxDeductStatusValue
+	--   		,isnull(SmartCardReq,'')						as SmartCardReq
+	--   		,isnull(SmartCardNo,'')							as SmartCardNo
+	--   		,isnull(SmartCardPin,'0')						as SmartCardPin
+	--   		,isnull(ECS,'')									as ECS
+	--   		,isnull(ElectronicCnfrmatn,'')					as ElectronicCnfrmatn
+	--   		,isnull(DividndCurncyValue,'0')					as DividndCurncyValue
+	--   		,isnull(GroupCode,'')							as GroupCode
+	--   		,isnull(BOSubStatusValue,'0')					as BOSubStatusValue
+	--   		,isnull(ClrngCorporatnIDValue,'0')				as ClrngCorporatnIDValue
+	--   		,isnull(ClrngMembrID,'')						as ClrngMembrID
+	--   		,isnull(StckExchng,'')							as StckExchng
+	--   		,isnull(ConfrmatnWavd,'')						as ConfrmatnWavd
+	--   		,isnull(TradngID,'')							as TradngID
+	--   		,isnull(BOStatemntCycleValue,'0')				as BOStatemntCycleValue
+	--   		,isnull(BENFBnkCode,'')							as BENFBnkCode
+	--   		,isnull(BENFBnkAcTypeValue,'0')					as BENFBnkAcTypeValue
+	--   		,isnull(BENFBnkAcNo,'')							as BENFBnkAcNo
+	--   		,isnull(BENFBnkCCYValue,'0')					as BENFBnkCCYValue
+	--   		,isnull(DIVNDBnkAcTypeValue,'0')				as DIVNDBnkAcTypeValue
+	--   		,isnull(DIVNDBnkCode,'')						as DIVNDBnkCode
+	--   		,isnull(DIVNDAcNo,'')							as DIVNDAcNo
+	--   		,isnull(DIVNDBnkCCYValue,'0')					as DIVNDBnkCCYValue
+	--   		----POA Detail----								
+	--   		,isnull(SkipPOA,'')								as SkipPOA
+	--   		,isnull(POAIDValue,'0')							as POAIDValue
+	--   		,isnull(POARegNo,'')							as POARegNo
+	--   		,isnull(PurposeCode,'')							as PurposeCode
+	--   		,isnull(GPABPA,'')								as GPABPA
+	--   		,isnull(FrmDt,'')								as FrmDt
+	--   		,isnull(ToDt,'')								as ToDt
+	--   		,isnull(POAUserFld1,'')							as POAUserFld1
+	--   		,isnull(POAUserFld2,'')							as POAUserFld2
+	--   		,isnull(Remarks,'')								as Remarks
+	--   		----Nominee Details----							
+	--   		,isnull(SkipNominee,'')							as SkipNominee
+	--   		,isnull(NomineeTitle,'')						as NomineeTitle
+	--   		,isnull(NomineeFName,'')						as NomineeFName
+	--   		,isnull(NomineeMName,'')						as NomineeMName
+	--   		,isnull(NomineeLName,'')						as NomineeLName
+	--   		,isnull(NomineeSufx,'')							as NomineeSufx
+	--   		,isnull(NomineeFatherName,'')					as NomineeFatherName
+	--   		,isnull(NomineeDOB,'')							as NomineeDOB
+	--   		,isnull(NomineeAdrs1,'')						as NomineeAdrs1
+	--   		,isnull(NomineeAdrs2,'')						as NomineeAdrs2
+	--   		,isnull(NomineeAdrs3,'')						as NomineeAdrs3
+	--   		,isnull(NomineeCity,'')							as NomineeCity
+	--   		,isnull(NomineePin,'')							as NomineePin
+	--   		,isnull(NomineeState,'')						as NomineeState
+	--   		,isnull(NomineeCountry,'')						as NomineeCountry
+	--   		,isnull(NomineeTelOfc,'')						as NomineeTelOfc
+	--   		,isnull(NomineeTelRes,'')						as NomineeTelRes
+	--   		,isnull(NomineeFaxNo,'')						as NomineeFaxNo
+	--   		,isnull(NomineeMobileNo,'')						as NomineeMobileNo
+	--   		,isnull(NomineeEmailID,'')						as NomineeEmailID
+	--   		,isnull(NomineePanNo,'')						as NomineePanNo
+	--   		,isnull(NomineeUID,'')							as NomineeUID
+	--   		,isnull(NomineeITCircle,'')						as NomineeITCircle
+	--   		----Main Gurdian----							
+	--   		,isnull(SkipGurdian,'')							as SkipGurdian
+	--   		,isnull(GurdianTitle,'')						as GurdianTitle
+	--   		,isnull(GurdianFName,'')						as GurdianFName
+	--   		,isnull(GurdianMName,'')						as GurdianMName
+	--   		,isnull(GurdianLName,'')						as GurdianLName
+	--   		,isnull(GurdianSufx,'')							as GurdianSufx
+	--   		,isnull(GurdianFatherName,'')					as GurdianFatherName
+	--   		,isnull(GurdianDOB,'')							as GurdianDOB
+	--   		,isnull(GurdianAdrs1,'')						as GurdianAdrs1
+	--   		,isnull(GurdianAdrs2,'')						as GurdianAdrs2
+	--   		,isnull(GurdianAdrs3,'')						as GurdianAdrs3
+	--   		,isnull(GurdianCity,'')							as GurdianCity
+	--   		,isnull(GurdianPin,'')							as GurdianPin
+	--   		,isnull(GurdianState,'')						as GurdianState
+	--   		,isnull(GurdianCountry,'')						as GurdianCountry
+	--   		,isnull(GurdianTelOfc,'')						as GurdianTelOfc
+	--   		,isnull(GurdianTelRes,'')						as GurdianTelRes
+	--   		,isnull(GurdianFaxNo,'')						as GurdianFaxNo
+	--   		,isnull(GurdianMobileNo,'')						as GurdianMobileNo
+	--   		,isnull(GurdianEmailID,'')						as GurdianEmailID
+	--   		,isnull(GurdianPanNo,'')						as GurdianPanNo
+	--   		,isnull(GurdianUID,'')							as GurdianUID
+	--   		,isnull(GurdianITCircle,'')						as GurdianITCircle
+	--   		----Nominee Gurdian Details----					
+	--   		,isnull(SkipNomGurdian,'')						as SkipNomGurdian
+	--   		,isnull(NomGurdianTitle,'')						as NomGurdianTitle
+	--   		,isnull(NomGurdianFName,'')						as NomGurdianFName
+	--   		,isnull(NomGurdianMName,'')						as NomGurdianMName
+	--   		,isnull(NomGurdianLName,'')						as NomGurdianLName
+	--   		,isnull(NomGurdianSufx,'')						as NomGurdianSufx
+	--   		,isnull(NomGurdianFatherName,'')				as NomGurdianFatherName
+	--   		,isnull(NomGurdianDOB,'')						as NomGurdianDOB
+	--   		,isnull(NomGurdianAdrs1,'')						as NomGurdianAdrs1
+	--   		,isnull(NomGurdianAdrs2,'')						as NomGurdianAdrs2
+	--   		,isnull(NomGurdianAdrs3,'')						as NomGurdianAdrs3
+	--   		,isnull(NomGurdianCity,'')						as NomGurdianCity
+	--   		,isnull(NomGurdianPin,'')						as NomGurdianPin
+	--   		,isnull(NomGurdianState,'')						as NomGurdianState
+	--   		,isnull(NomGurdianCountry,'')					as NomGurdianCountry
+	--   		,isnull(NomGurdianTelOfc,'')					as NomGurdianTelOfc
+	--   		,isnull(NomGurdianTelRes,'')					as NomGurdianTelRes
+	--   		,isnull(NomGurdianFaxNo,'')						as NomGurdianFaxNo
+	--   		,isnull(NomGurdianMobileNo,'')					as NomGurdianMobileNo
+	--   		,isnull(NomGurdianEmailID,'')					as NomGurdianEmailID
+	--   		,isnull(NomGurdianPanNo,'')						as NomGurdianPanNo
+	--   		,isnull(NomGurdianUID,'')						as NomGurdianUID		
+	--   		,isnull(NomGurdianITCircle,'')					as NomGurdianITCircle	
+	-- From #TempCDSL where KRAFormNO=@FormNo and EntryProfileStatus in ('C','M') 
+							 
+					End						
+				If(@CallBy='AddVerify_Main')
+					Begin
+							Declare @SkipSHlder Varchar(10), @SkipTHlder Varchar(10), @SkipPOA Varchar(10), @SkipNominee Varchar(10), @SkipGurdian Varchar(10),@SkipNomGurdian varchar(10) 						
+							Declare @SegmentID int,@CDSLOfflineAccount_MainID bigint,@VerifyDatetime datetime--,@CMRecordCount int, @TotalCMRecordCount int
+							
+							Set @SegmentID=10 
+							Set @VerifyDatetime=GetDate()	
+														
+							--Set @CMRecordCount=1
+							--Select @TotalCMRecordCount=COUNT(*) From #TempCDSL	
+							--While(@CMRecordCount<=@TotalCMRecordCount)
+							--	Begin
+									Select @SkipSHlder=SkipSHlder,@SkipTHlder=SkipTHlder,@SkipPOA=SkipPOA,
+										   @SkipNominee=SkipNominee, @SkipGurdian=SkipGurdian,
+										   @SkipNomGurdian=SkipNomGurdian
+									From #TempCDSL	
+--Select * From #TempCDSL
+--Select @SkipSHlder as SkipSHlder,@SkipTHlder as SkipTHlder,@SkipPOA as SkipPOA,@SkipNominee as SkipNominee,
+--	   @SkipGurdian as SkipGurdian,@SkipNomGurdian as SkipNomGurdian									    
+									
+									--From (SELECT ROW_NUMBER() OVER (ORDER BY RowID) AS Record,* From #TempCDSL
+									--	  ) as Records 
+									--Where Record=@CMRecordCount	
+																
+									BEGIN TRANSACTION
+									-------If already Exist Delete Record------------------------------
+									Declare @AlreadyExist_MainID int
+									Set @AlreadyExist_MainID=0
+									
+									Select @AlreadyExist_MainID=CdslOfflineAccount_ID 
+									From Trans_CDSLOfflineAccount
+									Where CdslOfflineAccount_CompanyID=(Select CompanyID from #TempCDSL)
+										  and CdslOfflineAccount_ApplicationNumber=(Select KRAAplicatnNo From #TempCDSL)
+--Select @AlreadyExist_MainID as MainID			
+									If(@AlreadyExist_MainID<>0)
+										Begin
+											Delete From Trans_CDSLOfflineAccount where CdslOfflineAccount_ID=@AlreadyExist_MainID
+											--Select 'Delete Account'
+										End								
+									
+									-------Start Insert First Holder Details----------------------------------
+									INSERT INTO Trans_CDSLOfflineAccount 
+												(   [CdslOfflineAccount_CompanyID],[CdslOfflineAccount_SegmentID],[CdslOfflineAccount_DPID],[CdslOfflineAccount_ApplicationNumber],[CdslOfflineAccount_BranchID],[CdslOfflineAccount_FinYear],
+													[CdslOfflineAccount_Title],[CdslOfflineAccount_FirstName],[CdslOfflineAccount_MiddleName],[CdslOfflineAccount_LastName],[CdslOfflineAccount_Suffix],[CdslOfflineAccount_FatherName],
+													[CdslOfflineAccount_Address1],[CdslOfflineAccount_Address2],[CdslOfflineAccount_Address3],[CdslOfflineAccount_City],[CdslOfflineAccount_Zip],[CdslOfflineAccount_State],[CdslOfflineAccount_Country],
+													[CdslOfflineAccount_PermAddress1],[CdslOfflineAccount_PermAddress2],[CdslOfflineAccount_PermAddress3],[CdslOfflineAccount_PermCity],[CdslOfflineAccount_PermZIP],[CdslOfflineAccount_PermState],[CdslOfflineAccount_PermCountry],
+													[CdslOfflineAccount_Phone1Ind],[CdslOfflineAccount_Phone1],[CdslOfflineAccount_Phone2Ind],[CdslOfflineAccount_Phone2],[CdslOfflineAccount_Fax],[CdslOfflineAccount_AdditionalPhone],[CdslOfflineAccount_EmailID],
+													[CdslOfflineAccount_PANExempt],[CdslOfflineAccount_PANExemptType],[CdslOfflineAccount_PAN],[CdslOfflineAccount_PANVerification],[CdslOfflineAccount_UID],[CdslOfflineAccount_ITCircle],
+													[CDSLOfflineAccount_UserText1],[CDSLOfflineAccount_UserText2],[CDSLOfflineAccount_UserText3],
+													[CdslOfflineAccount_CreateUser],[CdslOfflineAccount_CreateDateTime],[CdslOfflineAccount_EntryProfile],
+													[CdslOfflineAccount_VerifyUser],[CdslOfflineAccount_VerifyDateTime]													
+												)
+									Select CompanyID,@SegmentID,DPID,KRAAplicatnNo,BranchID,FinYear,
+										   FHlderTitle,FHlderFName,FHlderMName,FHlderLName,FHlderSufx,FHlderFatherName,
+										   FHlderCAdrs1,FHlderCAdrs2,FHlderCAdrs3,FHlderCCity,FHlderCPin,FHlderCState,FHlderCCountry,
+										   FHlderPAdrs1,FHlderPAdrs2,FHlderPAdrs3,FHlderPCity,FHlderPPin,FHlderPState,FHlderPCountry,
+										   Case When (TelOfc<>'' And TelRes='') Then 'O' 
+							   					When (TelOfc='' And TelRes<>'') Then 'R'
+							   					When (TelOfc<>'' And TelRes<>'') Then 'O'
+							   					When (TelOfc='' And TelRes='') Then ''
+							   				End,
+										   Case When (TelOfc<>'' And TelRes='') Then TelOfc 
+							   					When (TelOfc='' And TelRes<>'') Then TelRes
+							   					When (TelOfc<>'' And TelRes<>'') Then TelOfc
+							   					When (TelOfc='' And TelRes='') Then ''
+							   				End,
+										   Case When (TelOfc<>'' And TelRes<>'') Then 'R' Else '' End,
+										   Case When (TelOfc<>'' And TelRes<>'') Then TelRes Else '' End,
+										   FaxNo,MobileNo,EmailID,
+										   FHldrIsPanExmpt,FHlderExmptnType,FHlderPanNo,FHlderPanVerificatn,FHlderUID,FHlderITCircle,
+										   UserFld1,UserFld2,UserFld3,
+										   CreateUser,CreateDateTime,EntryProfileStatus,VerifyUser,@VerifyDatetime								   
+									From #TempCDSL	    
+									--From (SELECT ROW_NUMBER() OVER (ORDER BY RowID) AS Record,* From #TempCDSL
+									--	 ) as Records 
+									--Where Record=@CMRecordCount					
+					Print '1'    			
+			        				-------End Insert First Holder Details------------------------------------
+									IF @@ERROR != 0 
+										BEGIN
+											ROLLBACK TRANSACTION 
+											RETURN
+										END
+									ELSE
+										BEGIN -----------1
+											-----Select MainID									
+											Select @CDSLOfflineAccount_MainID=CDSLOfflineAccount_ID from Trans_CDSLOfflineAccount 
+											Where CdslOfflineAccount_VerifyUser=
+																(Select VerifyUser 
+																 From #TempCDSL	    
+																 --From (SELECT ROW_NUMBER() OVER (ORDER BY RowID) AS Record
+																 --	          ,* From #TempCDSL ) as Records 
+																 --Where Record=@CMRecordCount
+																 ) 
+												  And CdslOfflineAccount_VerifyDateTime=@VerifyDatetime
+											
+				    --Select @CDSLOfflineAccount_MainID											  
+					Print '2'						
+											--If(isnull((select 1 From Trans_CDSLOfflineAccount where CDSLOfflineAccount_ID=@CDSLOfflineAccount_MainID and CdslOfflineAccount_VerifyDateTime=@VerifyDatetime),0)=1)
+											--	Begin
+											--		Select @CDSLOfflineAccount_MainID
+											--	End
+											--SkipSHlder-----Start Update Second Holder Details-----------------------
+											If(@SkipSHlder<>'True')
+												Begin												 
+													 Update Trans_CDSLOfflineAccount	
+															Set	[CdslOfflineAccount_SecondHolderTitle]=SHlderTitle,
+																[CdslOfflineAccount_SecondHolderName]=SHlderFName,
+																[CdslOfflineAccount_SecondHolderMiddleName]=SHlderMName,
+																[CdslOfflineAccount_SecondHolderLastName]=SHlderLName,
+																[CdslOfflineAccount_SecondHolderSuffix]=SHlderSufx,
+																[CdslOfflineAccount_SecondHolderFatherName]=SHlderFatherName,
+																[CdslOfflineAccount_SecondHolderPANExempt]=SHldrIsPanExmpt,
+																[CdslOfflineAccount_SecondHolderPANExemptType]=SHlderExmptnType,
+																[CdslOfflineAccount_SecondHolderPAN]=SHlderPanNo,
+																[CdslOfflineAccount_SecondHolderPANVerification]=SHlderPanVerificatn,
+																[CdslOfflineAccount_SecondHolderUID]=SHlderUID,
+																[CdslOfflineAccount_SecondHolderITCircle]=SHlderITCircle
+													 From #TempCDSL	Where CdslOfflineAccount_ID=@CDSLOfflineAccount_MainID    
+													 --From (SELECT ROW_NUMBER() OVER (ORDER BY RowID) AS Record,* From #TempCDSL
+													 --	  ) as Records 
+													 --Where Record=@CMRecordCount and CDSLOfflineAccount_ID=@CDSLOfflineAccount_MainID			
+					Print '3'		
+												End											
+											-------End Update Second Holder Details-----------------------------------
+											IF @@ERROR != 0 
+												BEGIN
+													ROLLBACK TRANSACTION 
+													RETURN
+												END
+											ELSE
+												BEGIN -----------2				
+													-------Start Update Third Holder Details------------------------
+													If(@SkipTHlder<>'True')
+														Begin
+															 Update Trans_CDSLOfflineAccount				
+																	Set [CdslOfflineAccount_ThirdHolderTitle]=THlderTitle,
+																		[CdslOfflineAccount_ThirdHolderName]=THlderFName,
+																		[CdslOfflineAccount_ThirdHolderMiddleName]=THlderMName,
+																		[CdslOfflineAccount_ThirdHolderLastName]=THlderLName,
+																		[CdslOfflineAccount_ThirdHolderSuffix]=THlderSufx,
+																		[CdslOfflineAccount_ThirdHolderFatherName]=THlderFatherName,
+																		[CdslOfflineAccount_ThirdHolderPANExempt]=THldrIsPanExmpt,
+																		[CdslOfflineAccount_ThirdHolderPANExemptType]=THlderExmptnType,
+																		[CdslOfflineAccount_ThirdHolderPAN]=THlderPanNo,
+																		[CdslOfflineAccount_ThirdHolderPANVerification]=THlderPanVerificatn,
+																		[CdslOfflineAccount_ThirdHolderUID]=THlderUID,
+																		[CdslOfflineAccount_ThirdHolderITCircle]=THlderITCircle	
+															 From #TempCDSL Where CdslOfflineAccount_ID=@CDSLOfflineAccount_MainID
+															 --From (SELECT ROW_NUMBER() OVER (ORDER BY RowID) AS Record,* From #TempCDSL
+															 --	  ) as Records 
+															 --Where Record=@CMRecordCount and CDSLOfflineAccount_ID=@CDSLOfflineAccount_MainID
+					Print '4'		
+														End	
+													-------End Update Third Holder Details------------------------------------
+													IF @@ERROR != 0 
+														BEGIN
+															ROLLBACK TRANSACTION 
+															RETURN
+														END
+													ELSE
+														BEGIN----------3					
+															-------Start Update Product Details---------------------------------------
+															Update Trans_CDSLOfflineAccount				
+																		Set	[CdslOfflineAccount_ProductNumber]=@ProductTypeValue,
+																			[CdslOfflineAccount_DPIntrnlRefNo]=DPIntrnlRefNo,
+																			[CdslOfflineAccount_DateOfMaturity]=MaturityDt,
+																			[CdslOfflineAccount_DateOfBirth]=DOBDate,
+																			[CdslOfflineAccount_Sex]=Gender,
+																			[CdslOfflineAccount_OccupationCode]=Occupation,
+																			[CdslOfflineAccount_LifeStyleCode]=LifeStyle,
+																			[CdslOfflineAccount_GeographicalCode]=@GeoCodeValue,
+																			[CdslOfflineAccount_EducationCode]=@EducationValue,
+																			[CdslOfflineAccount_IncomeCode]=AnnualIncomeValue,
+																			[CdslOfflineAccount_Nationality]=Nationality,
+																			[CdslOfflineAccount_LegalStatus]=Status,
+																			[CdslOfflineAccount_FeeType]=BOFeeType,
+																			[CdslOfflineAccount_LanguageCode]=@LanguageValue,
+																			[CDSLOfflineAccount_Category4Code]=Catagory4,
+																			[CdslOfflineAccount_BankOption]=Bank5,
+																			[CdslOfflineAccount_StaffRelative]=@RelativeValue,
+																			[CdslOfflineAccount_StaffCode]=StaffCode,
+																			[CdslOfflineAccount_RGESS]=RGESS,
+																			[CdslOfflineAccount_AnnualReportFlag]=AnnualRpt,
+																			[CdslOfflineAccount_PledgeSIFlag]=PSIFlag,
+																			[CdslOfflineAccount_EmailRTADownloadFlag]=ERDFlag,
+																			[CdslOfflineAccount_BSDAFlag]=BSDACFlag,
+																			[CdslOfflineAccount_SecurityAccessCode]=@SecurityAccessValue,
+																			[CdslOfflineAccount_BOCategory]=@BOCategoryValue,
+																			[CdslOfflineAccount_SettlementPlanningFlag]=BOSettPlng,
+																			[CdslOfflineAccount_DivBankIFSC]=DBIFSC,
+																			[CdslOfflineAccount_RBIReference]=RBIRefNo,
+																			[CdslOfflineAccount_RBIApprovalDate]=RBIAprvlDt,
+																			[CdslOfflineAccount_SEBIRegNumber]=SEBIRegNo,
+																			[CdslOfflineAccount_TaxDeductionStatus]=@BenTaxDeductStatusValue,
+																			[CdslOfflineAccount_SmartCard]=SmartCardReq,
+																			[CdslOfflineAccount_SmartCardNumber]=SmartCardNo,
+																			[CdslOfflineAccount_SmartCardPIN]=SmartCardPin,
+																			[CdslOfflineAccount_ECSMandate]=ECS,
+																			[CdslOfflineAccount_ElectronicConfirmation]=ElectronicCnfrmatn,
+																			[CdslOfflineAccount_DivCurrency]=@DividndCurncyValue,
+																			[CdslOfflineAccount_GroupCode]=GroupCode,
+																			[CdslOfflineAccount_BOSubStatus]=@BOSubStatusValue,
+																			[CdslOfflineAccount_ClearingCorpID]=@ClrngCorporatnIDValue,
+																			[CdslOfflineAccount_ClearingMemberID]=ClrngMembrID,
+																			[CdslOfflineAccount_StockExchange]=StckExchng,
+																			[CdslOfflineAccount_ConfirmationWaived]=ConfrmatnWavd,
+																			[CdslOfflineAccount_TradingID]=TradngID,
+																			[CdslOfflineAccount_StatementCycleCode]=@BOStatemntCycleValue,
+																			[CdslOfflineAccount_BankMICR]=BENFBnkCode,
+																			[CdslOfflineAccount_BankAccountType]=@BENFBnkAcTypeValue,
+																			[CdslOfflineAccount_BankAccountNumber]=BENFBnkAcNo,
+																			[CdslOfflineAccount_BankCurrency]=BENFBnkCCYValue,
+																			[CdslOfflineAccount_DivBankAccountType]=@DIVNDBnkAcTypeValue,
+																			[CdslOfflineAccount_DivBankMICR]=DIVNDBnkCode,
+																			[CdslOfflineAccount_DivBankAccountNumber]=DIVNDAcNo,
+																			[CdslOfflineAccount_DivBankCurrency]=DIVNDBnkCCYValue																				
+															From #TempCDSL Where CdslOfflineAccount_ID=@CDSLOfflineAccount_MainID    
+															--From (SELECT ROW_NUMBER() OVER (ORDER BY RowID) AS Record,* From #TempCDSL
+															--     ) as Records 
+															--Where Record=@CMRecordCount and CdslOfflineAccount_ID=@CDSLOfflineAccount_MainID		
+					Print '5'	
+															-------End Update Product Details-----------------------------------------
+															IF @@ERROR != 0 
+																BEGIN
+																	ROLLBACK TRANSACTION 
+																	RETURN
+																END
+															ELSE
+																BEGIN-------4						
+																	-------Start Insert POA Details------------------------------------
+																	If(@SkipPOA<>'True')
+																		Begin
+																			-------If already Exist Delete Record------------------------------
+																			Declare @AlreadyExistPOA_ID int
+																			Set @AlreadyExistPOA_ID=0
+																			
+																			Select @AlreadyExistPOA_ID=CdslOfflinePOA_ID 
+																			From Trans_CdslOfflinePOA
+																			Where CdslOfflinePOA_MainID=@AlreadyExist_MainID
+--Select @AlreadyExist_MainID as InPOA_AlreadyExist_MainID																			
+--Select @AlreadyExistPOA_ID as AlreadyExistPOA_ID
+																			If(@AlreadyExistPOA_ID<>0)
+																				Begin
+																					Delete From Trans_CdslOfflinePOA where CdslOfflinePOA_ID=@AlreadyExistPOA_ID
+																					--Select 'Delete Poa'
+																				End
+																			
+																			--------Start Insert Record POA Table Corrosponding Main ID------------
+																			Insert Into Trans_CdslOfflinePOA 
+																						(	[CdslOfflinePOA_MainID],[CdslOfflinePOA_POAID],[CdslOfflinePOA_POARegistrationNo],[CdslOfflinePOA_PurposeCode],[CdslOfflinePOA_GPABPA],
+																							[CdslOfflinePOA_EffectiveFrom],[CdslOfflinePOA_EffectiveUntil],
+																							[CdslOfflinePOA_UserField1],[CdslOfflinePOA_UserField2],[CdslOfflinePOA_Remarks]									
+																						)
+																			Select	@CDSLOfflineAccount_MainID,POAIDValue,POARegNo,PurposeCode,GPABPA,FrmDt,ToDt,POAUserFld1,POAUserFld2,Remarks
+																			From #TempCDSL	    
+																			--From (SELECT ROW_NUMBER() OVER (ORDER BY RowID) AS Record,* From #TempCDSL
+																			--	 ) as Records 
+																		    --Where Record=@CMRecordCount	---Confusion To insert-----Select @POAIDValue							
+					Print '6'													
+																		End
+																	-------End Insert POA Details---------------------------------------------
+																	IF @@ERROR != 0 
+																		BEGIN
+																			ROLLBACK TRANSACTION 
+																			RETURN
+																		END
+																	ELSE
+																		BEGIN------5	
+																			-------Start Insert Nominee Details----------------------------				
+																			If(@SkipNominee<>'True')
+																				Begin
+																					-------If already Exist Delete Record------------------------------
+																					Declare @AlreadyExistNominee_ID int
+																					Set @AlreadyExistNominee_ID=0
+																					
+																					Select @AlreadyExistNominee_ID=CdslOfflineNominee_ID
+																					From Trans_CDSLOfflineNominee
+																					Where CdslOfflineNominee_MainID=@AlreadyExist_MainID
+--Select @AlreadyExist_MainID as InNominee_AlreadyExist_MainID																			
+--Select @AlreadyExistNominee_ID as AlreadyExistNominee_ID
+																					If(@AlreadyExistNominee_ID<>0)
+																						Begin																						
+																							Delete From Trans_CDSLOfflineNominee where CdslOfflineNominee_ID=@AlreadyExistNominee_ID
+																							--Select 'Delete Nominee'
+																						End
+																			
+																					--------Start Insert Record Nominee Table Corrosponding Main ID------------
+																					Insert Into Trans_CDSLOfflineNominee			
+																								(	[CdslOfflineNominee_CompanyID],[CdslOfflineNominee_SegmentID],[CdslOfflineNominee_MainID],[CdslOfflineNominee_Title],[CdslOfflineNominee_FirstName],[CdslOfflineNominee_MiddleName],
+																									[CdslOfflineNominee_LastName],[CdslOfflineNominee_Suffix],[CdslOfflineNominee_FatherName],[CdslOfflineNominee_DOB],
+																									[CdslOfflineNominee_Address1],[CdslOfflineNominee_Address2],[CdslOfflineNominee_Address3],
+																									[CdslOfflineNominee_City],[CdslOfflineNominee_Zip],[CdslOfflineNominee_State],[CdslOfflineNominee_Country],
+																									[CdslOfflineNominee_Phone1Ind],[CdslOfflineNominee_Phone1],[CdslOfflineNominee_Phone2Ind],[CdslOfflineNominee_Phone2],[CdslOfflineNominee_Fax],[CdslOfflineNominee_AdditionalPhone],
+																									[CdslOfflineNominee_EmailID],[CdslOfflineNominee_PAN],[CdslOfflineNominee_UID],[CdslOfflineNominee_ITCircle]						
+																								)	
+																							Select CompanyID,@SegmentID,@CDSLOfflineAccount_MainID,NomineeTitle,NomineeFName,NomineeMName,
+																								   NomineeLName,NomineeSufx,NomineeFatherName,NomineeDOB,
+																								   NomineeAdrs1,NomineeAdrs2,NomineeAdrs3,
+																								   NomineeCity,NomineePin,NomineeState,NomineeCountry,
+																								   Case When (NomineeTelOfc<>'' And NomineeTelRes='') Then 'O' 
+								   																		When (NomineeTelOfc='' And NomineeTelRes<>'') Then 'R'
+								   																		When (NomineeTelOfc<>'' And NomineeTelRes<>'') Then 'O'
+								   																		When (NomineeTelOfc='' And NomineeTelRes='') Then ''
+								   																	End,
+																								   Case When (NomineeTelOfc<>'' And NomineeTelRes='') Then NomineeTelOfc 
+								   																		When (NomineeTelOfc='' And NomineeTelRes<>'') Then NomineeTelRes
+								   																		When (NomineeTelOfc<>'' And NomineeTelRes<>'') Then NomineeTelOfc
+								   																		When (NomineeTelOfc='' And NomineeTelRes='') Then ''
+								   																	End,
+																								   Case When (NomineeTelOfc<>'' And NomineeTelRes<>'') Then 'R' Else '' End,
+																								   Case When (NomineeTelOfc<>'' And NomineeTelRes<>'') Then NomineeTelRes Else '' End,
+																								   NomineeFaxNo,NomineeMobileNo,
+																								   NomineeEmailID,NomineePanNo,NomineeUID,NomineeITCircle
+																							From #TempCDSL	    
+																					--From (SELECT ROW_NUMBER() OVER (ORDER BY RowID) AS Record,* From #TempCDSL
+																					--	 ) as Records 
+																					--Where Record=@CMRecordCount
+					Print '7'													
+																				End		
+																			-------End Insert Nominee Details-----------------------------------------
+																			IF @@ERROR != 0 
+																				BEGIN
+																					ROLLBACK TRANSACTION 
+																					RETURN
+																				END
+																			ELSE
+																				BEGIN----6	
+																					-------Start Update Main Gurdian Details-----------------------									
+																					If(@SkipGurdian<>'True')
+																						Begin
+																							Update Trans_CDSLOfflineAccount		
+																								Set	[CdslOfflineAccount_GuardianTitle]=GurdianTitle,
+																									[CdslOfflineAccount_GuardianFirstName]=GurdianFName,
+																									[CdslOfflineAccount_GuardianMiddleName]=GurdianMName,
+																									[CdslOfflineAccount_GuardianLastName]=GurdianLName,
+																									[CdslOfflineAccount_GuardianSuffix]=GurdianSufx,
+																									[CdslOfflineAccount_GuardianFatherName]=GurdianFatherName,
+																									[CdslOfflineAccount_GuardianDOB]=GurdianDOB,
+																									[CdslOfflineAccount_GuardianAddress1]=GurdianAdrs1,
+																									[CdslOfflineAccount_GuardianAddress2]=GurdianAdrs2,
+																									[CdslOfflineAccount_GuardianAddress3]=GurdianAdrs3,
+																									[CdslOfflineAccount_GuardianCity]=GurdianCity,
+																									[CdslOfflineAccount_GuardianZip]=GurdianPin,
+																									[CdslOfflineAccount_GuardianState]=GurdianState,
+																									[CdslOfflineAccount_GuardianCountry]=GurdianCountry,
+																									[CdslOfflineAccount_GuardianPhone1Ind]=Case When (GurdianTelOfc<>'' And GurdianTelRes='') Then 'O' 
+						   																														When (GurdianTelOfc='' And GurdianTelRes<>'') Then 'R'
+						   																														When (GurdianTelOfc<>'' And GurdianTelRes<>'') Then 'O'
+						   																														When (GurdianTelOfc='' And GurdianTelRes='') Then ''
+						   																													End,
+																									[CdslOfflineAccount_GuardianPhone1]=Case When (GurdianTelOfc<>'' And GurdianTelRes='') Then GurdianTelOfc 
+					   																														 When (GurdianTelOfc='' And GurdianTelRes<>'') Then GurdianTelRes
+					   																														 When (GurdianTelOfc<>'' And GurdianTelRes<>'') Then GurdianTelOfc
+					   																														 When (GurdianTelOfc='' And GurdianTelRes='') Then ''
+					   																													 End,
+																									[CdslOfflineAccount_GuardianPhone2Ind]=Case When (GurdianTelOfc<>'' And GurdianTelRes<>'') Then 'R' Else '' End,
+																									[CdslOfflineAccount_GuardianPhone2]=Case When (GurdianTelOfc<>'' And GurdianTelRes<>'') Then GurdianTelRes Else '' End,
+																									[CdslOfflineAccount_GuardianFax]=GurdianFaxNo,
+																									[CdslOfflineAccount_GuardianAdditionalPhone]=GurdianMobileNo,
+																									[CdslOfflineAccount_GuardianEmailID]=GurdianEmailID,
+																									[CdslOfflineAccount_GuardianPAN]=GurdianPanNo,
+																									[CdslOfflineAccount_GuardianUID]=GurdianUID,
+																									[CdslOfflineAccount_GuardianITCircle]=GurdianITCircle
+																							From #TempCDSL Where CdslOfflineAccount_ID=@CDSLOfflineAccount_MainID	    
+																							--From (SELECT ROW_NUMBER() OVER (ORDER BY RowID) AS Record,* From #TempCDSL
+																							--	 ) as Records 
+																							--Where Record=@CMRecordCount and CdslOfflineAccount_ID=@CDSLOfflineAccount_MainID
+					Print '8'		
+																						End
+																					-------End Update Main Gurdian Details------------------------------------
+																					IF @@ERROR != 0 
+																						BEGIN
+																							ROLLBACK TRANSACTION 
+																							RETURN
+																						END
+																					ELSE
+																						BEGIN----7	
+																							-------Start Update Nominee Gurdian Details-----------------
+																							If(@SkipNomGurdian<>'True')
+																								Begin
+																									Update Trans_CDSLOfflineNominee			
+																											Set	[CdslOfflineNominee_GuardianTitle]=NomGurdianTitle,
+																												[CdslOfflineNominee_GuardianFirstName]=NomGurdianFName,
+																												[CdslOfflineNominee_GuardianMiddleName]=NomGurdianMName,
+																												[CdslOfflineNominee_GuardianLastName]=NomGurdianLName,
+																												[CdslOfflineNominee_GuardianSuffix]=NomGurdianSufx,
+																												[CdslOfflineNominee_GuardianFatherName]=NomGurdianFatherName,
+																												[CdslOfflineNominee_DOB]=NomGurdianDOB,
+																												[CdslOfflineNominee_GuardianAddress1]=NomGurdianAdrs1,
+																												[CdslOfflineNominee_GuardianAddress2]=NomGurdianAdrs2,
+																												[CdslOfflineNominee_GuardianAddress3]=NomGurdianAdrs3,
+																												[CdslOfflineNominee_GuardianCity]=NomGurdianCity,
+																												[CdslOfflineNominee_GuardianZip]=NomGurdianPin,
+																												[CdslOfflineNominee_GuardianState]=NomGurdianState,
+																												[CdslOfflineNominee_GuardianCountry]=NomGurdianCountry,
+																												[CdslOfflineNominee_GuardianPhone1Ind]=Case When (NomGurdianTelOfc<>'' And NomGurdianTelRes='') Then 'O' 
+						   																																	When (NomGurdianTelOfc='' And NomGurdianTelRes<>'') Then 'R'
+						   																																	When (NomGurdianTelOfc<>'' And NomGurdianTelRes<>'') Then 'O'
+						   																																	When (NomGurdianTelOfc='' And NomGurdianTelRes='') Then ''
+						   																																End,
+																												[CdslOfflineNominee_GuardianPhone1]=Case When (NomGurdianTelOfc<>'' And NomGurdianTelRes='') Then NomGurdianTelOfc 
+					   																																	 When (NomGurdianTelOfc='' And NomGurdianTelRes<>'') Then NomGurdianTelRes
+					   																																	 When (NomGurdianTelOfc<>'' And NomGurdianTelRes<>'') Then NomGurdianTelOfc
+					   																																	 When (NomGurdianTelOfc='' And NomGurdianTelRes='') Then ''
+					   																																 End,
+																												[CdslOfflineNominee_GuardianPhone2Ind]=Case When (NomGurdianTelOfc<>'' And NomGurdianTelRes<>'') Then 'R' Else '' End,
+																												[CdslOfflineNominee_GuardianPhone2]=Case When (NomGurdianTelOfc<>'' And NomGurdianTelRes<>'') Then NomGurdianTelRes Else '' End,
+																												[CdslOfflineNominee_GuardianFax]=NomGurdianFaxNo,
+																												[CdslOfflineNominee_GuardianAdditionalPhone]=NomGurdianMobileNo,
+																												[CdslOfflineNominee_GuardianEmailID]=NomGurdianEmailID,
+																												[CdslOfflineNominee_GuardianPAN]=NomGurdianPanNo,
+																												[CdslOfflineNominee_GuardianUID]=NomGurdianUID,
+																												[CdslOfflineNominee_GuardianITCircle]=NomGurdianITCircle										
+																										From #TempCDSL Where CdslOfflineNominee_MainID=@CDSLOfflineAccount_MainID 
+																										--From (SELECT ROW_NUMBER() OVER (ORDER BY RowID) AS Record,* From #TempCDSL
+																										--	 ) as Records 
+																										--Where Record=@CMRecordCount and CdslOfflineNominee_MainID=@CDSLOfflineAccount_MainID
+					Print '9'		
+																								End				
+																							-------End Update Nominee Gurdian Details---------------------------------	
+																							IF @@ERROR != 0 
+																								BEGIN
+																									ROLLBACK TRANSACTION 
+																									RETURN
+																								END
+																							ELSE
+																								BEGIN
+																									COMMIT TRANSACTION --finally, Commit the transaction if Success..
+																									Select 'Record Saved' as Result
+					Print '10'																			
+																									RETURN
+																								END
+																						END------7
+																				END------6
+																		END--------5
+																End----------4
+														End------------3	
+												End--------------2
+										End--------------1
+										
+									--Set @CMRecordCount=@CMRecordCount+1	
+								--End		
+					End		
+							
+				---Drop Temp Table
+				
+				Drop table #TempCDSL
+End

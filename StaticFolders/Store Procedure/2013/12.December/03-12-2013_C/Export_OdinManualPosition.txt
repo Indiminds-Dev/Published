@@ -1,0 +1,402 @@
+
+
+ALTER PROCEDURE  [dbo].[Export_OdinManualPosition]
+	-- Add the parameters for the stored procedure here
+	@CompanyID Varchar(10),
+	@PositionDate Datetime,
+	@GrpType VARCHAR(40),
+	@GrpId varchar(max),
+	@ClientId varchar(max),
+	@SegmentID VARCHAR(MAX)
+	--@BranchHierchy varchar(max)
+	--@BranchHierchy varchar(max)
+--exec Export_OdinManualPosition 'COR0000002','2012-09-10','BRANCH','ALL','POA'
+
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+	--Set @CompanyID='COR0000002'
+	--Set @PositionDate='2012-09-10'
+Declare @sql1 varchar(max),@sql2 varchar(max),@sql3 varchar(max)
+			
+    -- Insert statements for procedure here	
+
+ 
+	Create Table #TmpPosition 
+					(CustomerID varchar(10) null,ProductSeriesID bigint null,SegmentID int null,MasterSegment int null,SegName varchar(12) null,
+					NetQty numeric(18,0) null,NetPriceUnits numeric(18,0) null,ClosePrice numeric(16,4) null,MktSegment varchar(10) null,ProductType varchar(5) null,
+					ClientID varchar(20) null,GroupID varchar(10) null,TerminalID varchar(150) null,InstrName varchar(12) null,
+					Symbol varchar(20) null,Series varchar(5) null,ExpiryDate varchar(9) null,StrikePrice numeric(10,2) null,
+					OptType varchar(5) null,BuyQty numeric(12,0) null,BuyValue numeric(20,2) null,SellQty numeric(12,0) null,
+					SellValue numeric(20,2) null
+					)
+					
+
+	-- Populate pending positions of all the CM Segments for this company
+	
+	select @sql1=' Select DematPosition_SegmentID,DematPosition_CustomerID,DematPosition_ProductSeriesID,
+	isnull(DematPosition_QtyToReceive,0)-isnull(DematPosition_QtyReceived,0)-(
+	isnull(DematPosition_QtyToDeliver,0)-isnull(DematPosition_QtyDelivered,0)),
+	isnull(DematPosition_QtyToReceive,0)-isnull(DematPosition_QtyReceived,0)-(
+	isnull(DematPosition_QtyToDeliver,0)-isnull(DematPosition_QtyDelivered,0))
+	FROM Trans_DematPosition,Master_Settlements,tbl_master_contact
+		WHERE	DematPosition_CustomerID=cnt_internalId
+		       AND DematPosition_SettlementNumber=Settlements_Number
+				and DematPosition_SettlementType=Settlements_TypeSuffix
+				and DematPosition_SettlementType<>''C''
+				and Settlements_ExchangeSegmentID in (1,4,19)
+				and Settlements_StartDateTime<='''+cast(@PositionDate as varchar)+'''  
+				and Settlements_FundsPayin>'''+cast(@PositionDate as varchar)+'''
+				and DematPosition_CompanyID='''+@CompanyID+'''
+				and (	(isnull(DematPosition_QtyToDeliver,0)-isnull(DematPosition_QtyDelivered,0))<>0 
+														OR 
+						(isnull(DematPosition_QtyToReceive,0)-isnull(DematPosition_QtyReceived,0)<>0) )'
+		If (@ClientId<>'ALL' And @ClientId<>'POA')
+			Begin
+				Select @sql1=@sql1+ 'And  DematPosition_CustomerID in ('+@ClientId+')'-- and cnt_internalid in ('+@ClientId+')'
+			End
+		If @ClientId='POA'
+			BEGIN
+				Select @sql1=@sql1+' and cnt_internalid in (select dpd_cntID from tbl_master_contactdpdetails where dpd_POA=1)'
+			END
+		--If (@GrpType='BRANCH' And @GrpId<>'ALL')
+		--	Begin
+		--		Select @sql1=@sql1+ 'And  DematPosition_Branchid in ('+@GrpId+') '
+		--	End
+		If (@GrpType='BRANCH' And @GrpId<>'ALL')
+			Begin
+				Select @sql1=@sql1+ 'And  DematPosition_CustomerID in (select distinct cnt_internalid from 
+				tbl_master_contact,tbl_master_branch where cnt_branchid=branch_id 
+				and branch_id in('+@GrpId+')) '
+			End
+			if(@GrpType<>'BRANCH' and @GrpType<>'BRANCHGROUP' And @GrpId<>'ALL' )
+			Begin
+			Select @sql1=@sql1+ ' And  DematPosition_CustomerID in (select distinct  grp_contactId from  tbl_master_groupmaster,tbl_trans_group where  gpm_type='''+@GrpType+''' AND grp_groupmaster=gpm_id
+					AND GRP_GROUPTYPE='''+@GrpType+'''  and gpm_id in ('+@GrpId+'))'
+			End
+			if(@GrpType<>'BRANCH' and @GrpType<>'BRANCHGROUP' And @GrpId='ALL' )
+			Begin
+			Select @sql1=@sql1+ ' And  DematPosition_CustomerID in (select distinct  grp_contactId from  tbl_master_groupmaster,tbl_trans_group where  gpm_type='''+@GrpType+''' AND grp_groupmaster=gpm_id
+					AND GRP_GROUPTYPE='''+@GrpType+''')'
+			End
+			IF(@GrpType='BRANCHGROUP')
+			BEGIN
+				IF(@GrpId<>'ALL')
+					BEGIN
+						Select @sql1=@sql1+' AND DematPosition_Branchid in(select distinct branchgroupmembers_branchid  from trans_branchgroupmembers where 
+										   branchgroupmembers_branchgroupid in('+@GrpId+'))'	
+					END
+				ELSE 
+					BEGIN
+						Select @sql1=@sql1+' AND DematPosition_Branchid in(select distinct branchgroupmembers_branchid  from trans_branchgroupmembers)'	
+					END
+			END
+			IF(@SegmentID<>'ALL')
+			BEGIN
+				Select @sql1=@sql1+' And DematPosition_SegmentID in ('+@SegmentID+')'
+			End
+	
+	
+Insert into #TmpPosition (SegmentID,CustomerID,ProductSeriesID,NetQty,NetPriceUnits)
+Exec(@sql1)
+
+
+	-- Populate pending positions of all the FO Segments for this company
+		
+		select @sql2='select CustomerTrades_CustomerID,CustomerTrades_ExchangeSegment,CustomerTrades_ProductSeriesID,
+		sum(CustomerTrades_QuantityLots),sum(CustomerTrades_UnitPriceQuantity)
+		from Trans_CustomerTrades,Master_Equity,tbl_master_contact
+		WHERE CustomerTrades_CompanyID='''+@CompanyID+'''
+		and CustomerTrades_ExchangeSegment in 
+		(select exch_internalId from tbl_master_companyExchange where exch_compId='''+@CompanyID+''' and exch_segmentId=''FO'')
+		and CustomerTrades_ProductSeriesID=Equity_SeriesID
+		and Equity_EffectUntil>='''+cast(@PositionDate as varchar)+'''
+		and CustomerTrades_TradeDate<='''+cast(@PositionDate as varchar)+'''
+		and CustomerTrades_CustomerID=cnt_internalId
+		and ISNULL(CustomerTrades_TradeCategory,''NOR'') not in (''AUC'',''ARS'',''ART'',''CFS'',''CFT'')'
+		If (@ClientId<>'ALL' And @ClientId<>'POA')
+			Begin
+				Select @sql2=@sql2+ 'And  CustomerTrades_CustomerID in ('+@ClientId+') and cnt_internalid in ('+@ClientId+')'
+			End
+			If @ClientId='POA'
+			BEGIN
+				Select @sql2=@sql2+' and cnt_internalid in (select dpd_cntID from tbl_master_contactdpdetails where dpd_POA=1)'
+			END
+			--If (@GrpType='BRANCH' And @GrpId<>'ALL')
+			--Begin
+			--	Select @sql2=@sql2+ 'And  Customertrades_Branchid in ('+@GrpId+') '
+			--End
+			If (@GrpType='BRANCH' And @GrpId<>'ALL')
+			Begin
+				Select @sql2=@sql2+ 'And  Customertrades_Customerid in (select distinct cnt_internalid from 
+				tbl_master_contact,tbl_master_branch where cnt_branchid=branch_id 
+				and branch_id in('+@GrpId+')) '
+			End
+			if(@GrpType<>'BRANCH' and @GrpType<>'BRANCHGROUP' And @GrpId<>'ALL' )
+			Begin
+			Select @sql2=@sql2+ ' And  CustomerTrades_CustomerID in (select distinct  grp_contactId from  tbl_master_groupmaster,tbl_trans_group where  gpm_type='''+@GrpType+''' AND grp_groupmaster=gpm_id
+					AND GRP_GROUPTYPE='''+@GrpType+'''  and gpm_id in ('+@GrpId+'))'
+			End
+			if(@GrpType<>'BRANCH' and @GrpType<>'BRANCHGROUP' And @GrpId='ALL' )
+			Begin
+			Select @sql2=@sql2+ ' And  CustomerTrades_CustomerID in (select distinct  grp_contactId from  tbl_master_groupmaster,tbl_trans_group where  gpm_type='''+@GrpType+''' AND grp_groupmaster=gpm_id
+					AND GRP_GROUPTYPE='''+@GrpType+''')'
+			End
+			IF(@GrpType='BRANCHGROUP')
+			BEGIN
+				IF(@GrpId<>'ALL')
+					BEGIN
+						Select @sql2=@sql2+' AND CustomerTrades_Branchid in(select distinct branchgroupmembers_branchid  from trans_branchgroupmembers where 
+										   branchgroupmembers_branchgroupid in('+@GrpId+'))'	
+					END
+				ELSE 
+					BEGIN
+						Select @sql2=@sql2+' AND CustomerTrades_Branchid in(select distinct branchgroupmembers_branchid  from trans_branchgroupmembers)'	
+					END
+			END
+			IF(@SegmentID<>'ALL')
+			BEGIN
+				Select @sql2=@sql2+ ' And CustomerTrades_ExchangeSegment in ('+@SegmentID+')'
+			End
+		Select @sql2=@sql2+ ' group by CustomerTrades_CustomerID,CustomerTrades_ExchangeSegment,CustomerTrades_ProductSeriesID
+		having sum(CustomerTrades_UnitPriceQuantity)<>0'
+		
+		Insert into #TmpPosition (CustomerID,SegmentID,ProductSeriesID,NetQty,NetPriceUnits)
+		Exec(@sql2)
+	
+
+	-- Populate pending positions of all the COMM/CDX Segments for this company
+		
+		select @sql3='select ComCustomerTrades_CustomerID,ComCustomerTrades_ExchangeSegment,ComCustomerTrades_ProductSeriesID,
+		sum(ComCustomerTrades_QuantityLots),sum(ComCustomerTrades_UnitPriceQuantity)
+		from Trans_ComCustomerTrades,Master_Commodity,tbl_master_contact
+		where ComCustomerTrades_CompanyID='''+@CompanyID+'''
+		and ComCustomerTrades_ExchangeSegment in 
+		(select exch_internalId from tbl_master_companyExchange where exch_compId='''+@CompanyID+''' and exch_segmentId IN (''COMM'',''CDX'',''SPOT''))
+		and ComCustomerTrades_ProductSeriesID=Commodity_ProductSeriesID
+		and Commodity_ExpiryDate>='''+cast(@PositionDate as varchar)+'''
+		and ComCustomerTrades_TradeDate<='''+cast(@PositionDate as varchar)+'''
+		and ComCustomerTrades_CustomerID=cnt_internalId
+		and ISNULL(ComCustomerTrades_TradeCategory,''NOR'') not in (''ARS'',''ART'',''CFS'',''CFT'')'
+		If (@ClientId<>'ALL' And @ClientId<>'POA')
+			Begin
+				Select @sql3=@sql3+ 'And  ComCustomerTrades_CustomerID in ('+@ClientId+') and cnt_internalid in ('+@ClientId+')'
+			End
+			If @ClientId='POA'
+			BEGIN
+				Select @sql3=@sql3+' and cnt_internalid in (select dpd_cntID from tbl_master_contactdpdetails where dpd_POA=1)'
+			END
+			--If (@GrpType='BRANCH' And @GrpId<>'ALL')
+			--Begin
+			--	Select @sql3=@sql3+ 'And  ComCustomerTrades_Branchid in ('+@GrpId+') '
+			--End
+			If (@GrpType='BRANCH' And @GrpId<>'ALL')
+			Begin
+				Select @sql3=@sql3+ 'And  ComCustomertrades_Customerid in (select distinct cnt_internalid from 
+				tbl_master_contact,tbl_master_branch where cnt_branchid=branch_id 
+				and branch_id in('+@GrpId+')) '
+			End
+			if(@GrpType<>'BRANCH' and @GrpType<>'BRANCHGROUP' And @GrpId<>'ALL' )
+			Begin
+			Select @sql3=@sql3+ ' And  ComCustomerTrades_CustomerID in (select distinct  grp_contactId from  tbl_master_groupmaster,tbl_trans_group where  gpm_type='''+@GrpType+''' AND grp_groupmaster=gpm_id
+					AND GRP_GROUPTYPE='''+@GrpType+'''  and gpm_id in ('+@GrpId+'))'
+			End
+			if(@GrpType<>'BRANCH' and @GrpType<>'BRANCHGROUP' And @GrpId='ALL' )
+			Begin
+			Select @sql3=@sql3+ ' And  ComCustomerTrades_CustomerID in (select distinct  grp_contactId from  tbl_master_groupmaster,tbl_trans_group where  gpm_type='''+@GrpType+''' AND grp_groupmaster=gpm_id
+					AND GRP_GROUPTYPE='''+@GrpType+''')'
+			End
+			IF(@GrpType='BRANCHGROUP')
+				BEGIN
+					IF(@GrpId<>'ALL')
+						BEGIN
+							Select @sql3=@sql3+' AND ComCustomerTrades_Branchid in(select distinct branchgroupmembers_branchid  from trans_branchgroupmembers where 
+											   branchgroupmembers_branchgroupid in('+@GrpId+'))'	
+						END
+					ELSE 
+						BEGIN
+							Select @sql3=@sql3+' AND ComCustomerTrades_Branchid in (select distinct branchgroupmembers_branchid  from trans_branchgroupmembers)'	
+						END
+				END
+			IF(@SegmentID<>'ALL')
+			BEGIN
+				Select @sql3=@sql3+ ' And ComCustomerTrades_ExchangeSegment in ('+@SegmentID+')'
+			End
+		Select @sql3=@sql3+ 'group by ComCustomerTrades_CustomerID,ComCustomerTrades_ExchangeSegment,ComCustomerTrades_ProductSeriesID
+		having sum(ComCustomerTrades_QuantityLots)<>0'
+		
+		Insert into #TmpPosition (CustomerID,SegmentID,ProductSeriesID,NetQty,NetPriceUnits)
+		Exec (@sql3)
+	
+		---- Update Other fields in the table ----
+		Update #TmpPosition Set		MasterSegment = 
+										CASE 	WHEN EXCH_EXCHID='EXN0000002' AND EXCH_SEGMENTID='CM'	THEN	'1'
+												WHEN EXCH_EXCHID='EXB0000001' AND EXCH_SEGMENTID='CM'	THEN	'4'
+												WHEN EXCH_EXCHID='EXC0000001' AND EXCH_SEGMENTID='CM'	THEN	'15'
+												WHEN EXCH_EXCHID='EXN0000002' AND EXCH_SEGMENTID='FO'	THEN	'2'
+												WHEN EXCH_EXCHID='EXB0000001' AND EXCH_SEGMENTID='FO'	THEN	'5'
+												WHEN EXCH_EXCHID='EXM0000001' AND EXCH_SEGMENTID='COMM'	THEN	'7'
+												WHEN EXCH_EXCHID='EXI0000001' AND EXCH_SEGMENTID='COMM' THEN	'12'
+												WHEN EXCH_EXCHID='EXN0000004' AND EXCH_SEGMENTID='COMM' THEN	'9'
+												WHEN EXCH_EXCHID='EXN0000005' AND EXCH_SEGMENTID='COMM' THEN	'11'
+												WHEN EXCH_EXCHID='EXD0000001' AND EXCH_SEGMENTID='COMM' THEN	'10'
+												WHEN EXCH_EXCHID='EXM0000002' AND EXCH_SEGMENTID='CDX'	THEN	'8'
+												WHEN EXCH_EXCHID='EXU0000001' AND EXCH_SEGMENTID='CDX'	THEN	'13'
+												WHEN EXCH_EXCHID='EXB0000001' AND EXCH_SEGMENTID='CDX'	THEN	'6'
+												WHEN EXCH_EXCHID='EXN0000002' AND EXCH_SEGMENTID='CDX'	THEN	'3'
+												WHEN EXCH_EXCHID='EXN0000006' AND EXCH_SEGMENTID='SPOT' THEN	'14'
+												WHEN EXCH_EXCHID='EXA0000002' AND EXCH_SEGMENTID='COMM' THEN	'17'
+												WHEN EXCH_EXCHID='EXI0000002' AND EXCH_SEGMENTID='COMM' THEN	'18'
+												WHEN EXCH_EXCHID='EXM0000002' AND EXCH_SEGMENTID='CM'	THEN	'19'
+												WHEN EXCH_EXCHID='EXM0000002' AND EXCH_SEGMENTID='FO'	THEN	'20'
+												Else NULL 
+										End,
+									MktSegment=
+										CASE 	
+												WHEN EXCH_EXCHID='EXN0000002' AND EXCH_SEGMENTID='CM'	THEN	'1'
+												WHEN EXCH_EXCHID='EXB0000001' AND EXCH_SEGMENTID='CM'	THEN	'8'
+												WHEN EXCH_EXCHID='EXN0000002' AND EXCH_SEGMENTID='FO'	THEN	'2'
+												WHEN EXCH_EXCHID='EXB0000001' AND EXCH_SEGMENTID='FO'	THEN	'4'
+												WHEN EXCH_EXCHID='EXM0000001' AND EXCH_SEGMENTID='COMM' THEN	'16'
+												WHEN EXCH_EXCHID='EXN0000004' AND EXCH_SEGMENTID='COMM' THEN	'64'
+												WHEN EXCH_EXCHID='EXN0000006' AND EXCH_SEGMENTID='SPOT' THEN	'256'
+												WHEN EXCH_EXCHID='EXM0000002' AND EXCH_SEGMENTID='CDX'	THEN	'1024'
+												WHEN EXCH_EXCHID='EXN0000005' AND EXCH_SEGMENTID='COMM' THEN	'16384'
+												WHEN EXCH_EXCHID='EXN0000002' AND EXCH_SEGMENTID='CDX'	THEN	'32768'
+												Else '99999' 
+										End,
+									SegName=	
+										CASE 	WHEN EXCH_EXCHID='EXN0000002' AND EXCH_SEGMENTID='CM'	THEN	'NSE - CM' 
+												WHEN EXCH_EXCHID='EXB0000001' AND EXCH_SEGMENTID='CM'	THEN	'BSE - CM'
+												WHEN EXCH_EXCHID='EXC0000001' AND EXCH_SEGMENTID='CM'	THEN	'CSE - CM' 
+												WHEN EXCH_EXCHID='EXN0000002' AND EXCH_SEGMENTID='FO'	THEN	'NSE - FO'
+												WHEN EXCH_EXCHID='EXB0000001' AND EXCH_SEGMENTID='FO'	THEN	'BSE - FO'
+												WHEN EXCH_EXCHID='EXM0000001' AND EXCH_SEGMENTID='COMM' THEN	'MCX - COMM'
+												WHEN EXCH_EXCHID='EXI0000001' AND EXCH_SEGMENTID='COMM' THEN	'ICEX - COMM'
+												WHEN EXCH_EXCHID='EXN0000004' AND EXCH_SEGMENTID='COMM' THEN	'NCDEX - COMM'
+												WHEN EXCH_EXCHID='EXN0000005' AND EXCH_SEGMENTID='COMM' THEN	'NMCE - COMM'
+												WHEN EXCH_EXCHID='EXD0000001' AND EXCH_SEGMENTID='COMM' THEN	'DGCX - COMM'
+												WHEN EXCH_EXCHID='EXM0000002' AND EXCH_SEGMENTID='CDX'	THEN	'MCXSX - CDX'
+												WHEN EXCH_EXCHID='EXU0000001' AND EXCH_SEGMENTID='CDX'	THEN	'USE - CDX'
+												WHEN EXCH_EXCHID='EXB0000001' AND EXCH_SEGMENTID='CDX'	THEN	'BSE - CDX'
+												WHEN EXCH_EXCHID='EXN0000002' AND EXCH_SEGMENTID='CDX'	THEN	'NSE - CDX'
+												WHEN EXCH_EXCHID='EXN0000006' AND EXCH_SEGMENTID='SPOT' THEN	'NSEL - SPOT'
+												WHEN EXCH_EXCHID='EXA0000002' AND EXCH_SEGMENTID='COMM' THEN	'ACE - COMM'
+												WHEN EXCH_EXCHID='EXI0000002' AND EXCH_SEGMENTID='COMM' THEN	'INMX - COMM'
+												WHEN EXCH_EXCHID='EXM0000002' AND EXCH_SEGMENTID='CM'	THEN	'MCXSX - CM'
+												WHEN EXCH_EXCHID='EXM0000002' AND EXCH_SEGMENTID='FO'	THEN	'MCXSX - FO'
+												Else NULL 
+										End			
+												from tbl_master_companyExchange where
+												exch_compId=@CompanyID
+												and exch_internalId=SegmentID
+
+
+		Update #TmpPosition Set		ClosePrice=	DailyStat_Close 
+												from Trans_DailyStatistics where
+												ProductSeriesID=DailyStat_ProductSeriesID 
+												and DailyStat_DateTime=(
+												select max(DailyStat_DateTime) 
+												from Trans_DailyStatistics where
+												DailyStat_ProductSeriesID=ProductSeriesID 
+												and DailyStat_DateTime<=@PositionDate)
+												and MasterSegment in (1,4,15,19) ----- All the CM Segments
+
+		Update #TmpPosition Set		ClosePrice=	DailyStat_SettlementPrice 
+												from Trans_DailyStatistics where
+												ProductSeriesID=DailyStat_ProductSeriesID 
+												and DailyStat_DateTime=(
+												select max(DailyStat_DateTime) 
+												from Trans_DailyStatistics where
+												DailyStat_ProductSeriesID=ProductSeriesID 
+												and DailyStat_DateTime<=@PositionDate)
+												and MasterSegment in (2,5,20)  ----- all the FO Segments
+
+		Update #TmpPosition Set		ClosePrice=	ComDailyStat_SettlementPrice 
+												from Trans_ComDailyStat where
+												ProductSeriesID=ComDailyStat_ProductSeriesID 
+												and ComDailyStat_DateTime=(
+												select max(ComDailyStat_DateTime) 
+												from Trans_ComDailyStat where
+												ComDailyStat_ProductSeriesID=ProductSeriesID 
+												and ComDailyStat_DateTime<=@PositionDate)
+												and MasterSegment in (7,12,9,11,10,3,8,13,6,14,17,18) -----  all the comm/cdx/spot Segments
+
+		Update #TmpPosition Set		GroupID=	ltrim(rtrim(isnull(crg_FrontOfficeBranchCode,'HO')))
+												from tbl_master_contactExchange
+												where CustomerID=crg_cntID
+												and ltrim(rtrim(crg_exchange))=ltrim(rtrim(SegName))
+												and crg_company=@CompanyID
+
+		Update #TmpPosition Set		TerminalID=	ltrim(rtrim(ISNULL(crg_FrontOfficeGroupCode,'HO'))) 
+												from tbl_master_contactExchange
+												where CustomerID=crg_cntID
+												and ltrim(rtrim(crg_exchange))=ltrim(rtrim(SegName))
+												and crg_company=@CompanyID
+
+
+		Update #TmpPosition Set		ClientID=	ltrim(rtrim(crg_tcode))
+												from tbl_master_contactExchange
+												where crg_cntID=CustomerID
+												and crg_company=@CompanyID
+												and ltrim(rtrim(crg_exchange))=ltrim(rtrim(SegName))
+												
+		Update #TmpPosition Set InstrName=		Case when Equity_ExchSegmentID in (2,5,20) then ltrim(rtrim(Equity_foidentifier)) Else Null End,
+								Symbol=			Case when Equity_ExchSegmentID=4 then Equity_TickerCode Else ltrim(rtrim(Equity_TickerSymbol)) End,
+								ExpiryDate=		Case when Equity_ExchSegmentID in (2,5,20) then 
+												replace(convert(char(9),Equity_EffectUntil,6),' ','-')
+												Else NULL End,
+								StrikePrice=	case when left(Equity_FOIdentifier,3)='OPT' then cast(Equity_StrikePrice as numeric(10,2)) Else Null End,
+								OptType=		case when left(Equity_FOIdentifier,3)='OPT' then ltrim(rtrim(Equity_Series)) Else NULL  End,
+								Series=			case when Equity_ExchSegmentID in (1,19) then ltrim(rtrim(Equity_Series)) Else NULL  End
+												from Master_Equity
+												where Equity_SeriesID=ProductSeriesID
+												and MasterSegment in (1,4,5,2,15,19,20)
+												
+		Update #TmpPosition Set InstrName=		Case when Commodity_ExchangeSegmentID in (3,6,8,13) then ltrim(rtrim(Commodity_Identifier)) Else Null End,
+								Symbol=			ltrim(rtrim(Commodity_TickerSymbol)),
+								ExpiryDate=		replace(convert(char(9),Commodity_ExpiryDate,6),' ','-'),
+								StrikePrice=	case when left(Commodity_Identifier,3)='OPT' then cast(Commodity_StrikePrice as numeric(10,2)) Else Null End,
+								OptType=		case when left(Commodity_Identifier,3)='OPT' then ltrim(rtrim(Commodity_TickerSeries)) Else NULL  End
+												from Master_Commodity
+												where Commodity_ProductSeriesID=ProductSeriesID
+												and MasterSegment in (7,12,9,11,10,3,8,13,6,14,17,18)
+
+		Update #TmpPosition Set	BuyQty=			case when NetQty<0 then ABS(netqty) Else NULL end,
+								BuyValue=		case when NetQty<0 then ABS(NetPriceUnits)*isnull(ClosePrice,0) Else NULL end,
+								SellQty=		case when NetQty>0 then netqty Else NULL end,
+								SellValue=		case when NetQty>0 then NetPriceUnits*isnull(ClosePrice,0) Else NULL END
+
+
+
+Select
+'' As Filler1,												------- Filler
+MktSegment,													------- Market Segment
+'A' As ProductType,											-------	Product Type
+ClientID,													------- Trading Code of the client in the respective segment
+GroupID,													-------	Branch Code
+TerminalID,													------- Client's First Name
+isnull(InstrName,'') As InstrName,							------- Instrument Type, Only for FO/CUR segments
+Symbol,														------- Ticker Symbol
+isnull(Series,'') As Series,								------- Only for NSE-CM and MCXSX-CM segment
+isnull(ExpiryDate,'') As ExpiryDate,						------- For FO/COMM/CDX Segment Products
+isnull(cast(StrikePrice as varchar(20)),'') As StrikePrice,	------- For Option Products
+isnull(OptType,'') As OptionType,							------- For Option Products
+isnull(cast(BuyQty as varchar(20)),'') As BuyQty,			------- Net Open Buy POsition
+isnull(cast(BuyValue as varchar(20)),'') As BuyVal,			------- Close Value of Net Open Buy POsition
+isnull(cast(SellQty as varchar(20)),'') As SellQty,			------- Net Open Sell Position
+isnull(cast(SellValue as varchar(20)),'') As SellVal,		------- Close Value Of Net Open Sell Position
+'' As Remarks,												------- Filler
+'' As Filler2
+from
+#TmpPosition where isnull(BuyQty,0)+isnull(SellQty,0)<>0
+ORDER BY CustomerID,SegmentID,Symbol,ExpiryDate
+Drop table #TmpPosition
+
+---Export the result of this querry as a .CSV file named "MANUAL_POSITION_DDMMYYYY_HHMM.CSV"
+END
+
+GO
+

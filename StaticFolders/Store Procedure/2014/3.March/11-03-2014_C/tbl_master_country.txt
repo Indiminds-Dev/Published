@@ -1,0 +1,3 @@
+
+alter table tbl_master_state add State_UCXCode varchar(4)
+

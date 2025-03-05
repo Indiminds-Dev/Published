@@ -1,0 +1,231 @@
+
+ALTER procedure [dbo].[TradeChangeNSEBSEDISPLAY]
+@date varchar(50),
+@ClientsID varchar(max),
+@segment varchar(20),
+@Companyid varchar(30),
+@Instruments varchar(max),
+@OrderNo Varchar(max),
+@Terminalid varchar(max),
+@CTCLID varchar(max),
+@TIME VARCHAR(MAX),
+@Settno varchar(20),
+@Setttype varchar(20),
+@MasterSegment varchar(20),
+@tradetype varchar(10),
+@actype varchar(10)	,
+@actypeCli varchar(max),
+@mktprice varchar(max),
+@Sortorder varchar(10),
+@TranType varchar(10)
+
+AS
+BEGIN
+SET NOCOUNT ON
+DECLARE @SqlExchange VARCHAR(MAX),@sqlOther VARCHAR(MAX)
+SELECT @SqlExchange=''
+
+Declare @TabContract Table(ChkCntr varchar(1))
+				
+-----------------Fetching Distinct CustomerID					
+	IF @ClientsID<>'ALL'
+	BEGIN
+		declare @TblCustomerID table
+		(
+			Id int identity,
+			CustomerID varchar(max)
+		)			
+		insert into @TblCustomerID(CustomerID)
+		select * from dbo.fnSplitReturnTable(@ClientsID,',')
+		
+		declare @Max int,@Min int
+		select @Max=MAX(Id) FROM @TblCustomerID
+		
+		set @Min=2
+		select @ClientsID=''''+CustomerID from @TblCustomerID where Id=1
+						
+		while(@Min<=@Max)
+		Begin							
+			select @ClientsID=@ClientsID+''','''+CustomerID from @TblCustomerID where Id=@Min
+			set @Min=@Min+1
+		End
+		select @ClientsID=@ClientsID+''''
+		--select @ClientsID
+	End
+				
+	------------ContractNo Checking
+	
+	select @sqlOther='Select ''Y''
+	From Trans_CustomerTrades Where CustomerTrades_contractnotenumber is null '
+	IF @Instruments<>'ALL'
+	BEGIN
+			select @sqlOther=@sqlOther + ' and CustomerTrades_ProductSeriesID in('+@Instruments+')'
+	END
+	IF @ClientsID<>'ALL'
+	BEGIN
+			select @sqlOther=@sqlOther + ' and CustomerTrades_CustomerID in('+@ClientsID+')'
+	END
+	select @sqlOther=@sqlOther + '
+	and CustomerTrades_SettlementNumber='''+@Settno+'''
+	and CustomerTrades_SettlementType='''+@Setttype+'''
+	and CustomerTrades_TradeDate='''+@date+'''
+	AND isnull(CustomerTrades_TransactionType,''GNRTD'')<>''GNRTD''
+	and CustomerTrades_ExchangeSegment='''+@segment+'''
+	and CustomerTrades_CompanyID='''+@Companyid+''''
+	Insert Into @TabContract(ChkCntr)exec(@sqlOther)
+		
+	select @SqlExchange='select ExchangeTrades_CustTransactionID as CustTransactionID,''0'' as status,
+	ExchangeTrades_ID as ExchangeTradesID,Equity_SeriesID as PRODUCTID,
+	case when isnull(Equity_StrikePrice,0.0)=0.0 and Equity_EffectUntil is null
+			then isnull(rtrim(Equity_TickerSymbol),'''')+'' ''+isnull(rtrim(Equity_Series),''[''+rtrim(Equity_tickercode)+'']'')
+		when isnull(Equity_StrikePrice,0.0)<>0.0 and Equity_EffectUntil is null
+			then isnull(rtrim(Equity_TickerSymbol),'''')+'' ''+isnull(rtrim(Equity_Series),''[''+rtrim(Equity_tickercode)+'']'')+'' ''+cast(cast(round(Equity_StrikePrice,2) as numeric(28,2)) as varchar)
+		when isnull(Equity_StrikePrice,0.0)=0.0 and Equity_EffectUntil is not null
+			then isnull(rtrim(Equity_TickerSymbol),'''')+'' ''+isnull(rtrim(Equity_Series),''[''+rtrim(Equity_tickercode)+'']'')+'' ''+convert(varchar(9),Equity_EffectUntil,6)
+	else isnull(rtrim(Equity_TickerSymbol),'''')+'' ''+isnull(rtrim(Equity_Series),''[''+rtrim(Equity_tickercode)+'']'')+'' ''+cast(cast(round(Equity_StrikePrice,2) as numeric(28,2)) as varchar)+'' ''+convert(varchar(9),Equity_EffectUntil,6)
+	end as instrument,
+	ExchangeTrades_OrderNumber as orderno,
+	ExchangeTrades_TradeNumber as tradeno,
+	case when ExchangeTrades_BuySellFlag=1 then ''Buy'' else ''Sell'' end as flag,
+	isnull(ExchangeTrades_QuantityLots,0.0) as PriceQuantity,
+	isnull(ExchangeTrades_UnitPrice,0.0) as Price,
+	dbo.fn_FormatNumber(CAST(CAST(ISNULL(ExchangeTrades_QuantityLots ,0) AS NUMERIC(28,2)) AS VARCHAR(8000)),''N'')  AS PriceQuantityDISPLAY ,
+	dbo.fn_FormatNumber(CAST(CAST(ISNULL(ExchangeTrades_UnitPrice ,0) AS NUMERIC(28,4)) AS VARCHAR(8000)),''N'')  AS PriceDISPLAY ,
+	ExchangeTrades_Terminalid as Terminalid,
+	ExchangeTrades_CTCLID as CTCLID,
+	CONVERT(VARCHAR(8), EXCHANGETRADES_TRADEENTRYTIME, 108) as TRADETIME,
+	rtrim(ltrim(ExchangeTrades_customerucc))  as actype,
+	ISNULL(ExchangeTrades_QuantityLots ,0) as Quantity,
+	ExchangeTrades_CustodialFlag as CustodialFlag 
+	from Trans_ExchangeTrades,Master_Equity where 
+	Equity_SeriesID=ExchangeTrades_ProductSeriesID
+	AND isnull(ExchangeTrades_TransactionType,''GNRTD'')<>''GNRTD''
+	AND  (ExchangeTrades_IsLocked IS NULL or ExchangeTrades_IsLocked=''N'')
+	AND (( '+@TIME+' ) or (EXCHANGETRADES_TRADEENTRYTIME is null))'
+	IF @ClientsID<>'ALL'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' and ExchangeTrades_CustomerID in('+@ClientsID+')'
+	END
+	IF @actype='1'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' and ExchangeTrades_procli=1'
+	END
+	IF @actype='2'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' and ExchangeTrades_procli=2'
+	END
+	IF @actype='0'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' and ExchangeTrades_procli IN(1,2)'
+	END
+	IF @actypeCli<>'ALL'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' and ExchangeTrades_customerucc IN ('+@actypeCli+')'
+	END
+	IF @tradetype='1'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' and ExchangeTrades_BuySellFlag=1'
+	END
+	IF @tradetype='2'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' and ExchangeTrades_BuySellFlag=2'
+	END
+	IF @OrderNo<>'ALL'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' and ExchangeTrades_OrderNumber in('+@OrderNo+')'
+	END
+	IF @Instruments<>'ALL'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' and ExchangeTrades_ProductSeriesID in('+@Instruments+')'
+	END
+	IF @Terminalid<>'ALL'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' and ExchangeTrades_Terminalid in('+@Terminalid+')'
+	END
+	IF @CTCLID<>'ALL'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' and ExchangeTrades_CTCLID in('+@CTCLID+')'
+	END
+	IF @mktprice<>'ALL'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' and '+@mktprice+''
+	END
+	IF @TranType='Confrmd'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' and ltrim(rtrim(ExchangeTrades_CustodialFlag))=''Y'''
+	End
+	IF @TranType='UnConfrmd'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' and ltrim(rtrim(isnull(ExchangeTrades_CustodialFlag,''N'')))=''N'''
+	End
+	select @SqlExchange=@SqlExchange + '
+	and ExchangeTrades_SettlementNumber='''+@Settno+'''
+	and ExchangeTrades_SettlementType='''+@Setttype+'''
+	and ExchangeTrades_TradeDate='''+@date+'''
+	and ExchangeTrades_Segment='''+@segment+'''
+	and ExchangeTrades_CompanyID='''+@Companyid+'''
+	and (select CustomerTrades_ContractNoteNumber from Trans_CustomerTrades where CustomerTrades_ID=ExchangeTrades_CustTransactionID)  is null 
+	order by '
+	IF @Sortorder='1st'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' Equity_TickerSymbol,Equity_Series,Equity_StrikePrice,Equity_EffectUntil,ExchangeTrades_BuySellFlag,CONVERT(VARCHAR(8), EXCHANGETRADES_TRADEENTRYTIME, 108)'
+	END
+	IF @Sortorder='2nd'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' CONVERT(VARCHAR(8), EXCHANGETRADES_TRADEENTRYTIME, 108) '
+	END
+	IF @Sortorder='3rd'
+	BEGIN
+			select @SqlExchange=@SqlExchange + ' Equity_TickerSymbol,Equity_Series,Equity_StrikePrice,Equity_EffectUntil,CONVERT(VARCHAR(8), EXCHANGETRADES_TRADEENTRYTIME, 108)'
+	END
+
+	If Exists(Select 'Y' From @TabContract)
+	Begin
+			exec(@SqlExchange)
+			
+	End
+	Else
+	Begin
+		select @sqlOther='Select ''Y''
+		From Trans_ExchangeTrades Where ExchangeTrades_custtransactionid is null'
+		IF @ClientsID<>'ALL'
+		BEGIN
+				select @sqlOther=@sqlOther + ' and ExchangeTrades_CustomerID in('+@ClientsID+')'
+		End
+		IF @Instruments<>'ALL'
+		BEGIN
+				select @sqlOther=@sqlOther + ' and ExchangeTrades_ProductSeriesID in('+@Instruments+')'
+		END
+		select @sqlOther=@sqlOther + '
+		and ExchangeTrades_SettlementNumber='''+@Settno+'''
+		and ExchangeTrades_SettlementType='''+@Setttype+'''
+		and ExchangeTrades_TradeDate='''+@date+'''
+		and ExchangeTrades_Segment='''+@segment+'''
+		AND isnull(ExchangeTrades_TransactionType,''GNRTD'')<>''GNRTD''
+		and ExchangeTrades_CompanyID='''+@Companyid+''''
+		Insert Into @TabContract(ChkCntr)exec(@sqlOther)
+		
+		print @sqlOther
+		If Exists(Select 'Y' From @TabContract)
+		Begin
+				exec(@SqlExchange)	
+		End
+		Else
+		Begin
+				Select 3 as status----ConTract Note Number Already geneRated Please Cancel It
+	    End
+	End
+
+
+
+
+END
+
+
+
+
+
+
+
+
+

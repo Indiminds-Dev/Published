@@ -1,0 +1,87 @@
+<%@ page language="C#" autoeventwireup="true" inherits="frm_MCEXContracts, App_Web_g1t3n0jz" %>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" >
+<head id="Head1" runat="server">
+    <title>Import MCX Contract</title>
+    <link type="text/css" href="../CSS/style.css" rel="Stylesheet" />
+
+    <script type="text/javascript" src="../JSFUNCTION/loaddata1.js"></script>
+
+    <script language="javascript" type="text/javascript">
+    function SignOff()
+    {
+        window.parent.SignOff();
+    }
+    function height()
+    {
+        if(document.body.scrollHeight>=300)
+            window.frameElement.height = document.body.scrollHeight;
+        else
+            window.frameElement.height = '300px';
+        window.frameElement.Width = document.body.scrollWidth;
+    }
+    </script>
+</head>
+<body style="margin: 0px 0px 0px 0px; background-color: #DDECFE" onload="clearPreloadPage()">
+    <form id="form1" runat="server">
+    <div>
+        <asp:Panel ID="Panelmain" runat="server" HorizontalAlign="Center" Style="z-index: 100;
+            left: 280px; position: absolute; top: 22px" Visible="true">
+            <table id="tbl_main" cellpadding="0" cellspacing="0" class="login" width="410">
+                <tbody>
+               <tr>
+                    <td class="lt1" style="height: 22px">
+                        <h5>
+                            Imports Contracts From "MCX-SX_ProductMaster.csv" File
+                        </h5>
+                    </td>
+                </tr>
+                
+                    <tr>
+                        <td class="lt" style="height: 115px">
+                            <table cellpadding="0" cellspacing="12" class="width100per" style="width: 100%">
+                                <tbody>
+                                    <tr>
+                                        <%--<td class="lt" style="height: 22px">
+                                                    </td>--%>
+                                        <td align="right" style="width: 278px; height: 22px">
+                                            <asp:FileUpload ID="MCXSelectFile" runat="server" Height="20px" Width="272px"/>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td align="right" colspan="1" valign="middle">
+                                                            <asp:Button ID="BtnSave" runat="server" CssClass="btn" OnClick="BtnSave_Click" Text="Import File"
+                                                                Width="84px" /></td>
+                                        <td align="right" colspan="2" valign="middle">
+                                            <table cellpadding="0" cellspacing="0">
+                                                <tbody>
+                                                    <tr>
+                                                        <td align="center" style="height: 19px" valign="top">
+                                                            &nbsp;</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                    <%--<tr style="display: none">
+                                                    <td>
+                                                        <asp:TextBox ID="txtTableName" runat="server" Width="272px">TempTable</asp:TextBox></td>
+                                                    <td style="width: 278px">
+                                                        <asp:TextBox ID="txtCSVDir" runat="server" Width="272px">Import/Table</asp:TextBox></td>
+                                                    <td>
+                                                    </td>
+                                                </tr>--%>
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </asp:Panel>
+    
+    </div>
+    </form>
+</body>
+</html>

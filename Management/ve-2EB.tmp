@@ -1,0 +1,164 @@
+<%@ Page Language="C#" MasterPageFile="~/MasterPage.master" AutoEventWireup="true"
+    CodeFile="CopyofFOCLosingRats.aspx.cs" Inherits="management_FOCLosingRats"
+    Title="FO CLosing Rats" %>
+
+<%@ Register Src="Headermain.ascx" TagName="Headermain" TagPrefix="uc1" %>
+<asp:Content ID="Content1" ContentPlaceHolderID="ContentPlaceHolder1" runat="Server">
+    <uc1:Headermain ID="Headermain1" runat="server" />
+</asp:Content>
+<asp:Content ID="Content2" ContentPlaceHolderID="ContentPlaceHolder2" runat="Server">
+</asp:Content>
+<asp:Content ID="Content3" ContentPlaceHolderID="ContentPlaceHolder3" runat="Server">
+    <asp:ScriptManager ID="ScriptManager1" runat="server">
+    </asp:ScriptManager>
+    <asp:UpdatePanel ID="UpdatePanel1" runat="server">
+        <ContentTemplate>
+            <table id="tbl_main" class="login" cellspacing="0" cellpadding="0" runat="server"
+                width="510">
+                <tr>
+                    <td class="lt1">
+                        <h5>
+                            Imports FO Closing Rates CSV Files
+                        </h5>
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td class="lt1">
+                        <table class="width100per" cellspacing="0" cellpadding="0">
+                            <tr>
+                                <td>
+                                    <table width="100%" style="border-style: dotted; border-color: Black; border: 1px"
+                                        cellspacing="12" cellpadding="0">
+                                        <tr>
+                                            <td class="lt" style="width: 75%;">
+                                                <asp:RadioButton ID="rdBtnFO" GroupName="sel" runat="server" AutoPostBack="True"
+                                                    OnCheckedChanged="rdBtnFO_CheckedChanged" />
+                                                Bhavcopy (.CSV) files from www.nseindia.com {foDDMONYYYYbhav.csv}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="lt" style="width: 75%;">
+                                                <asp:RadioButton ID="rdBtnFoFCN" GroupName="sel" runat="server" AutoPostBack="True"
+                                                    OnCheckedChanged="rdBtnFoFCN_CheckedChanged" />
+                                                Combined F&O Closing Rate Files from NSE's FTP Server {F_CN01_DDMMYYYY.CSV}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="lt1">
+                        <table class="width100per" cellspacing="0" cellpadding="0">
+                            <tr>
+                                <td colspan="0" >
+                                    <asp:Label ID="importstatus" runat="server" Font-Size="XX-Small" Font-Names="Arial"
+                                        Font-Bold="True" ForeColor="Red" />
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="lt1" >
+                        <table class="width100per" cellspacing="0" cellpadding="0">
+                            <tr id="trFo" runat="server">
+                            <td></td>
+                                <td>
+                                    <table class="width100per" cellspacing="0" cellpadding="0">
+                                        <tr>
+                                            <td class="lt" style="width: 75%; height: 22px;">
+                                                <asp:CheckBox ID="chkUpOnlyStatTable" runat="server" />
+                                                Add New Contracts
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="lt" style="width: 75%; height: 22px;">
+                                                <asp:FileUpload ID="OFDSelectFile" runat="server" />
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="lt" style="width: 75%; height: 22px;">
+                                                <asp:CheckBox ID="chkLots" runat="server" />
+                                                FO Closing Rates Lots
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td class="lt" style="width: 75%; height: 21px;">
+                                                <asp:FileUpload ID="FileUploadLots" runat="server" />
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td align="right" valign="middle" colspan="2" style="height: 33px; width: 237px;">
+                                                <table cellspacing="0" cellpadding="0">
+                                                    <tbody>
+                                                        <tr>
+                                                            <td valign="top" align="right" style="height: 19px">
+                                                                <asp:Button ID="BtnSave" runat="server" Text="Import File" CssClass="btn" OnClick="BtnSave_Click"
+                                                                    Width="84px" />
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="lt" >
+                        <table class="width100per" cellspacing="0" cellpadding="0">
+                            <tr id="trFoWLots" runat="server">
+                             <td></td>
+                                <td>
+                                    <table class="width100per" cellspacing="0" cellpadding="0">
+                                        <tr>
+                                            <td class="lt" style="width: 75%; height: 22px;">
+                                                <asp:FileUpload ID="FileUpload1" runat="server" />
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td align="right" valign="middle" colspan="2" style="height: 33px; width: 237px;">
+                                                <table cellspacing="0" cellpadding="0">
+                                                    <tbody>
+                                                        <tr>
+                                                            <td valign="top" align="right" style="height: 19px">
+                                                                <asp:Button ID="btnFoLotsImports" runat="server" Text="Import File" CssClass="btn"
+                                                                    Width="84px" />
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr style="display: none">
+                    <td>
+                        <table class="width100per" cellspacing="12" cellpadding="0">
+                            <tr>
+                                <td>
+                                    <asp:TextBox ID="txtTableName" runat="server">TempTable</asp:TextBox></td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <asp:TextBox ID="txtCSVDir" runat="server">Import/Table</asp:TextBox>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </ContentTemplate>
+    </asp:UpdatePanel>
+</asp:Content>

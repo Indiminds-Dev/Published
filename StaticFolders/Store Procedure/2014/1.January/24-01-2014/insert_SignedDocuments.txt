@@ -1,0 +1,1970 @@
+
+-- exec [insert_SignedDocuments] '2012-2013','COR0000002','12022800','CDSL','12-Jul-2012','1','1202280000000721','5','--CDSL-1202280000000721.pdf','Documents/SIGNEDDOCS/2012/Aug/--CDSL-1202280000000721.pdf',377,'EMV0000001','changoiwalla@gmail.com',10011
+ALTER procedure [dbo].[insert_SignedDocuments]
+@FinancialYear varchar(50),
+@CompanyID varchar(50),
+@Segment_OR_DPID varchar(50),
+@Segment_Name varchar(50),
+@ContractDate varchar(50),
+@BranchID varchar(50),
+@ContactID_OR_BenAccNumber varchar(max),
+@DocumentType varchar(50),
+@DocumentName varchar(max),
+@DocumentPath varchar(500),
+@user varchar(50),
+@Signatory varchar(50),
+@RecipientEmailID varchar(200),
+@EmailCreateAppMenuId int
+as
+Begin
+Declare @id bigint
+Declare @status varchar(100)
+Declare @Parameters varchar(100), @WhichCallType1 varchar(30),@WhichCallType2 varchar(50)
+,@WhichCallType3 varchar(30),@WhichCallType4 varchar(30),@WhichCallType5 varchar(30)
+Set @Parameters=@DocumentName
+Create Table #tttParamInfo(AutoID int identity(1,1),Paramater Varchar(Max))
+if (@BranchID<> 0 or @BranchID <>'')
+begin
+	If (@DocumentType<>'99')
+		Begin
+            INSERT INTO [Trans_SignedDocuments]
+           ([SignedDocuments_FinYear]
+           ,[SignedDocuments_GenerateDateTime]
+           ,[SignedDocuments_CompanyID]
+           ,[SignedDocuments_SegmentDPID]
+           ,[SignedDocuments_BranchID]
+           ,[SignedDocuments_ContactBenID]
+           ,[SignedDocuments_DocumentType]
+           ,[SignedDocuments_DocumentName]
+           ,[SignedDocuments_DocumentPath]
+           ,[SignedDocuments_GenerateUser]
+           ,[SignedDocuments_Signatory]
+           ,[SignedDocuments_RecipientEmailID]
+			)
+		     VALUES
+           (@FinancialYear
+           ,getdate()
+           ,@CompanyID
+           ,@Segment_OR_DPID
+           ,@BranchID
+           ,@ContactID_OR_BenAccNumber
+           ,@DocumentType
+           ,@DocumentName
+           ,@DocumentPath
+           ,@user
+           ,@Signatory
+           ,@RecipientEmailID
+			)
+		End
+	Else
+		Begin
+			INSERT INTO [Trans_SignedDocuments]
+           ([SignedDocuments_FinYear]
+           ,[SignedDocuments_GenerateDateTime]
+           ,[SignedDocuments_CompanyID]
+           ,[SignedDocuments_SegmentDPID]
+           ,[SignedDocuments_BranchID]
+           ,[SignedDocuments_ContactBenID]
+           ,[SignedDocuments_DocumentType]
+           ,[SignedDocuments_DocumentName]
+           ,[SignedDocuments_DocumentPath]
+           ,[SignedDocuments_GenerateUser]
+           ,[SignedDocuments_Signatory]
+           ,[SignedDocuments_RecipientEmailID]
+           ,[SignedDocuments_ForDate]
+			)
+		     VALUES
+           (@FinancialYear
+           ,getdate()
+           ,@CompanyID
+           ,@Segment_OR_DPID
+           ,@BranchID
+           ,@ContactID_OR_BenAccNumber
+           ,@DocumentType
+           ,@DocumentName
+           ,@DocumentPath
+           ,@user
+           ,@Signatory
+           ,@RecipientEmailID
+           --,(select dbo.fnSplit(@ContractDate,'split',2))
+           ,@ContractDate
+			)
+		
+		End
+End		
+-- exec [insert_SignedDocuments] '2012-2013','COR0000002','12022800','CDSL','12-Jul-2012','1','1202280000000721','5','--CDSL-1202280000000721.pdf','Documents/SIGNEDDOCS/2012/Aug/--CDSL-1202280000000721.pdf',377,'EMV0000001','changoiwalla@gmail.com',10011
+If (@DocumentType<>'99')
+Begin
+
+ if(@Segment_Name='ICEX-COMM')
+ BEGIN
+							Insert into #tttParamInfo
+	Select col From fnSplitReturnTable(@Parameters,'-')
+	Select @WhichCallType1= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=1
+	Select @WhichCallType2= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=2
+	Select @WhichCallType3= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=3
+	Select @WhichCallType4= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=4
+	Select @WhichCallType5= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=5
+	
+	update Trans_ContractNotes set ContractNotes_EmailDateTime=GETDATE(),ContractNotes_EmailedBy=@user
+	where ContractNotes_Number=@WhichCallType4 and ContractNotes_CompanyID=@CompanyID
+	and ContractNotes_TradeDate=@ContractDate and ContractNotes_SegmentID=@Segment_OR_DPID
+							INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						  Select (select top 1 eml_email from tbl_master_email
+					      where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'ECN FOR ['+ Convert(varchar(20),@ContractDate,106)+
+								'] IN '+ @Segment_Name
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your contract note for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				           Select @id=@@identity
+
+				           INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						   )
+						
+						 Select	 @id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				           INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			            set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			if (len(@status)>0 or @status is not null)
+			BEGIN
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				           INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+				END
+				
+
+		END
+ else if(@Segment_Name='NSE-CDX')
+ BEGIN
+ Insert into #tttParamInfo
+	Select col From fnSplitReturnTable(@Parameters,'-')
+	Select @WhichCallType1= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=1
+	Select @WhichCallType2= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=2
+	Select @WhichCallType3= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=3
+	Select @WhichCallType4= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=4
+	Select @WhichCallType5= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=5
+	
+	update Trans_ContractNotes set ContractNotes_EmailDateTime=GETDATE(),ContractNotes_EmailedBy=@user
+	where ContractNotes_Number=@WhichCallType4 and ContractNotes_CompanyID=@CompanyID
+	and ContractNotes_TradeDate=@ContractDate and ContractNotes_SegmentID=@Segment_OR_DPID
+							INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						  Select (select top 1 eml_email from tbl_master_email
+					      where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'ECN FOR ['+ Convert(varchar(20),@ContractDate,106)+
+								'] IN '+ @Segment_Name
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your contract note for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				           Select @id=@@identity
+
+				           INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						   )
+						
+						 Select	 @id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				           INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			            set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			if (len(@status)>0 or @status is not null)
+			BEGIN
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				           INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+				END
+				
+
+ END
+ else if(@Segment_Name='USE-CDX')
+ BEGIN
+ Insert into #tttParamInfo
+	Select col From fnSplitReturnTable(@Parameters,'-')
+	Select @WhichCallType1= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=1
+	Select @WhichCallType2= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=2
+	Select @WhichCallType3= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=3
+	Select @WhichCallType4= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=4
+	Select @WhichCallType5= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=5
+	
+	update Trans_ContractNotes set ContractNotes_EmailDateTime=GETDATE(),ContractNotes_EmailedBy=@user
+	where ContractNotes_Number=@WhichCallType4 and ContractNotes_CompanyID=@CompanyID
+	and ContractNotes_TradeDate=@ContractDate and ContractNotes_SegmentID=@Segment_OR_DPID
+							INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						  Select (select top 1 eml_email from tbl_master_email
+					     where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'ECN FOR ['+ Convert(varchar(20),@ContractDate,106)+
+								'] IN '+ @Segment_Name
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your contract note for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				      Select @id=@@identity
+
+				     INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						  )
+						
+						Select	@id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				   INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			               set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+		if (len(@status)>0 or @status is not null)
+		 BEGIN
+
+				     INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						 Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				   INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+		END
+				
+
+ END
+ else if(@Segment_Name='MCXSX-CDX')
+ BEGIN
+ Insert into #tttParamInfo
+	Select col From fnSplitReturnTable(@Parameters,'-')
+	Select @WhichCallType1= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=1
+	Select @WhichCallType2= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=2
+	Select @WhichCallType3= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=3
+	Select @WhichCallType4= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=4
+	Select @WhichCallType5= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=5
+	
+	update Trans_ContractNotes set ContractNotes_EmailDateTime=GETDATE(),ContractNotes_EmailedBy=@user
+	where ContractNotes_Number=@WhichCallType4 and ContractNotes_CompanyID=@CompanyID
+	and ContractNotes_TradeDate=@ContractDate and ContractNotes_SegmentID=@Segment_OR_DPID
+							INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						Select (select top 1 eml_email from tbl_master_email
+					where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'ECN FOR ['+ Convert(varchar(20),@ContractDate,106)+
+								'] IN '+ @Segment_Name
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your contract note for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				        Select @id=@@identity
+
+				        INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						   )
+						
+						  Select @id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				        INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			         set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			    if (len(@status)>0 or @status is not null)
+				BEGIN
+
+				   INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						  )
+						
+						  Select @id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				    INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+				END
+				
+
+ END
+			--END
+---------------------------------
+ else if(@Segment_Name='NCDEX-COMM')
+ BEGIN
+ Insert into #tttParamInfo
+	Select col From fnSplitReturnTable(@Parameters,'-')
+	Select @WhichCallType1= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=1
+	Select @WhichCallType2= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=2
+	Select @WhichCallType3= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=3
+	Select @WhichCallType4= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=4
+	Select @WhichCallType5= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=5
+	
+	update Trans_ContractNotes set ContractNotes_EmailDateTime=GETDATE(),ContractNotes_EmailedBy=@user
+	where ContractNotes_Number=@WhichCallType4 and ContractNotes_CompanyID=@CompanyID
+	and ContractNotes_TradeDate=@ContractDate and ContractNotes_SegmentID=@Segment_OR_DPID
+							INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						Select (select top 1 eml_email from tbl_master_email
+					  where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'ECN FOR ['+ Convert(varchar(20),@ContractDate,106)+
+								'] IN '+ @Segment_Name
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your contract note for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				  Select @id=@@identity
+
+				  INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				    INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			       set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			if (len(@status)>0 or @status is not null)
+			  BEGIN
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				   INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+				END
+				
+
+ END
+
+--------------------------------------
+ else if(@Segment_Name='MCX-COMM')
+ BEGIN
+ Insert into #tttParamInfo
+	Select col From fnSplitReturnTable(@Parameters,'-')
+	Select @WhichCallType1= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=1
+	Select @WhichCallType2= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=2
+	Select @WhichCallType3= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=3
+	Select @WhichCallType4= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=4
+	Select @WhichCallType5= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=5
+	
+	update Trans_ContractNotes set ContractNotes_EmailDateTime=GETDATE(),ContractNotes_EmailedBy=@user
+	where ContractNotes_Number=@WhichCallType4 and ContractNotes_CompanyID=@CompanyID
+	and ContractNotes_TradeDate=@ContractDate and ContractNotes_SegmentID=@Segment_OR_DPID
+							INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						Select (select top 1 eml_email from tbl_master_email
+					   where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'ECN FOR ['+ Convert(varchar(20),@ContractDate,106)+
+								'] IN '+ @Segment_Name
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your contract note for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				  Select @id=@@identity
+
+				  INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						  )
+						
+						  Select @id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				    INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			      set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			if (len(@status)>0 or @status is not null)
+			 BEGIN
+
+				  INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				  INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			END
+				
+
+ END
+ 
+ else if(@Segment_Name='UCX-COMM')
+ BEGIN
+ Insert into #tttParamInfo
+	Select col From fnSplitReturnTable(@Parameters,'-')
+	Select @WhichCallType1= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=1
+	Select @WhichCallType2= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=2
+	Select @WhichCallType3= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=3
+	Select @WhichCallType4= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=4
+	Select @WhichCallType5= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=5
+	
+	update Trans_ContractNotes set ContractNotes_EmailDateTime=GETDATE(),ContractNotes_EmailedBy=@user
+	where ContractNotes_Number=@WhichCallType4 and ContractNotes_CompanyID=@CompanyID
+	and ContractNotes_TradeDate=@ContractDate and ContractNotes_SegmentID=@Segment_OR_DPID
+							INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						Select (select top 1 eml_email from tbl_master_email
+					   where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'ECN FOR ['+ Convert(varchar(20),@ContractDate,106)+
+								'] IN '+ @Segment_Name
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your contract note for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				  Select @id=@@identity
+
+				  INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						  )
+						
+						  Select @id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				    INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			      set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			if (len(@status)>0 or @status is not null)
+			 BEGIN
+
+				  INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				  INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			END
+				
+
+ END
+ 
+ else if(@Segment_Name='NSE-CM')
+ BEGIN
+ 
+ 
+
+--Create Table #tttParamInfo(AutoID int identity(1,1),Paramater Varchar(Max))
+	
+	Insert into #tttParamInfo
+	Select col From fnSplitReturnTable(@Parameters,'-')
+	Select @WhichCallType1= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=1
+	Select @WhichCallType2= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=2
+	Select @WhichCallType3= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=3
+	Select @WhichCallType4= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=4
+	Select @WhichCallType5= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=5
+	
+	update Trans_ContractNotes set ContractNotes_EmailDateTime=GETDATE(),ContractNotes_EmailedBy=@user
+	where ContractNotes_Number=@WhichCallType4 and ContractNotes_CompanyID=@CompanyID
+	and ContractNotes_TradeDate=@ContractDate and ContractNotes_SegmentID=@Segment_OR_DPID
+	--Drop table #tttParamInfo
+							INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						Select (select top 1 eml_email from tbl_master_email
+					    where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'ECN FOR ['+ Convert(varchar(20),@ContractDate,106)+
+								'] IN '+ @Segment_Name
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your contract note for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				    Select @id=@@identity
+
+				   INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				   INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			       set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			if (len(@status)>0 or @status is not null)
+			 BEGIN
+
+				  INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				   INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			END
+				
+
+ END
+ else if(@Segment_Name='NSE-FO')
+ BEGIN
+ Insert into #tttParamInfo
+	Select col From fnSplitReturnTable(@Parameters,'-')
+	Select @WhichCallType1= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=1
+	Select @WhichCallType2= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=2
+	Select @WhichCallType3= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=3
+	Select @WhichCallType4= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=4
+	Select @WhichCallType5= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=5
+	
+	update Trans_ContractNotes set ContractNotes_EmailDateTime=GETDATE(),ContractNotes_EmailedBy=@user
+	where ContractNotes_Number=@WhichCallType4 and ContractNotes_CompanyID=@CompanyID
+	and ContractNotes_TradeDate=@ContractDate and ContractNotes_SegmentID=@Segment_OR_DPID
+							INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						Select (select top 1 eml_email from tbl_master_email
+					where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'ECN FOR ['+ Convert(varchar(20),@ContractDate,106)+
+								'] IN '+ @Segment_Name
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your contract note for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				Select @id=@@identity
+
+				INSERT INTO [Trans_EmailRecipients]
+						   ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						Select	@id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+
+			    set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			if (len(@status)>0 or @status is not null)
+			 BEGIN
+				   INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			END
+
+ END
+ else if(@Segment_Name='BSE-CM')
+ BEGIN
+
+Set @Parameters=@DocumentName
+--Create Table #tttParamInfo(AutoID int identity(1,1),Paramater Varchar(Max))
+	
+	Insert into #tttParamInfo
+	Select col From fnSplitReturnTable(@Parameters,'-')
+	Select @WhichCallType1= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=1
+	Select @WhichCallType2= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=2
+	Select @WhichCallType3= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=3
+	Select @WhichCallType4= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=4
+	Select @WhichCallType5= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=5
+	
+	update Trans_ContractNotes set ContractNotes_EmailDateTime=GETDATE(),ContractNotes_EmailedBy=@user
+	where ContractNotes_Number=@WhichCallType4 and ContractNotes_CompanyID=@CompanyID
+	and ContractNotes_TradeDate=@ContractDate and ContractNotes_SegmentID=@Segment_OR_DPID
+	--Drop table #tttParamInfo
+							INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						Select (select top 1 eml_email from tbl_master_email
+					where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'ECN FOR ['+ Convert(varchar(20),@ContractDate,106)+
+								'] IN '+ @Segment_Name
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your contract note for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				Select @id=@@identity
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			if (len(@status)>0 or @status is not null)
+			 BEGIN
+
+				 INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			END
+				
+
+ END
+		
+ else if(@Segment_Name='BSE-FO')
+ BEGIN
+ Insert into #tttParamInfo
+	Select col From fnSplitReturnTable(@Parameters,'-')
+	Select @WhichCallType1= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=1
+	Select @WhichCallType2= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=2
+	Select @WhichCallType3= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=3
+	Select @WhichCallType4= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=4
+	Select @WhichCallType5= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=5
+	
+	update Trans_ContractNotes set ContractNotes_EmailDateTime=GETDATE(),ContractNotes_EmailedBy=@user
+	where ContractNotes_Number=@WhichCallType4 and ContractNotes_CompanyID=@CompanyID
+	and ContractNotes_TradeDate=@ContractDate and ContractNotes_SegmentID=@Segment_OR_DPID
+							INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						Select (select top 1 eml_email from tbl_master_email
+					where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'ECN FOR ['+ Convert(varchar(20),@ContractDate,106)+
+								'] IN '+ @Segment_Name
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your contract note for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				Select @id=@@identity
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			if (len(@status)>0 or @status is not null)
+			 BEGIN
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			END
+				
+
+ END
+---------------------------
+else if(@Segment_Name='MCXSX-FO')
+ BEGIN
+ Insert into #tttParamInfo
+	Select col From fnSplitReturnTable(@Parameters,'-')
+	Select @WhichCallType1= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=1
+	Select @WhichCallType2= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=2
+	Select @WhichCallType3= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=3
+	Select @WhichCallType4= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=4
+	Select @WhichCallType5= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=5
+	
+	update Trans_ContractNotes set ContractNotes_EmailDateTime=GETDATE(),ContractNotes_EmailedBy=@user
+	where ContractNotes_Number=@WhichCallType4 and ContractNotes_CompanyID=@CompanyID
+	and ContractNotes_TradeDate=@ContractDate and ContractNotes_SegmentID=@Segment_OR_DPID
+							INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						Select (select top 1 eml_email from tbl_master_email
+					where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'ECN FOR ['+ Convert(varchar(20),@ContractDate,106)+
+								'] IN '+ @Segment_Name
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your contract note for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				Select @id=@@identity
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			if (len(@status)>0 or @status is not null)
+			 BEGIN
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			END
+				
+
+ END
+ 
+ 
+ 
+ else if(@Segment_Name='MCXSX-CM')
+ BEGIN
+ 
+ 
+ Set @Parameters=@DocumentName
+--Create Table #tttParamInfo(AutoID int identity(1,1),Paramater Varchar(Max))
+	
+	Insert into #tttParamInfo
+	Select col From fnSplitReturnTable(@Parameters,'-')
+	Select @WhichCallType1= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=1
+	Select @WhichCallType2= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=2
+	Select @WhichCallType3= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=3
+	Select @WhichCallType4= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=4
+	Select @WhichCallType5= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=5
+	
+	update Trans_ContractNotes set ContractNotes_EmailDateTime=GETDATE(),ContractNotes_EmailedBy=@user
+	where ContractNotes_Number=@WhichCallType4 and ContractNotes_CompanyID=@CompanyID
+	and ContractNotes_TradeDate=@ContractDate and ContractNotes_SegmentID=@Segment_OR_DPID
+	--Drop table #tttParamInfo
+							INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						Select (select top 1 eml_email from tbl_master_email
+					where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'ECN FOR ['+ Convert(varchar(20),@ContractDate,106)+
+								'] IN '+ @Segment_Name
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your contract note for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				Select @id=@@identity
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			if (len(@status)>0 or @status is not null)
+			 BEGIN
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			END
+				
+
+ END
+---------------------------
+ else if(@Segment_Name='NSEL-SPOT')
+ BEGIN
+ Insert into #tttParamInfo
+	Select col From fnSplitReturnTable(@Parameters,'-')
+	Select @WhichCallType1= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=1
+	Select @WhichCallType2= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=2
+	Select @WhichCallType3= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=3
+	Select @WhichCallType4= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=4
+	Select @WhichCallType5= ltrim(rtrim(Paramater)) From #tttParamInfo where AutoID=5
+	
+	update Trans_ContractNotes set ContractNotes_EmailDateTime=GETDATE(),ContractNotes_EmailedBy=@user
+	where ContractNotes_Number=@WhichCallType4 and ContractNotes_CompanyID=@CompanyID
+	and ContractNotes_TradeDate=@ContractDate and ContractNotes_SegmentID=@Segment_OR_DPID
+							INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						Select (select top 1 eml_email from tbl_master_email
+					where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'ECN FOR ['+ Convert(varchar(20),@ContractDate,106)+
+								'] IN '+ @Segment_Name
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your contract note for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				Select @id=@@identity
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+
+			set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			if (len(@status)>0 or @status is not null)
+			 BEGIN
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			END
+				
+
+ END
+ else
+ BEGIN
+	 If (@DocumentName like '--%')
+	  Begin
+				INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						Select (select top 1 eml_email from tbl_master_email
+					where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							--,'DP ['+(Select dbo.fnSplit(@DocumentName,'-',1))+
+							--	'] Bill for '+ (Select dbo.fnSplit(@DocumentName,'-',2))+
+							--	'-'+(Select dbo.fnSplit(@DocumentName,'-',3))
+							, 'Quaterly No Transaction Statement ['+ @DocumentName +'] '
+							--,'Find Attached your DP Bill in ' +(Select dbo.fnSplit(@DocumentName,'-',1)) +' for '+
+							--	(Select dbo.fnSplit(@DocumentName,'-',2))+'-'+
+							--	(Select dbo.fnSplit(@DocumentName,'-',3))
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your Quaterly No Transaction Statement Holding Dated &nbsp;' + @ContractDate+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							
+							,'Y'
+							--,@EmailCreateAppMenuId
+							--,@user
+							--,getdate()
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				Select @id=@@identity
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			if (len(@status)>0 or @status is not null)
+			 BEGIN
+
+				 INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			END
+      End
+      Else
+       Begin
+				INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						Select (select top 1 eml_email from tbl_master_email
+					where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							--,'DP ['+(Select dbo.fnSplit(@DocumentName,'-',1))+
+							--	'] Bill for '+ (Select dbo.fnSplit(@DocumentName,'-',2))+
+							--	'-'+(Select dbo.fnSplit(@DocumentName,'-',3))
+							, 'DP Bill ['+ @DocumentName +'] '
+							--,'Find Attached your DP Bill in ' +(Select dbo.fnSplit(@DocumentName,'-',1)) +' for '+
+							--	(Select dbo.fnSplit(@DocumentName,'-',2))+'-'+
+							--	(Select dbo.fnSplit(@DocumentName,'-',3))
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your Dp Bill Dated &nbsp;' + @ContractDate+ '&nbsp; in &nbsp; ' + @Segment_Name +'&nbsp; Segment
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							
+							,'Y'
+							--,@EmailCreateAppMenuId
+							--,@user
+							--,getdate()
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				Select @id=@@identity
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+			if (len(@status)>0 or @status is not null)
+				BEGIN
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+				END
+				
+        End
+   End
+				
+END
+Else
+Begin
+				print 3
+				INSERT INTO [Trans_Emails]
+						   ([Emails_SenderEmailID]
+						   ,[Emails_Subject]
+						   ,[Emails_Content]
+						   ,[Emails_HasAttachement]
+						   ,[Emails_CreateApplication]
+						   ,[Emails_CreateUser]
+						   ,[Emails_CreateDateTime]
+						   ,[Emails_Type]
+						   ,[Emails_CompanyID]
+						   ,[Emails_Segment]
+						   )
+						Select (select top 1 eml_email from tbl_master_email
+					where eml_cntId=(select top 1 user_contactId from tbl_master_user where user_id=@user) order by eml_type desc)
+							,'Daily Margin Reporting to Client For ['+ Convert(varchar(20),@ContractDate,106)+
+								'] '
+							,' Dear Madam / Sir,
+							<BR></BR>
+							<BR></BR>
+							Please find attached herein your Daily Margin Report for &nbsp;' + Convert(varchar(20),@ContractDate,106)+ ' 
+							<BR></BR>
+							<BR></BR>
+							
+							The document attached with this email is a digitally signed PDF File. In case the signature validity is unknown you need Acrobat Reader 6.0 or higher to verify the digital signatures.(Click http://get.adobe.com/reader To Download Acrobat Reader)
+							<BR></BR>
+							<BR></BR> 
+							Please follow steps mentioned below if you intend to verify the digital signature.
+							<BR></BR>
+							<BR></BR>
+							1) Open the PDF document.<BR></BR><BR></BR>
+							2) Click on digital signature which will take you to the screen for Signature Validation Status then click on signature properties.<BR></BR><BR></BR>
+							3) Click on show certificate which will take you to certificate viewer screen.<BR></BR><BR></BR>
+							4) Click on trust in this screen and then click on add to trusted sources.<BR></BR><BR></BR>
+							5) After you click OK to Acrobat Security Screen the digital signature will get verified.'
+							,'Y'
+							--,@EmailCreateAppMenuId
+							--,@user
+							--,getdate()
+							,@EmailCreateAppMenuId
+							,@user
+							,getdate()
+							,'E'
+							,@CompanyID
+							,@Segment_Name
+
+				Select @id=@@identity
+
+				INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@RecipientEmailID
+								,@ContactID_OR_BenAccNumber
+								,'TO'
+								,getdate()
+								,0
+								,'P'
+				INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+			set @status=(select eml_ccEmail from tbl_master_email where eml_cntID=@ContactID_OR_BenAccNumber and eml_type='Official' and eml_ccEmail is not null)
+		if (len(@status)>0 or @status is not null)
+			BEGIN
+
+				  INSERT INTO [Trans_EmailRecipients]
+						    ([EmailRecipients_MainID]
+						   ,[EmailRecipients_RecipientEmailID]
+						   ,[EmailRecipients_ContactLeadID]
+						   ,[EmailRecipients_RecipientType]
+						   ,[EmailRecipients_SendDateTime]
+						   ,[EmailRecipients_AttemptNumber]
+						   ,EmailRecipients_Status
+						)
+						
+						Select	@id
+								,@status
+								,@ContactID_OR_BenAccNumber
+								,'CC'
+								,getdate()
+								,0
+								,'P'
+				     INSERT INTO [Trans_EmailAttachment]
+						   ([EmailAttachment_MainID]
+						   ,[EmailAttachment_Path])
+							Select @id,@DocumentPath
+
+				END
+				
+  End
+  Drop table #tttParamInfo
+End
+
+
+

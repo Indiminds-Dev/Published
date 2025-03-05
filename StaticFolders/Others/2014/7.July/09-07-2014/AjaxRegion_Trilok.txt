@@ -1,0 +1,12 @@
+**** Old Region
+#region Searchproductandeffectuntil
+ else if (idlist[0] == "Expiry")
+            {
+--               This Part
+                else
+                {
+                    DT = oDBEngine.GetDataTable("master_commodity", " distinct top 10  CONVERT(VARCHAR(11),CAST(commodity_expirydate AS DATETIME),106) AS EXPIRY , commodity_expirydate as Id", "CONVERT(VARCHAR(11),CAST(commodity_expirydate AS DATETIME),106) Like '" + reqStr + "%' and Commodity_ExchangeSegmentID=" + Session["ExchangeSegmentID"].ToString() + " and commodity_expirydate>='" + idlist[1] + "'", "commodity_expirydate");
+
+                }
+            }
+#end region

@@ -1,0 +1,613 @@
+
+--declare @b varchar(max)
+--set @b='1,32,22,29,17,19,33'
+--exec [Report_ExchangeMarginReportingFile_Com] '2014-01-24',@b,'88','COR0000002','2013-2014','NO','2014-01-23','01/24/2014 12:00:00 AM','01/24/2014 12:00:00 AM','01/24/2014 12:00:00 AM','YES','20.90','k','6'
+
+ALTER procedure [dbo].[Report_ExchangeMarginReportingFile_Com]
+@date varchar(50),
+@branch varchar(max),
+@segment varchar(50),
+@Companyid varchar(30),
+@Finyear varchar(50),
+@chkhaircut varchar(30),
+@SYSTM1date varchar(50),
+@SYSTM2date varchar(50),
+@CValuationdate varchar(50),
+@CHoldingdate varchar(50),
+@chkunapproved varchar(10),
+@unapprovedshares numeric(28,2),
+@IntialMargin varchar(5),
+@MasterSegment varchar(5)
+
+AS
+BEGIN
+		create table #TEMP(date varchar(50),UCC varchar(50),CustomerID varchar(50),
+		SpanMargin numeric(28,2),BuyPremium numeric(28,2),TotalMargin numeric(28,2),
+		ExposureMargin numeric(28,2),ctype varchar(4),ColeteralVal numeric(28,2),
+		trdac numeric(28,2),mrgdep numeric(28,2),appmargin numeric(28,6),InitialMargin numeric(28,2),
+		CMCode varchar(50),TMCode varchar(50),FinalSettMargin numeric(28,2),SpecialMargin numeric(28,2),
+		DeliveryMargin numeric(28,2),DailyMTM numeric(28,2))
+
+		Declare @NextFinYear varchar(15),@POABenefit char(1)
+		Select @NextFinYear=cast(right(@Finyear,4) as varchar)+'-'+cast(right(@Finyear,4)+1 as varchar)
+
+		select @POABenefit=(select DISTINCT 1 from Config_RiskProfile where RiskProfile_SegmentID=@segment and isnull(RiskProfile_ConsiderPOA,'0')='1')
+			
+		CREATE TABLE #MARGINSTOCKS(Clientid varchar(50),Stocksresult numeric(28,6),Quantity numeric(28,6),
+			productid varchar(500),closeprice  numeric(28,6),
+			varmargin numeric(28,6))
+
+		declare @SQL varchar(max)
+		set @SQL=''
+
+		select @SQL='select REPLACE(CONVERT(VARCHAR(11),ComMarginSummary_Date, 106), '' '', ''-'') as date,
+		ComMarginSummary_AccountCode,
+		ComMarginSummary_CustomerID,
+		ComMarginSummary_InitialMargin as SpanMargin,
+		ComMarginSummary_Premium as BuyPremium,
+		ComMarginSummary_TotalMargin as TotalMargin,
+		ComMarginSummary_ELMMargin as ExposureMargin,
+		Left(ComMarginSummary_AccountType,1) as ctype,
+		case when ComMarginSummary_TotalMargin is null then 
+		isnull(ComMarginSummary_TotalMargin,0.0)+ISNULL(ComMarginSummary_ELMMargin,0.0)
+		else isnull(ComMarginSummary_TotalMargin,0.0)  end as ApplicableMargin,
+		Case When '''+@IntialMargin+'''=''S'' 
+			 Then ComMarginSummary_InitialMargin 
+		Else (isnull(ComMarginSummary_InitialMargin,0)+isnull(ComMarginSummary_Premium,0)) End,
+		exch_CMCode as CMCode,
+		exch_TMCode as TMCode,
+		ComMarginSummary_FinalSettlementMargin as FinalSettMargin,
+		ComMarginSummary_SpecialMargin as SpecialMargin,
+		ComMarginSummary_DeliveryMargin as DeliveryMargin,
+		ComMarginSummary_DailyMTM as DailyMTM
+		from Trans_ComMarginSummary,tbl_Master_CompanyExchange
+		where ComMarginSummary_Date='''+@date+'''
+		and ComMarginSummary_BranchID in('+@branch+')
+		and ComMarginSummary_FinYear='''+@Finyear+'''
+		and ComMarginSummary_SegmentID='''+@segment+'''
+		and ISNULL(ComMarginSummary_CalType,''E'')=''E''
+		and ComMarginSummary_CompanyID='''+@Companyid+'''
+		and exch_InternalID='''+@segment+''''
+--------------------		and Left(ComMarginSummary_AccountType,1)=''C'''
+
+		
+		insert into #TEMP(date,UCC,CustomerID,SpanMargin,BuyPremium,TotalMargin,ExposureMargin,ctype,
+			appmargin,InitialMargin,CMCode,TMCode,FinalSettMargin,SpecialMargin,DeliveryMargin,DailyMTM) exec(@SQL)
+
+		print @SQL
+------------------------------------------------------COLLATERAL 
+--------------------------------------------------*********Trd A/c
+				Select @SQL='update #TEMP set trdac=closing from
+				(select closing,closingclinet from 
+				(select sum(isnull(accountsledger_amountCr,0.0)-isnull(accountsledger_amountDr,0.0)) as closing,
+				AccountsLedger_SubAccountID as closingclinet
+				from trans_accountsledger,#TEMP where
+				accountsledger_mainaccountid=''SYSTM00001''
+				and AccountsLedger_SubAccountID=CustomerID '
+				If([dbo].[fn_GetFinYear](cast(@SYSTM1date as datetime))<>@Finyear)
+				Begin
+						select @SQL=@SQL+' AND ltrim(rtrim(AccountsLedger_FinYear))
+						in ('''+@Finyear+''','''+@NextFinYear+''')'
+				End
+				Else
+				Begin
+						select @SQL=@SQL+' AND ltrim(rtrim(AccountsLedger_FinYear))='''+@Finyear+''''
+				End
+				select @SQL=@SQL+'
+				and AccountsLedger_TransactionDate<='''+@SYSTM1date+'''
+				and AccountsLedger_ExchangeSegmentID='''+@segment+'''
+				and AccountsLedger_CompanyID='''+@Companyid+'''
+				group by AccountsLedger_SubAccountID) as tbclosing) as tab
+				where CustomerID=closingclinet'
+				exec(@SQL)
+
+--------------------------------------------------*********Marg Dep
+			
+				update #TEMP set mrgdep=closing from
+				(select closing,closingclinet from 
+				(select sum(isnull(accountsledger_amountCr,0.0)-isnull(accountsledger_amountDr,0.0)) as closing,
+				AccountsLedger_SubAccountID as closingclinet
+				from trans_accountsledger,#TEMP where
+				accountsledger_mainaccountid in('SYSTM00002','SYSTM00003')
+				and AccountsLedger_SubAccountID=CustomerID 
+				and AccountsLedger_TransactionDate<=@SYSTM2date
+				and ltrim(rtrim(AccountsLedger_FinYear))=@Finyear 
+				and AccountsLedger_ExchangeSegmentID=@segment
+				and AccountsLedger_CompanyID=@Companyid
+				group by AccountsLedger_SubAccountID) as tbclosing) as tab
+				where CustomerID=closingclinet
+
+---- We also take into account the T-Day net fund adjustment
+		Alter table #TEMP Add NetDayFund numeric(18,2) null
+		
+		Update #TEMP set NetDayFund = net.adj from (
+							Select accountsledger_subaccountid AS clnt,
+							sum(ISNULL(AccountsLedger_AmountCr,0.00)-ISNULL(AccountsLedger_AmountDr,0.00)) as adj 
+							from Trans_AccountsLedger
+							where AccountsLedger_CompanyID=@Companyid and
+							AccountsLedger_FinYear=@Finyear
+							and AccountsLedger_ExchangeSegmentID=@segment
+							and AccountsLedger_TransactionDate=@date
+							and AccountsLedger_MainAccountID='SYSTM00001'
+							and AccountsLedger_TransactionType in ('Cash_Bank','Journal')
+							and left(ltrim(rtrim(isnull(AccountsLedger_TransactionReferenceID,''))),2)
+								not in (Select VoucherType_Code from Master_VoucherType except (SELECT 'YG' FROM Master_VoucherType))
+							GROUP BY AccountsLedger_SubAccountID) as net
+							where CustomerID=net.clnt
+
+		Update #TEMP set trdac=isnull(trdac,0.00)+isnull(NetDayFund,0.00)
+
+
+		select * into #ABC from
+		(select isnull(DematTransactions_Quantity,0) as QuantityS,
+		DematTransactions_CustomerID as CustomerIDS,
+		DematTransactions_ProductSeriesID as ProductSeriesIDS,
+		DematTransactions_SegmentID as SegmentIDS,
+		DematTransactions_SettlementNumberS as SettlementNumberS,
+		DematTransactions_SettlementNumberT as SettlementNumberT,
+		DematTransactions_SourceSegmentId as SourceSegmentId
+		from Trans_DematTransactions,#TEMP where
+		DematTransactions_Date<=@CHoldingdate 
+		and isnull(DematTransactions_TransferType,'H')<>'CF'
+		and DematTransactions_FinYear=@Finyear
+		and DematTransactions_CustomerID=customerid
+		and (DematTransactions_SegmentID=@segment or DematTransactions_SourceSegmentId=@segment)
+		and DematTransactions_CompanyID=@Companyid)as tab
+
+		select * into #t from 
+		(select * from #ABC where SourceSegmentId is not null) as tab 
+		delete from #ABC where SourceSegmentId is not null
+
+		insert into #ABC(QuantityS,CustomerIDS,ProductSeriesIDS,SegmentIDS,
+		SettlementNumberS,SettlementNumberT,SourceSegmentId)
+		select QuantityS,CustomerIDS,ProductSeriesIDS,SegmentIDS,null,
+		SettlementNumberT,null
+		from #t where SourceSegmentId<>SegmentIDS
+
+
+		insert into #ABC(QuantityS,CustomerIDS,ProductSeriesIDS,SegmentIDS,
+		SettlementNumberS,SettlementNumberT,SourceSegmentId)
+		select QuantityS,CustomerIDS,ProductSeriesIDS,SourceSegmentId,
+		SettlementNumberS,null,null
+		from #t where SourceSegmentId<>SegmentIDS
+
+		delete from #ABC where SegmentIDS<>@segment
+
+
+
+--------------------------------------MARGIN STOCKS
+				INSERT INTO #MARGINSTOCKS(Clientid,productid,Quantity)
+				select 
+				case when CustomerIDS is null then CustomerIDT else CustomerIDS end as Client,
+				case when ProductSeriesIDS is null then ProductSeriesIDT else ProductSeriesIDS end as product,
+				(ISNULL(Quantityt,0.0)-ISNULL(QuantityS,0.0)) AS QuantityTTEMP
+				from
+				(select  SUM(isnull(QuantityS,0)) as QuantityS,
+				CustomerIDS as CustomerIDS,
+				ProductSeriesIDS as ProductSeriesIDS
+				from #ABC where rtrim(ltrim(SettlementNumberS))='Margin'
+				and SegmentIDS=@segment GROUP BY CustomerIDS,ProductSeriesIDS) as tabS
+				
+				full outer join
+
+				(select  SUM(isnull(QuantityS,0)) as QuantityT,
+				CustomerIDS as CustomerIDT,
+				ProductSeriesIDS as ProductSeriesIDT
+				from #ABC where rtrim(ltrim(SettlementNumberT))='Margin'
+				and SegmentIDS=@segment GROUP BY CustomerIDS,ProductSeriesIDS) as tabT
+				
+				on(CustomerIDS=CustomerIDT
+					and ProductSeriesIDS=ProductSeriesIDT)
+--
+--
+---------------------FETCH CLOSE PRICE				
+				UPDATE #MARGINSTOCKS set closeprice=DailyStat_Close
+				from Trans_DailyStatistics,
+										  (SELECT MAX(DailyStat_DateTime)AS DATE,DailyStat_ProductSeriesID AS PRDID
+										   FROM Trans_DailyStatistics,#MARGINSTOCKS 
+										   WHERE DailyStat_ProductSeriesID=productid
+										   AND DailyStat_DateTime<=@CValuationdate
+										   GROUP BY DailyStat_ProductSeriesID) AS JK
+				where DailyStat_ProductSeriesID=PRDID
+				AND DailyStat_ProductSeriesID=productid
+				AND productid=PRDID
+				AND DailyStat_DateTime=DATE
+--
+------------------FETCH VARMARGIN
+	if(@chkhaircut='YES')-------------haircut alpplicable
+		begin
+
+				if(@chkunapproved='YES' and @unapprovedshares<>0.0)----------UNAPPROVED SHARES
+					begin
+								UPDATE #MARGINSTOCKS set varmargin=case when DailyVar_AppMargin=100 then @unapprovedshares else DailyVar_AppMargin end 
+								from Trans_DailyVar,(SELECT MAX(DailyVar_Date)AS DATE,DailyVar_ProductSeriesID AS PRDID
+														   FROM Trans_DailyVar,#MARGINSTOCKS 
+														   WHERE DailyVar_ProductSeriesID=productid
+														   AND DailyVar_Date<=@CValuationdate
+														   GROUP BY DailyVar_ProductSeriesID) AS JK
+								where DailyVar_ProductSeriesID=PRDID
+								AND DailyVar_ProductSeriesID=productid
+								AND productid=PRDID
+								AND DailyVar_Date=DATE
+
+					end
+				else
+					begin
+								UPDATE #MARGINSTOCKS set varmargin=DailyVar_AppMargin
+								from Trans_DailyVar,(SELECT MAX(DailyVar_Date)AS DATE,DailyVar_ProductSeriesID AS PRDID
+														   FROM Trans_DailyVar,#MARGINSTOCKS 
+														   WHERE DailyVar_ProductSeriesID=productid
+														   AND DailyVar_Date<=@CValuationdate
+														   GROUP BY DailyVar_ProductSeriesID) AS JK
+								where DailyVar_ProductSeriesID=PRDID
+								AND DailyVar_ProductSeriesID=productid
+								AND productid=PRDID
+								AND DailyVar_Date=DATE
+								
+					end
+				
+				update #MARGINSTOCKS set Stocksresult=((Quantity*isnull(closeprice,0))*(100-isnull(varmargin,0))/100)
+		end
+
+	else-------------haircut not alpplicable
+		begin
+				if(@chkunapproved='YES' and @unapprovedshares<>0.0)----------UNAPPROVED SHARES
+					begin
+								update #MARGINSTOCKS set varmargin=@unapprovedshares
+								update #MARGINSTOCKS set Stocksresult=((Quantity*isnull(closeprice,0))*(100-isnull(varmargin,0))/100)
+					end
+				else
+					begin
+							  update #MARGINSTOCKS set Stocksresult=(Quantity*isnull(closeprice,0))
+					end
+		end
+			
+
+			 update #TEMP set ColeteralVal=Stocksresult from 
+			 (select sum(isnull(Stocksresult,0.0)) as Stocksresult,Clientid from #MARGINSTOCKS 	
+			 group by Clientid) as tab where Clientid=customerid
+
+
+
+
+delete from #MARGINSTOCKS
+--------------------------------------holdBack STOCKS
+				INSERT INTO #MARGINSTOCKS(Clientid,productid,Quantity)
+				select 
+				case when CustomerIDS is null then CustomerIDT else CustomerIDS end as Client,
+				case when ProductSeriesIDS is null then ProductSeriesIDT else ProductSeriesIDS end as product,
+				(ISNULL(Quantityt,0.0)-ISNULL(QuantityS,0.0)) AS QuantityTTEMP
+				from
+				(select  SUM(isnull(QuantityS,0)) as QuantityS,
+				CustomerIDS as CustomerIDS,
+				ProductSeriesIDS as ProductSeriesIDS
+				from #ABC where
+				rtrim(ltrim(SettlementNumberS))='HLDBK'
+				and SegmentIDS=@segment GROUP BY CustomerIDS,ProductSeriesIDS) as tabS
+				
+				full outer join
+
+				(select  SUM(isnull(QuantityS,0)) as QuantityT,
+				CustomerIDS as CustomerIDT,
+				ProductSeriesIDS as ProductSeriesIDT
+				from #ABC where
+				rtrim(ltrim(SettlementNumberT))='HLDBK'
+				and SegmentIDS=@segment GROUP BY CustomerIDS,ProductSeriesIDS) as tabT
+				
+				on(CustomerIDS=CustomerIDT
+					and ProductSeriesIDS=ProductSeriesIDT)
+--
+-------------------FETCH CLOSE PRICE				
+				UPDATE #MARGINSTOCKS set closeprice=DailyStat_Close
+				from Trans_DailyStatistics,
+										  (SELECT MAX(DailyStat_DateTime)AS DATE,DailyStat_ProductSeriesID AS PRDID
+										   FROM Trans_DailyStatistics,#MARGINSTOCKS 
+										   WHERE DailyStat_ProductSeriesID=productid
+										   AND DailyStat_DateTime<=@CValuationdate
+										   GROUP BY DailyStat_ProductSeriesID) AS JK
+				where DailyStat_ProductSeriesID=PRDID
+				AND DailyStat_ProductSeriesID=productid
+				AND productid=PRDID
+				AND DailyStat_DateTime=DATE
+
+------------------FETCH VARMARGIN
+
+   if(@chkhaircut='YES')
+		begin
+				UPDATE #MARGINSTOCKS set varmargin=DailyVar_AppMargin
+				from Trans_DailyVar,(SELECT MAX(DailyVar_Date)AS DATE,DailyVar_ProductSeriesID AS PRDID
+														   FROM Trans_DailyVar,#MARGINSTOCKS 
+														   WHERE DailyVar_ProductSeriesID=productid
+														   AND DailyVar_Date<=@CValuationdate
+														   GROUP BY DailyVar_ProductSeriesID) AS JK
+				where DailyVar_ProductSeriesID=PRDID
+				AND DailyVar_ProductSeriesID=productid
+				AND productid=PRDID
+				AND DailyVar_Date=DATE
+
+				update #MARGINSTOCKS set Stocksresult=((Quantity*isnull(closeprice,0))*(100-isnull(varmargin,0))/100)
+		end
+	else
+		begin
+				update #MARGINSTOCKS set Stocksresult=(Quantity*isnull(closeprice,0))
+		end
+
+			update #TEMP set ColeteralVal=Stocksresult from 
+			(select sum(isnull(Stocksresult,0.0)) as Stocksresult,Clientid from	#MARGINSTOCKS 	
+			 group by Clientid) as tab where Clientid=customerid
+
+			update #TEMP set InitialMargin=case when InitialMargin=0 then null else InitialMargin end
+--
+---- We calculate the value of Stocks in POA Accounts in case the user follows the practice of considering POA holding as Margin Stocks
+If @POABenefit=1
+BEGIN
+	Alter table #TEMP Add POAHolding numeric(22,2) null,
+						  DPID varchar(8) null,
+						  ClientID varchar(10) null,
+						  RiskProfile varchar(15) null
+						  
+	Create table #POAHld (CustomerID varchar(10) null,DPID varchar(8) null,ClientID varchar(10) null,ISIN varchar(12) null,Quantity numeric(18,3) null,
+							HCutRate numeric(8,4) null,Price numeric(15,4) null,Value numeric(22,2) null,AssetID bigint null,SeriesID bigint null)
+
+	Update #TEMP Set RiskProfile=	ProfileMember_Code	
+									from Trans_ProfileMember 
+									where ProfileMember_Type=1 
+									and ProfileMember_CustomerID=CustomerID
+									and @date between ProfileMember_DateFrom and isnull(ProfileMember_DateTo,'2200-12-31')
+									
+	Update #TEMP Set RiskProfile='DEFAULTRSK' where RiskProfile is NULL
+
+	Update #TEMP Set DPID=dpd_dpCode,ClientID=dpd_ClientId from tbl_master_contactDPDetails,Config_RiskProfile 
+										where dpd_accountType='Default'
+										and dpd_POA=1 and CustomerID=dpd_cntId
+										and RiskProfile_SegmentID=@segment
+										and @date between RiskProfile_DateFrom and isnull(RiskProfile_DateTo,'2200-12-31')
+										and RiskProfile_Code=RiskProfile
+										and RiskProfile_ConsiderPOA='1'
+	
+	-- Fetch Records for NSDL accounts
+	Insert into #POAHld (CustomerID,DPID,ClientID,ISIN,Quantity)
+	Select #TEMP.CustomerID,#TEMP.DPID,#TEMP.ClientID,NsdlHolding_ISIN,NsdlHolding_Free 
+	from trans_nsdlholding,#TEMP
+	where LEFT(#TEMP.DPID,2)='IN'
+	and #TEMP.ClientID=NsdlHolding_BenAccountNumber
+	and NsdlHolding_HoldingDateTime=@date
+	
+	-- Fetch Records for CDSL accounts
+	Insert into #POAHld (CustomerID,DPID,ClientID,ISIN,Quantity)
+	Select #TEMP.CustomerID,#TEMP.DPID,#TEMP.ClientID,CdslHolding_ISIN,CdslHolding_FreeBalance 
+	from Trans_CdslHolding,#TEMP
+	where LEFT(#TEMP.DPID,2)<>'IN'
+	and #TEMP.ClientID=CdslHolding_BenAccountNumber
+	and CdslHolding_HoldingDateTime=@date
+
+	-- Find Rates for the ISINs which are there in any of the three CM segments
+	Update #POAHld Set AssetID=(select top 1 ISIN_ProductID from Master_ISIN where ISIN_Number=ISIN)
+	Update #POAHld Set SeriesID=(select top 1 Equity_SeriesID from Master_Equity where Equity_ExchSegmentID=1 and Equity_ProductID=AssetID)
+	Update #POAHld Set SeriesID=(select top 1 Equity_SeriesID from Master_Equity where Equity_ExchSegmentID=4 and Equity_ProductID=AssetID)
+									where SeriesID is NULL
+	Update #POAHld Set SeriesID=(select top 1 Equity_SeriesID from Master_Equity where Equity_ExchSegmentID=19 and Equity_ProductID=AssetID)
+									where SeriesID is NULL
+	
+	Update #POAHld Set HCutRate=DailyVar_AppMargin 
+								from Trans_DailyVar,(SELECT DailyVar_ProductSeriesID AS PRDID,MAX(DailyVar_Date)AS DATE
+													   FROM Trans_DailyVar,#POAHld 
+													   WHERE DailyVar_ProductSeriesID=SeriesID
+													   AND DailyVar_Date<=@CValuationdate
+													   GROUP BY DailyVar_ProductSeriesID) AS JK 
+								where DailyVar_ProductSeriesID=SeriesID
+								and DailyVar_Date=DATE
+
+	Update #POAHld Set Price=DailyStat_Close 
+								from Trans_DailyStatistics,(SELECT DailyStat_ProductSeriesID AS PRDID,MAX(DailyStat_DateTime)AS DATE
+															   FROM Trans_DailyStatistics,#POAHld 
+															   WHERE DailyStat_ProductSeriesID=SeriesID
+															   AND DailyStat_DateTime<=@CValuationdate
+															   GROUP BY DailyStat_ProductSeriesID) AS JK
+ 								where DailyStat_ProductSeriesID=SeriesID
+ 								and DailyStat_DateTime=DATE
+
+	Update #POAHld Set Value=Price*Quantity*(1-(HCutRate/100))
+	Update #TEMP Set POAHolding=PVal.Val
+	From (	Select CustomerID As CId,sum(isnull(Value,0)) As Val 
+			from #POAHld
+			Group by CustomerID) As PVal
+	where CustomerID=CId
+	
+	--- Finally add this value to already calculated collateral value
+	Update #TEMP Set ColeteralVal=isnull(ColeteralVal,0)+isnull(POAHolding,0)
+					where DPID IS not NULL
+	
+	
+	Drop table #POAHld
+
+END
+----   End POA Holding Value
+
+------------------------------RESULT DISPLAY
+			select 	(isnull(rtrim(cnt_firstName),'') +''+
+				isnull(rtrim(cnt_middleName),'')+''+
+					isnull(rtrim(cnt_lastName),'')) as Name,
+			UCC,
+			(ltrim(rtrim(branch_description))+' ['+rtrim(ltrim(branch_code))+']') as branchname,
+			CASE WHEN ISNULL(appmargin,0)=0 THEN NULL WHEN ISNULL(appmargin,0)<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST(appmargin AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CAST(appmargin AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  appmargin,
+			CASE WHEN ISNULL(SpanMargin,0)=0 THEN NULL WHEN ISNULL(SpanMargin,0)<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST(SpanMargin AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CAST(SpanMargin AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  SpanMargin,
+			CASE WHEN ISNULL(InitialMargin,0)=0 THEN NULL WHEN ISNULL(InitialMargin,0)<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST(InitialMargin AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CAST(InitialMargin AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  InitialMargin,
+			CASE WHEN ISNULL(trdac,0)=0 THEN NULL WHEN ISNULL(trdac,0)<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST(trdac AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CAST(trdac AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  trdac,
+			CASE WHEN ISNULL(mrgdep,0)=0 THEN NULL WHEN ISNULL(mrgdep,0)<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST(mrgdep AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CAST(mrgdep AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  mrgdep,
+			CASE WHEN ISNULL(ColeteralVal,0)=0 THEN NULL WHEN ISNULL(ColeteralVal,0)<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST(ColeteralVal AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CAST(ColeteralVal AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  ColeteralVal,
+			CASE WHEN (isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))=0 THEN NULL 
+				WHEN (isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST((isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CAST((isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  effective,
+			CASE WHEN (isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))-isnull(appmargin,0)=0 THEN NULL 
+				 WHEN (isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))-isnull(appmargin,0)<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST((isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))-isnull(appmargin,0) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') 
+				 ELSE dbo.fn_FormatNumber(CAST(ABS(CAST((isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))-isnull(appmargin,0) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  excessshortage,
+			(isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))-isnull(appmargin,0) as excessshortageformat,
+
+			case when ((isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))-isnull(appmargin,0))<0 AND isnull(appmargin,0)<>0
+				then 
+					case when 
+								abs(((isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))-isnull(appmargin,0)))/isnull(appmargin,1)*100>100
+								then cast(100 as varchar) 
+								else cast(round(abs(((isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))-isnull(appmargin,0)))/isnull(appmargin,1)*100,2) as varchar)
+								end else null end as sortpercent
+			
+			
+			from #TEMP,tbl_master_branch,tbl_master_contact
+			where cnt_internalid=CustomerID
+			and cnt_branchid=branch_id 
+			----and ctype<>'P'
+			order by UCC,branchname,excessshortage,sortpercent 
+
+			---------Export 
+			If (@MasterSegment=8)
+			begin
+					select 
+					Upper(replace(date,'-','')),
+					rtrim(ltrim(CMCode)),
+					rtrim(ltrim(TMCode)),
+					rtrim(ltrim(ctype)),
+					rtrim(ltrim(UCC)) as UCC,
+					isnull(SpanMargin,'0.00'),
+					isnull(SpecialMargin,'0.00'),
+					'0.00',
+					isnull(DeliveryMargin,'0.00'),
+					isnull(FinalSettMargin,'0.00'),
+					'0.00',
+					ISNULL(BuyPremium,'0.00'),
+					isnull(TotalMargin,'0.00'),
+					Case when ltrim(rtrim(ctype))<>'P' then (isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0)) Else isnull(TotalMargin,'0.00') End
+					from #TEMP 
+					---where rtrim(ltrim(ctype))<>'P'
+			End
+			Else if (@MasterSegment=3)
+			Begin
+					select date,rtrim(ltrim(UCC)) as UCC,isnull(SpanMargin,'0.00'),isnull(ExposureMargin,'0.00'),isnull(TotalMargin,'0.00'),isnull(BuyPremium,'0.00'),
+					rtrim(ltrim(ctype)),(isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0)) as effective 
+					from #TEMP where rtrim(ltrim(ctype))<>'P'
+			End
+			Else if (@MasterSegment=6)
+			begin
+					select 
+					Upper(replace(date,'-',' ')),
+					rtrim(ltrim(UCC)) as UCC,
+					isnull(SpanMargin,'0.00'),
+					ISNULL(BuyPremium,'0.00'),
+					isnull(ExposureMargin,'0.00'),
+					isnull(TotalMargin,'0.00'),
+					ltrim(rtrim(ctype)),
+					CONVERT(varchar(24),getdate(),113) As UploadDate,
+					Case when ltrim(rtrim(ctype))<>'P' then (isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0)) Else isnull(TotalMargin,'0.00') End,
+					Case when ((isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))-isnull(TotalMargin,'0.00'))>0 then 0.00 Else 
+					ABS(((isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))-isnull(TotalMargin,'0.00'))) End,
+					'' As PenaltyCode,
+					'0.00' As PenaltyAmount
+					from #TEMP 
+					---where rtrim(ltrim(ctype))<>'P'
+			End
+			Else if (@MasterSegment=13)
+			Begin
+--					select Upper(replace(date,'-','')),rtrim(ltrim(CMCode)),rtrim(ltrim(TMCode)),rtrim(ltrim(ctype)),rtrim(ltrim(UCC)) as UCC,
+--					isnull(SpanMargin,'0.00'),isnull(SpecialMargin,'0.00'),'0.00',isnull(DeliveryMargin,'0.00'),isnull(FinalSettMargin,'0.00'),isnull(TotalMargin,'0.00'),
+--					(isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))
+--					from #TEMP where rtrim(ltrim(ctype))<>'P'
+					select date,rtrim(ltrim(UCC)),isnull(SpanMargin,'0.00'),isnull(ExposureMargin,'0.00'),isnull(BuyPremium,'0.00'),isnull(DailyMTM,'0.00'),isnull(FinalSettMargin,'0.00'),
+					(cast((isnull(SpanMargin,'0.00')) as numeric(28,2))+cast((isnull(ExposureMargin,'0.00')) as numeric(28,2))),
+					rtrim(ltrim(ctype)),cast(isnull(appmargin,'0.00') as numeric(22,2))
+					from #TEMP where rtrim(ltrim(ctype))<>'P'
+
+			End
+-------------File Name
+		declare @record varchar(50)
+		set @record=null
+		Select @record=Max(ExportFiles_BatchNumber) from Trans_ExportFiles where 
+		[ExportFiles_Segment]=@segment and [ExportFiles_Type]='MARGIN REPORTING'
+		and 
+		Case 
+			When (@MasterSegment=8 Or @MasterSegment=13)
+			Then SUBSTRING(ExportFiles_Name,Len('MCX-SX_MARGIN_')+1,4)+'-'+SUBSTRING(ExportFiles_Name,Len('MCX-SX_MARGIN_')+5,2)+'-'+SUBSTRING(ExportFiles_Name,Len('MCX-SX_MARGIN_')+7,2)
+			When (@MasterSegment=3)
+			Then SUBSTRING(ExportFiles_Name,Len('X_MRG_TM_')+5,4)+'-'+SUBSTRING(ExportFiles_Name,Len('X_MRG_TM_')+3,2)+'-'+ SUBSTRING(ExportFiles_Name,Len('X_MRG_TM_')+1,2) 
+		End	
+		=cast(DATEADD(dd, 0, DATEDIFF(dd, 0,@date)) as datetime)
+							
+
+
+			if(@record is null)
+					begin
+						set @record='01'
+					end
+			else 
+					begin
+						set @record=@record+1
+						if (@record<=9)
+							begin
+								set @record='0'+@record
+							end
+						if(@record>9 and @record<=99)
+							begin
+								set @record=@record
+							end
+					end
+					
+If (@MasterSegment=8)
+begin
+			select exch_TMCode,@record as record,
+			('MCX-SX_MARGIN'+'_') as filename,REPLACE(CONVERT(VARCHAR(10), cast(@date as datetime),120),'-','') as date
+			from tbl_master_companyexchange	where exch_compid=@Companyid and exch_internalid=@segment
+End
+Else If (@MasterSegment=3)
+Begin
+			select exch_TMCode,@record as record,
+			('X_MRG_TM_') as filename,REPLACE(CONVERT(VARCHAR(10), cast(@date as datetime),103),'/','') as date
+			from tbl_master_companyexchange	where exch_compid=@Companyid and exch_internalid=@segment
+End
+Else If (@MasterSegment=6)
+Begin
+			select exch_TMCode,'' as record,
+			('BFX_MGRTM_'+ltrim(rtrim(exch_TMCode))+'_') as filename,
+			--REPLACE(CONVERT(VARCHAR(10), cast(@date as datetime),103),'/','') as date,
+			substring(REPLACE(CONVERT(VARCHAR(10), cast(@date as datetime),103),'/',''),5,4)+
+			substring(REPLACE(CONVERT(VARCHAR(10), cast(@date as datetime),103),'/',''),3,2)+
+			substring(REPLACE(CONVERT(VARCHAR(10), cast(@date as datetime),103),'/',''),1,2) As date
+			--replace(@date,'-','') As date
+			from tbl_master_companyexchange	where exch_compid=@Companyid and exch_internalid=@segment
+End
+Else If (@MasterSegment=13)
+Begin
+			select exch_TMCode,@record as record,
+			('MGTM_'+ exch_TMCode +'_') as filename,REPLACE(CONVERT(VARCHAR(10), cast(@date as datetime),120),'-','') as date
+			from tbl_master_companyexchange	where exch_compid=@Companyid and exch_internalid=@segment
+
+End
+-----------------------------------------SEGMENT
+declare @segmentname1 varchar(30)
+select @segmentname1=(select ltrim(rtrim(exh_shortName)) from tbl_master_exchange 
+where exh_cntId=tbl_master_companyExchange.exch_exchId)+'-'+
+exch_segmentId from tbl_master_companyExchange where exch_internalId=@Segment
+
+select @segmentname1 as segmentname
+----------------------------------SUM RECORD
+			select 	
+			CASE WHEN SUM(ISNULL(appmargin,0))=0 THEN NULL WHEN SUM(ISNULL(appmargin,0))<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST(SUM(ISNULL(appmargin,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CAST(SUM(ISNULL(appmargin,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  appmargin_SUM,
+			CASE WHEN SUM(ISNULL(SpanMargin,0))=0 THEN NULL WHEN SUM(ISNULL(SpanMargin,0))<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST(SUM(ISNULL(SpanMargin,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CAST(SUM(ISNULL(SpanMargin,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  SpanMargin_SUM,SUM(ISNULL(SpanMargin,0)) AS SpanMargin_SUM1,
+			CASE WHEN SUM(ISNULL(InitialMargin,0))=0 THEN NULL WHEN SUM(ISNULL(InitialMargin,0))<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST(SUM(ISNULL(InitialMargin,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CAST(SUM(ISNULL(InitialMargin,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  InitialMargin_SUM,SUM(ISNULL(SpanMargin,0)) AS InitialMargin_SUM1,
+			CASE WHEN SUM(ISNULL(trdac,0))=0 THEN NULL WHEN SUM(ISNULL(trdac,0))<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST(SUM(ISNULL(trdac,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CAST(SUM(ISNULL(trdac,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  trdac_SUM,
+			CASE WHEN SUM(ISNULL(mrgdep,0))=0 THEN NULL WHEN SUM(ISNULL(mrgdep,0))<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST(SUM(ISNULL(mrgdep,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CAST(SUM(ISNULL(mrgdep,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  mrgdep_SUM,
+			CASE WHEN SUM(ISNULL(ColeteralVal,0))=0 THEN NULL WHEN SUM(ISNULL(ColeteralVal,0))<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST(SUM(ISNULL(ColeteralVal,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CAST(SUM(ISNULL(ColeteralVal,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  ColeteralVal_SUM,
+			CASE WHEN SUM(isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))=0 THEN NULL WHEN SUM(isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))<0 THEN  '-'+dbo.fn_FormatNumber(CAST(ABS(CAST(SUM(isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CAST(SUM(isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0)) AS NUMERIC(28,2)) ) AS VARCHAR(8000)),'N') END AS  effective_SUM
+			from #TEMP
+			where ctype<>'P'
+			
+			select dbo.fn_FormatNumber(CAST(ABS(CAST(SUM((isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))-isnull(appmargin,0)) AS NUMERIC(28,4)) ) AS VARCHAR(8000)),'N') AS  excessshortage_SUM,
+			SUM((isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))-isnull(appmargin,0)) AS  excessshortage_SUM1
+			from #TEMP 
+			where ctype<>'P' and (isnull(ColeteralVal,0)+isnull(trdac,0)+isnull(mrgdep,0))-isnull(appmargin,0)<0
+
+			drop table #TEMP
+			drop table #MARGINSTOCKS
+			drop table #ABC
+			drop table #t
+
+END
+
+

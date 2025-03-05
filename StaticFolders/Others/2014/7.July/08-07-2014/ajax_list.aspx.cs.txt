@@ -1,0 +1,7 @@
+---New addition-----
+#region ShowClientFORMarginStocks
+else if (idlist[0] == "ClientParam")
+            {
+                DT = oDBEngine.GetDataTable("tbl_master_contact,tbl_master_branch", "top 10 isnull(rtrim(cnt_firstName),'')+' '+isnull(rtrim(cnt_middlename),'')+' '+isnull(rtrim(cnt_lastName),'')+' ['+isnull(rtrim(cnt_ucc),'')+']'+' ['+rtrim(branch_description)+']' ,cnt_internalID", " cnt_internalId like 'CL%' and cnt_branchID=branch_id and " + idlist[1] + "='" + idlist[2] + "' and (cnt_firstName like '" + reqStr + "%' or cnt_ucc like '" + reqStr + "%')");
+            }
+#EndRegion

@@ -1,0 +1,1706 @@
+
+--exec [Contract_Report14] 'COR0000002','24','NSE - CM','26 Aug 2013','NAV RATAN TIBREWALA','S',1,'28 Aug 2013','True','2013163','N','','''CLS0000006''','','','Print','Clients','All','','false'
+--exec [Contract_Report14] 'COR0000002','24','NSE - CM','2012-06-01','NAV RATAN TIBREWALA,SUBHADEEP CHATTERJEE,MUKUT KANDAR','S',1,'05 Jun 2012','True','2012104','N','192','','','','Print','Branch','All','html'
+--exec [Contract_Report14] 'COR0000002','24','NSE - CM','2012-06-01','NAV RATAN TIBREWALA,SUBHADEEP CHATTERJEE,MUKUT KANDAR','S',1,'05 Jun 2012','True','2012104','N','192','''CLS0001108''','','','Print','Clients','All','html'
+
+
+ALTER  procedure [dbo].[Contract_Report14]
+@CompanyID varchar(50),
+@DpId varchar(50),
+@dp varchar(50),
+@tradedate varchar(20),
+@AuthorizeName varchar(Max),
+@Mode varchar(Max),
+@SegmentExchangeID int,
+@strFundPayoutDate varchar(20),
+@BrkgFlag varchar(10),
+@SettlementNumber varchar(20),
+@SettlementType varchar(5),
+@Branch  varchar(max),                  
+@Customer varchar(Max),
+@Group varchar(max),
+@Groupbytext varchar(100),
+@Reporttype varchar(10),
+@Groupbyvalue varchar(50),
+@sendtypeparameter varchar(10),
+@Employeename varchar(250),
+@netammountchk varchar(10),
+@pdforhtml varchar(10)='pdf',
+@outputhtmltype varchar(10)=null
+
+--,
+--@FromNo varchar(max),
+--@ToNo varchar(max)
+as
+begin
+
+		Declare @sql varchar(MAX),@Sql1 varchar(Max),@Sql3 varchar(Max),@Sql4 varchar(Max),@Sql5 varchar(Max),
+        @Sql6 varchar(Max),@Sql7 varchar(Max),@CustomerID varchar(max),@ContractNote varchar(max),@netamountforfo numeric(28,2)
+        
+        
+---------- New implementation for client and contractnote fetch------------------  
+
+If (@sendtypeparameter='All')
+	Begin
+	
+		 If (@Groupbyvalue='Clients')    
+			Begin
+				Set @Sql3=@Customer
+			
+				If (@Mode='A')
+					Begin
+					
+						select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+						(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+						and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+						and cnt_internalId=ContractNotes_CustomerID AND cnt_internalId like 'CL%' 
+						 ) rr
+						 
+						set @CustomerID=''+@CustomerID+''
+						
+					End
+					If (@Mode='S')
+					Begin
+						--set @CustomerID=@Customer
+						select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+						(Select Distinct cnt_internalID from tbl_master_contact WHERE  
+						
+						 cnt_internalId in (select * from dbo.fnSplitReturnTable(Replace(@Sql3,'''',''),','))
+						 ) rr
+						 
+						set @CustomerID=''+@CustomerID+''
+					End
+					If (@Mode='D')
+					Begin
+						print 'deselect'
+						
+						select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+						(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+						and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+						and cnt_internalId=ContractNotes_CustomerID AND cnt_internalId like 'CL%' 
+						--and ContractNotes_CustomerID not in (select * from dbo.fnSplitReturnTable(@Customer,',')) 
+						and ContractNotes_CustomerID not in (select * from dbo.fnSplitReturnTable(Replace(@Sql3,'''',''),','))
+						) rr
+						set @CustomerID=''+@CustomerID+''
+					End
+					
+			End
+			
+			If (@Groupbyvalue='Branch')
+				Begin
+					If (@Mode='S')
+						Begin
+							select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+							(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+							and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+							and cnt_internalId=ContractNotes_CustomerID AND cnt_internalId like 'CL%' and ContractNotes_branchid in ( select * from dbo.fnSplitReturnTable(@Branch,',') )
+							 ) rr
+							set @CustomerID=''+@CustomerID+''
+						End
+					If (@Mode='A')
+						Begin
+								select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+								(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+								and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+								and cnt_internalId=ContractNotes_CustomerID AND cnt_internalId like 'CL%' 
+								 ) rr
+								set @CustomerID=''+@CustomerID+''
+						End
+					If (@Mode='D')
+						Begin
+								select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+								(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+								and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+								and cnt_internalId=ContractNotes_CustomerID AND cnt_internalId like 'CL%' 
+								and ContractNotes_branchid not in ( select * from dbo.fnSplitReturnTable(@Branch,',') )
+								 ) rr
+								set @CustomerID=''+@CustomerID+''
+						End
+				
+					
+				
+				End
+			If (@Groupbyvalue='Group') 
+				Begin
+					If (@Mode='A')
+					Begin
+					
+						select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+						(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+						and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+						and cnt_internalId=ContractNotes_CustomerID AND cnt_internalId like 'CL%' 
+						 ) rr
+						 
+						set @CustomerID=''+@CustomerID+''
+						
+					End
+					If (@Mode='S')
+					Begin
+						
+						select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from
+						(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+						and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+						and cnt_internalId=ContractNotes_CustomerID and cnt_internalId like 'CL%' 
+						and cnt_internalid in (select grp_contactid from tbl_trans_group where grp_grouptype=@Groupbytext 
+						and grp_groupmaster in (select * from dbo.fnSplitReturnTable(@Group,',')))) rr
+						set @CustomerID=''+@CustomerID+''
+					End
+					If (@Mode='D')
+					Begin
+						select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+						(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+						and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+						and cnt_internalId=ContractNotes_CustomerID and cnt_internalId like 'CL%' 
+						and ContractNotes_CustomerID in(select grp_contactid from tbl_trans_group where  grp_groupmaster 
+						not in(select gpm_id from tbl_master_groupmaster where gpm_id IN 
+						(select * from dbo.fnSplitReturnTable(@Group,',')) and gpm_type=@Groupbytext))
+						) rr
+						set @CustomerID=''+@CustomerID+''
+					End
+				
+				End
+				select @ContractNote=coalesce(@ContractNote+''',''', '') + Convert(varchar,ContractNotes_Number) from 
+						(Select ContractNotes_Number from tbl_master_contact,trans_ContractNotes 
+							WHERE ContractNotes_TradeDate=@tradedate And ContractNotes_SegmentId=@DpId 
+							AND ContractNotes_CompanyID=@CompanyID AND cnt_internalId=ContractNotes_CustomerID 
+							AND cnt_internalId like 'CL%' and ContractNotes_CustomerID  in ( select * from dbo.fnSplitReturnTable(@CustomerID,''',''') )
+							
+						 ) rr
+						set @ContractNote=''''+@ContractNote+''''
+	End	
+	Else
+		Begin
+			If (@Groupbyvalue='Clients')    
+				Begin
+					Set @Sql3=@Customer
+				
+					If (@Mode='A')
+						Begin
+						
+							select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+							(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+							and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+							and cnt_internalId=ContractNotes_CustomerID AND cnt_internalId like 'CL%'
+							and ContractNotes_EmailDateTime is null and ContractNotes_EmailedBy is null 
+							 ) rr
+							 
+							set @CustomerID=''+@CustomerID+''
+							
+						End
+						If (@Mode='S')
+						Begin
+							--set @CustomerID=@Customer
+							select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+						(Select Distinct cnt_internalID from tbl_master_contact WHERE  
+						
+						 cnt_internalId in (select * from dbo.fnSplitReturnTable(Replace(@Sql3,'''',''),','))
+						 ) rr
+						 
+						set @CustomerID=''+@CustomerID+''
+						End
+						If (@Mode='D')
+						Begin
+							select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+							(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+							and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+							and cnt_internalId=ContractNotes_CustomerID AND cnt_internalId like 'CL%'
+							and ContractNotes_EmailDateTime is null and ContractNotes_EmailedBy is null  
+							and ContractNotes_CustomerID not in (select * from dbo.fnSplitReturnTable(Replace(@Sql3,'''',''),','))
+							) rr
+							set @CustomerID=''+@CustomerID+''
+						End
+						
+				End
+				
+				If (@Groupbyvalue='Branch')
+					Begin
+						If (@Mode='S')
+							Begin
+								select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+								(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+								and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+								and ContractNotes_EmailDateTime is null and ContractNotes_EmailedBy is null
+								and cnt_internalId=ContractNotes_CustomerID AND cnt_internalId like 'CL%' 
+								and ContractNotes_branchid in ( select * from dbo.fnSplitReturnTable(@Branch,',') )
+								 ) rr
+								set @CustomerID=''+@CustomerID+''
+							End
+						If (@Mode='A')
+							Begin
+									select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+									(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+									and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+									and cnt_internalId=ContractNotes_CustomerID AND cnt_internalId like 'CL%' 
+									and ContractNotes_EmailDateTime is null and ContractNotes_EmailedBy is null
+									 ) rr
+									set @CustomerID=''+@CustomerID+''
+							End
+						If (@Mode='D')
+							Begin
+									select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+									(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+									and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+									and cnt_internalId=ContractNotes_CustomerID AND cnt_internalId like 'CL%' 
+									and ContractNotes_EmailDateTime is null and ContractNotes_EmailedBy is null
+									and ContractNotes_branchid not in ( select * from dbo.fnSplitReturnTable(@Branch,',') )
+									 ) rr
+									set @CustomerID=''+@CustomerID+''
+							End
+					
+						
+					
+					End
+				If (@Groupbyvalue='Group') 
+					Begin
+						If (@Mode='A')
+						Begin
+						
+							select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+							(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+							and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID 
+							and ContractNotes_Status Is null 
+							and ContractNotes_EmailDateTime is null and ContractNotes_EmailedBy is null
+							and cnt_internalId=ContractNotes_CustomerID AND cnt_internalId like 'CL%' 
+							 ) rr
+							 
+							set @CustomerID=''+@CustomerID+''
+							
+						End
+						If (@Mode='S')
+						Begin
+							
+							select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from
+							(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+							and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+							and cnt_internalId=ContractNotes_CustomerID and cnt_internalId like 'CL%'
+							and ContractNotes_EmailDateTime is null and ContractNotes_EmailedBy is null 
+							and cnt_internalid in (select grp_contactid from tbl_trans_group where grp_grouptype=@Groupbytext 
+							and grp_groupmaster in (select * from dbo.fnSplitReturnTable(@Group,',')))) rr
+							set @CustomerID=''+@CustomerID+''
+						End
+						If (@Mode='D')
+						Begin
+							select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+							(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+							and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+							and cnt_internalId=ContractNotes_CustomerID and cnt_internalId like 'CL%' 
+							and ContractNotes_EmailDateTime is null and ContractNotes_EmailedBy is null
+							and ContractNotes_CustomerID in(select grp_contactid from tbl_trans_group where  grp_groupmaster 
+							not in(select gpm_id from tbl_master_groupmaster where gpm_id IN 
+							(select * from dbo.fnSplitReturnTable(@Group,',')) and gpm_type=@Groupbytext))
+							) rr
+							set @CustomerID=''+@CustomerID+''
+						End
+				
+				End
+				select @ContractNote=coalesce(@ContractNote+''',''', '') + Convert(varchar,ContractNotes_Number) from 
+						(Select ContractNotes_Number from tbl_master_contact,trans_ContractNotes 
+							WHERE ContractNotes_TradeDate=@tradedate And ContractNotes_SegmentId=@DpId 
+							AND ContractNotes_CompanyID=@CompanyID AND cnt_internalId=ContractNotes_CustomerID 
+							and ContractNotes_EmailDateTime is null and ContractNotes_EmailedBy is null
+							AND cnt_internalId like 'CL%' and ContractNotes_CustomerID  in ( select * from dbo.fnSplitReturnTable(@CustomerID,''',''') )
+							
+						 ) rr
+						set @ContractNote=''''+@ContractNote+''''
+		
+		End
+		
+				-------------------Contract Note no fetch from above customer
+					
+		set @CustomerID=''''+@CustomerID+''''				
+						
+----------------------------------------------------End Implementetion for client and contractnote fetch----------------------
+
+           				CREATE TABLE #TEMPTABLETRADE
+				(
+				
+					ExchangeTrades_FinYear varchar(100),
+					ExchangeTrades_CompanyID varchar(100),
+					ExchangeTrades_Segment varchar(100),
+                    ExchangeTrades_SettlementNumber varchar(100),
+					ExchangeTrades_SettlementType varchar(100),
+					ExchangeTrades_BranchID varchar(100),
+					ExchangeTrades_Tradedate datetime,
+					ExchangeTrades_Tradenumber varchar(100),
+					ExchangeTrades_TradeEntryTime datetime,
+					ExchangeTrades_TradeModifyTime varchar(250),
+					ExchangeTrades_OrderNumber varchar(100),				
+					ExchangeTrades_OrderEntryTime datetime,
+					ExchangeTrades_CustomerID varchar(100),
+					ExchangeTrades_SecuritySymbol varchar(100),
+                    ExchangeTrades_SecuritySeries varchar(100),
+                    ExchangeTrades_SecurityExpiry datetime,
+                    ExchangeTrades_StrikePrice varchar(100),
+					ExchangeTrades_SecurityType varchar(100),
+					ExchangeTrades_BuySellFlag varchar(100),
+					Exchangetrades_CustTransactionID varchar(100),
+                    CustomerTrades_CompanyID varchar(100),
+                    CustomerTrades_ExchangeSegment varchar(100),
+                    CustomerTrades_UnitPrice varchar(100),
+					CustomerTrades_ID varchar(100),
+					CustomerTrades_MarketValue numeric(28, 4),
+					CustomerTrades_TotalBrokerage numeric(16, 6),
+					CustomerTrades_TradeDate datetime,
+					CustomerTrades_NetRatePerUnit varchar(100),
+                    CustomerTrades_ServiceTaxOnBrkg varchar(100),
+                    CustomerTrades_EduCessOnBrkg varchar(100),
+					CustomerTrades_HgrEduCessOnBrkg varchar(100),
+                    CustomerTrades_ServiceTaxMode char(1),
+					CustomerTrades_StampDutyMode char(1),
+					CustomerTrades_ContractNoteNumber int,
+					CustomerTrades_BranchID int,
+					CustomerTrades_TranChargeMode char(1),
+					CustomerTrades_AverageType tinyint,
+                    CustomerTrades_NetValue numeric(28, 6),
+					CustomerTrades_ProductseriesID bigint,
+					CustomerTrades_ProductSeries char(2),
+					TotalTAX numeric(28, 4),
+					CustomerTrades_UnitPriceQuantity numeric(14, 4),
+					CustomerTrades_CustomerID char(10),
+					CustomerTrades_SettlementNumber char(7),
+					CustomerTrades_SettlementType char(2),
+                    CustomerTrades_BrokerageType char(5),
+                    ContractNotes_Branchid int,
+					ContractNotes_SegmentID int,
+					ContractNotes_TradeDate datetime,
+					ContractNotes_SettlementNumber char(7),
+					ContractNotes_SettlementType char(2),
+					ContractNotes_Number int,
+					ContractNotes_CustomerID char(10),
+					ContractNotes_TotalBrokerage numeric(18, 4),
+					ContractNotes_TotalTO numeric(18, 4),
+					ContractNotes_ServiceTaxOnBrkg  numeric(12, 4),
+					ContractNotes_EduCessOnBrkg numeric(12, 4),
+					ContractNotes_TransactionCharges numeric(12, 4),
+					ContractNotes_HgrEducessOnBrkg numeric(12, 4),
+					ContractNotes_StampDuty numeric(12, 4),
+					ContractNotes_NetAmount numeric(18, 4),
+					ContractNotes_TranChargeMode char(1),
+					ContractNotes_StampDutyMode char(1),
+					ContractNotes_ServiceTaxMode char(1),
+					ContractNotes_ServiceTaxOnTranCharge numeric(12, 4),
+					ContractNotes_EduCessOnTranCharge numeric(12, 4),
+					ContractNotes_HgrEduCessOnTranCharge numeric(12, 4),
+                    ContractNotes_TotalServiceTax numeric(12, 4),
+					ContractNotes_TotalEduCess numeric(12, 4),
+                    ContractNotes_TotalHgrEduCess numeric(12, 4),               
+                    Data varchar(100),
+					SEBIFees numeric(12,4),
+					securitycode varchar(20)
+
+
+               )
+
+
+
+
+           
+
+           set @sql='
+            select distinct ExchangeTrades_FinYear,ExchangeTrades_CompanyID,ExchangeTrades_Segment,
+			ExchangeTrades_SettlementNumber,ExchangeTrades_SettlementType,ExchangeTrades_BranchID,
+			ExchangeTrades_TradeDate,ExchangeTrades_TradeNumber,
+			ExchangeTrades_TradeEntryTime,ExchangeTrades_TradeModifyTime,
+			ExchangeTrades_OrderNumber,ExchangeTrades_OrderEntryTime,
+			ExchangeTrades_CustomerID,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecuritySeries,ExchangeTrades_SecurityExpiry,ExchangeTrades_SecurityStrikePrice,
+			ExchangeTrades_SecurityType,ExchangeTrades_BuySellFlag,ExchangeTrades_CustTransactionID,
+            Trans_CustomerTrades.CustomerTrades_CompanyID,Trans_CustomerTrades.CustomerTrades_ExchangeSegment,Trans_CustomerTrades.CustomerTrades_UnitPrice,Trans_CustomerTrades.CustomerTrades_ID,
+			Trans_CustomerTrades.CustomerTrades_MarketValue,Trans_CustomerTrades.CustomerTrades_TotalBrokerage,Trans_CustomerTrades.CustomerTrades_TradeDate,Trans_CustomerTrades.CustomerTrades_NetRatePerUnit,
+			Trans_CustomerTrades.CustomerTrades_ServiceTaxOnBrkg,Trans_CustomerTrades.CustomerTrades_EduCessOnBrkg,Trans_CustomerTrades.CustomerTrades_HgrEduCessOnBrkg,
+			Trans_CustomerTrades.CustomerTrades_ServiceTaxMode,Trans_CustomerTrades.CustomerTrades_StampDutyMode,Trans_CustomerTrades.CustomerTrades_ContractNoteNumber,Trans_CustomerTrades.CustomerTrades_BranchID,
+			Trans_CustomerTrades.CustomerTrades_TranChargeMode,Trans_CustomerTrades.CustomerTrades_AverageType,Trans_CustomerTrades.CustomerTrades_NetValue,
+			Trans_CustomerTrades.CustomerTrades_ProductSeriesID,Trans_CustomerTrades.CustomerTrades_ProductSeries,(CustomerTrades_ServiceTaxOnBrkg+CustomerTrades_EduCessOnBrkg+CustomerTrades_HgrEduCessOnBrkg) as TotalTAX,
+			Trans_CustomerTrades.CustomerTrades_UnitPriceQuantity,Trans_CustomerTrades.CustomerTrades_CustomerID,Trans_CustomerTrades.CustomerTrades_SettlementNumber,Trans_CustomerTrades.CustomerTrades_SettlementType,Trans_CustomerTrades.CustomerTrades_BrokerageType,
+            trans_ContractNotes.ContractNotes_BranchID,trans_ContractNotes.ContractNotes_SegmentID,trans_ContractNotes.ContractNotes_TradeDate,
+			trans_ContractNotes.ContractNotes_SettlementNumber,trans_ContractNotes.ContractNotes_SettlementType,trans_ContractNotes.ContractNotes_Number,
+			trans_ContractNotes.ContractNotes_CustomerID,trans_ContractNotes.ContractNotes_TotalBrokerage,trans_ContractNotes.ContractNotes_TotalTO,
+			trans_ContractNotes.ContractNotes_ServiceTaxOnBrkg,trans_ContractNotes.ContractNotes_EduCessOnBrkg,trans_ContractNotes.ContractNotes_TransactionCharges,trans_ContractNotes.ContractNotes_HgrEduCessOnBrkg,
+			trans_ContractNotes.ContractNotes_StampDuty,trans_ContractNotes.ContractNotes_NetAmount,trans_ContractNotes.ContractNotes_TranChargeMode,ContractNotes_StampDutyMode,ContractNotes_ServiceTaxMode,
+			trans_ContractNotes.ContractNotes_ServiceTaxOnTranCharge,trans_ContractNotes.ContractNotes_EduCessOnTranCharge,trans_ContractNotes.ContractNotes_HgrEduCessOnTranCharge,
+            trans_ContractNotes.ContractNotes_TotalServiceTax,trans_ContractNotes.ContractNotes_TotalEduCess,trans_ContractNotes.ContractNotes_TotalHgrEduCess,
+            CASE WHEN trans_ContractNotes.ContractNotes_ServiceTaxMode='+char(39)+'E'+char(39)+' THEN '+char(39)+'Exclusive Of Brokerage'+char(39)+' ELSE '+char(39)+'Inclusive Of Brokerage'+char(39)+' End as Data,
+			isnull(trans_ContractNotes.ContractNotes_SEBIFee,0.00)as SebiFees,ExchangeTrades_SecurityCode as securitycode
+
+
+            from
+            (select ExchangeTrades_FinYear,ExchangeTrades_CompanyID,ExchangeTrades_Segment,
+			ExchangeTrades_SettlementNumber,ExchangeTrades_SettlementType,ExchangeTrades_BranchID,ExchangeTrades_TradeDate,
+			ExchangeTrades_TradeNumber,ExchangeTrades_TradeEntryTime,ExchangeTrades_TradeModifyTime,
+			ExchangeTrades_OrderNumber,ExchangeTrades_OrderEntryTime,
+			ExchangeTrades_CustomerID,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecuritySeries,ExchangeTrades_SecurityExpiry,ExchangeTrades_SecurityStrikePrice,
+			ExchangeTrades_SecurityType,ExchangeTrades_BuySellFlag,
+			ExchangeTrades_CustTransactionID,ExchangeTrades_SecurityCode from  Trans_ExchangeTrades,   
+			(select ExchangeTrades_CustTransactionID as Cid,
+			min(ExchangeTrades_ID)as ExchangeID   
+			
+			from Trans_ExchangeTrades      
+			where ExchangeTrades_TradeDate='''+@tradedate+''''
+			if (@Mode<>'A' and @Mode<>'D' and @Mode='S' and @Branch<>'')
+				begin
+					set @sql=@sql+'and ExchangeTrades_CustomerID in ('+@CustomerID+')'
+				end 
+			if(@Mode='S' And @CustomerID<>'' and @Branch='')
+			begin
+				set @sql=@sql+'and ExchangeTrades_CustomerID in ('+@CustomerID+')'
+			end	
+				else if(@Mode='1' And @CustomerID<>'' and @Branch='')
+			begin
+				set @sql=@sql+'and ExchangeTrades_CustomerID in ('+@CustomerID+')'
+			end	
+			else if(@Mode='2' And @CustomerID<>'' and @Branch='')
+			begin
+				set @sql=@sql+'and ExchangeTrades_CustomerID in ('+@CustomerID+')'
+			end	
+            else if (@Mode='D' And @CustomerID<>'' and @Branch<>'')
+				begin
+					set @sql=@sql+'and ExchangeTrades_CustomerID in ('+@CustomerID+')' 
+
+				end 
+			else if(@Mode='A' And @CustomerID<>'')
+				begin
+					set @sql=@sql+'and ExchangeTrades_CustomerID in ('+@CustomerID+')'
+				end
+			
+			
+			else if (@Mode='D' And @CustomerID<>'' and @Branch='')
+				begin
+					set @sql=@sql+'and ExchangeTrades_CustomerID in ('+@CustomerID+')'
+				end 
+			set @sql=@sql+'
+			and ExchangeTrades_segment='''+@DpId+'''     
+			And ExchangeTrades_CompanyID='''+@CompanyID+'''    
+			group by ExchangeTrades_CustTransactionID) as tab      
+			where ExchangeTrades_ID=ExchangeID)as tabnext,Trans_CustomerTrades,trans_ContractNotes
+            where 
+			(ExchangeTrades_CustTransactionID=CustomerTrades_ID or CustomerTrades_OriginalTransactionID=ExchangeTrades_CustTransactionID)'
+			if (@Mode<>'A' and @Mode<>'D' and @Mode='S' and @Branch<>'')
+				begin
+					set @sql=@sql+'and CustomerTrades_CustomerID in ('+@CustomerID+')'
+				end 
+			if(@Mode='S' And @CustomerID<>'' and @Branch='')
+			begin
+				set @sql=@sql+'and CustomerTrades_CustomerID in ('+@CustomerID+')'
+			end	
+				
+			
+            else if (@Mode='D' And @CustomerID<>'' and @Branch<>'')
+				begin
+					set @sql=@sql+'and CustomerTrades_CustomerID in ('+@CustomerID+')' 
+
+				end 
+			else if (@Mode='A' And @CustomerID<>'')
+				begin
+					set @sql=@sql+'and CustomerTrades_CustomerID in ('+@CustomerID+')'
+				end 
+			
+			 else if (@Mode='D' And @CustomerID<>'' and @Branch='')
+				begin
+					set @sql=@sql+'and CustomerTrades_CustomerID in ('+@CustomerID+')'
+				end 
+			
+
+			set @sql=@sql+'     
+			and ExchangeTrades_CompanyID=CustomerTrades_CompanyID
+			and ExchangeTrades_Segment=CustomerTrades_exchangesegment
+			and ExchangeTrades_SettlementType=CustomerTrades_SettlementType
+			and ExchangeTrades_SettlementNumber=CustomerTrades_SettlementNumber
+			and ExchangeTrades_TradeDate=CustomerTrades_TradeDate
+			AND ExchangeTrades_CustomerId=CustomerTrades_CustomerID
+			and CustomerTrades_TradeDate='''+@tradedate+'''      
+			and CustomerTrades_exchangesegment='''+@DpId+'''
+			AND CustomerTrades_ContractNoteNumber IS NOT NULL
+			And CustomerTrades_CompanyID='''+@CompanyID+'''
+			--AND CustomerTrades_SettlementNumber='''+@SettlementNumber+'''
+			--AND CustomerTrades_SettlementType='''+@SettlementType+''' 
+            AND ContractNotes_TradeDate=CustomerTrades_TradeDate
+            and ContractNotes_Number=CustomerTrades_ContractNoteNumber
+			AND Contractnotes_CustomerId =CustomerTrades_CustomerID
+			AND ContractNotes_CompanyId=CustomerTrades_CompanyID
+			AND ContractNotes_SegmentId=CustomerTrades_exchangesegment
+			and ContractNotes_SettlementNumber=CustomerTrades_SettlementNumber
+			and ContractNotes_SettlementType=CustomerTrades_SettlementType
+            AND Contractnotes_CustomerId=ExchangeTrades_CustomerID
+			AND ContractNotes_CompanyId=CustomerTrades_CompanyID
+			AND ContractNotes_SegmentId=CustomerTrades_exchangesegment
+           --AND ContractNotes_SettlementNumber ='''+@SettlementNumber+'''
+           --AND ContractNotes_SettlementType='''+@SettlementType+'''
+           and ContractNotes_TradeDate='''+@tradedate+'''
+		   AND ContractNotes_Status Is Null	'
+			if (@Reporttype<>'Digital')
+				Begin
+					set @sql=@sql+' AND CustomerTrades_SettlementNumber='''+@SettlementNumber+'''
+									AND CustomerTrades_SettlementType='''+@SettlementType+'''
+									AND ContractNotes_SettlementNumber ='''+@SettlementNumber+'''
+									AND ContractNotes_SettlementType='''+@SettlementType+''' '
+				End
+
+
+        insert into #TEMPTABLETRADE
+        exec (@sql)
+       -- print (@sql)
+	--select * from #TEMPTABLETRADE
+  Select * into #Temp
+    from
+      (Select a2.ExchangeTrades_FinYear,a2.ExchangeTrades_CompanyID,a2.ExchangeTrades_Segment,
+	   a2.ExchangeTrades_SettlementNumber,a2.ExchangeTrades_SettlementType,a2.ExchangeTrades_BranchID,
+		a2.ExchangeTrades_TradeDate,a2.ExchangeTrades_TradeNumber,
+		a2.ExchangeTrades_TradeEntryTime,a2.ExchangeTrades_TradeModifyTime,
+			a2.ExchangeTrades_OrderNumber,a2.ExchangeTrades_OrderEntryTime,
+			a2.ExchangeTrades_CustomerID,a2.ExchangeTrades_SecuritySymbol,a2.ExchangeTrades_SecuritySeries,a2.ExchangeTrades_SecurityExpiry,a2.ExchangeTrades_StrikePrice,
+			a2.ExchangeTrades_SecurityType,a2.ExchangeTrades_BuySellFlag,a2.ExchangeTrades_CustTransactionID,a2.CustomerTrades_CompanyID,a2.CustomerTrades_ExchangeSegment,a2.CustomerTrades_UnitPrice,a2.CustomerTrades_ID,
+			a2.CustomerTrades_MarketValue,a2.CustomerTrades_TotalBrokerage,a2.CustomerTrades_TradeDate,a2.CustomerTrades_NetRatePerUnit,
+			a2.CustomerTrades_ServiceTaxOnBrkg,a2.CustomerTrades_EduCessOnBrkg,a2.CustomerTrades_HgrEduCessOnBrkg,
+			a2.CustomerTrades_ServiceTaxMode,a2.CustomerTrades_StampDutyMode,a2.CustomerTrades_ContractNoteNumber,a2.CustomerTrades_BranchID,
+			a2.CustomerTrades_TranChargeMode,a2.CustomerTrades_AverageType,a2.CustomerTrades_BrokerageType,a2.CustomerTrades_NetValue,
+			a2.CustomerTrades_ProductSeriesID,a2.CustomerTrades_ProductSeries,a2.TotalTAX,
+			a2.CustomerTrades_UnitPriceQuantity,a2.CustomerTrades_CustomerID,a2.CustomerTrades_SettlementNumber,a2.CustomerTrades_SettlementType,
+       a2.sttaxsummary_TotalSTT,a2.sttaxsummary_RoundOffAmount,a2.sttaxsummary_NetSTT,
+      trans_sttax.Sttax_ProductSeriesID,trans_sttax.Sttax_TotalStt,trans_sttax.Sttax_DeliveryBuyStt,trans_sttax.Sttax_DeliverySaleStt,trans_sttax.Sttax_DifferenceStt,
+			a2.ContractNotes_BranchID,a2.ContractNotes_SegmentID,a2.ContractNotes_TradeDate,
+			a2.ContractNotes_SettlementNumber,a2.ContractNotes_SettlementType,a2.ContractNotes_Number,
+			a2.ContractNotes_CustomerID,a2.ContractNotes_TotalBrokerage,a2.ContractNotes_TotalTO,
+			a2.ContractNotes_ServiceTaxOnBrkg,a2.ContractNotes_EduCessOnBrkg,a2.ContractNotes_TransactionCharges,
+			a2.ContractNotes_HgrEduCessOnBrkg,
+			a2.ContractNotes_StampDuty,a2.ContractNotes_NetAmount,a2.ContractNotes_TranChargeMode,
+			a2.ContractNotes_ServiceTaxMode,
+			a2.ContractNotes_ServiceTaxOnTranCharge,a2.ContractNotes_EduCessOnTranCharge,
+			a2.ContractNotes_HgrEduCessOnTranCharge,
+            a2.ContractNotes_TotalServiceTax,a2.ContractNotes_TotalEduCess,a2.ContractNotes_TotalHgrEduCess,
+			a2.Data,a2.SebiFees,a2.securitycode
+
+
+       from
+      (Select  
+      #TEMPTABLETRADE.ExchangeTrades_FinYear,#TEMPTABLETRADE.ExchangeTrades_CompanyID,#TEMPTABLETRADE.ExchangeTrades_Segment,
+	   #TEMPTABLETRADE.ExchangeTrades_SettlementNumber,#TEMPTABLETRADE.ExchangeTrades_SettlementType,#TEMPTABLETRADE.ExchangeTrades_BranchID,
+		#TEMPTABLETRADE.ExchangeTrades_TradeDate,#TEMPTABLETRADE.ExchangeTrades_TradeNumber,
+		#TEMPTABLETRADE.ExchangeTrades_TradeEntryTime,#TEMPTABLETRADE.ExchangeTrades_TradeModifyTime,
+			#TEMPTABLETRADE.ExchangeTrades_OrderNumber,#TEMPTABLETRADE.ExchangeTrades_OrderEntryTime,
+			#TEMPTABLETRADE.ExchangeTrades_CustomerID,#TEMPTABLETRADE.ExchangeTrades_SecuritySymbol,#TEMPTABLETRADE.ExchangeTrades_SecuritySeries,#TEMPTABLETRADE.ExchangeTrades_SecurityExpiry,#TEMPTABLETRADE.ExchangeTrades_StrikePrice,
+			#TEMPTABLETRADE.ExchangeTrades_SecurityType,#TEMPTABLETRADE.ExchangeTrades_BuySellFlag,#TEMPTABLETRADE.ExchangeTrades_CustTransactionID,#TEMPTABLETRADE.CustomerTrades_CompanyID,#TEMPTABLETRADE.CustomerTrades_ExchangeSegment,#TEMPTABLETRADE.CustomerTrades_UnitPrice,#TEMPTABLETRADE.CustomerTrades_ID,
+			#TEMPTABLETRADE.CustomerTrades_MarketValue,#TEMPTABLETRADE.CustomerTrades_TotalBrokerage,#TEMPTABLETRADE.CustomerTrades_TradeDate,#TEMPTABLETRADE.CustomerTrades_NetRatePerUnit,
+			#TEMPTABLETRADE.CustomerTrades_ServiceTaxOnBrkg,#TEMPTABLETRADE.CustomerTrades_EduCessOnBrkg,#TEMPTABLETRADE.CustomerTrades_HgrEduCessOnBrkg,
+			#TEMPTABLETRADE.CustomerTrades_ServiceTaxMode,#TEMPTABLETRADE.CustomerTrades_StampDutyMode,#TEMPTABLETRADE.CustomerTrades_ContractNoteNumber,#TEMPTABLETRADE.CustomerTrades_BranchID,
+			#TEMPTABLETRADE.CustomerTrades_TranChargeMode,#TEMPTABLETRADE.CustomerTrades_AverageType,#TEMPTABLETRADE.CustomerTrades_BrokerageType,#TEMPTABLETRADE.CustomerTrades_NetValue,
+			#TEMPTABLETRADE.CustomerTrades_ProductSeriesID,#TEMPTABLETRADE.CustomerTrades_ProductSeries,#TEMPTABLETRADE.TotalTAX,
+			#TEMPTABLETRADE.CustomerTrades_UnitPriceQuantity,#TEMPTABLETRADE.CustomerTrades_CustomerID,#TEMPTABLETRADE.CustomerTrades_SettlementNumber,#TEMPTABLETRADE.CustomerTrades_SettlementType,
+		   trans_sttaxsummary.sttaxsummary_TotalSTT,trans_sttaxsummary.sttaxsummary_RoundOffAmount,trans_sttaxsummary.sttaxsummary_NetSTT,
+			#TEMPTABLETRADE.ContractNotes_BranchID,
+			#TEMPTABLETRADE.ContractNotes_SegmentID,
+			#TEMPTABLETRADE.ContractNotes_TradeDate,
+			#TEMPTABLETRADE.ContractNotes_SettlementNumber,
+			#TEMPTABLETRADE.ContractNotes_SettlementType,
+			#TEMPTABLETRADE.ContractNotes_Number,
+			#TEMPTABLETRADE.ContractNotes_CustomerID,
+			#TEMPTABLETRADE.ContractNotes_TotalBrokerage,
+			#TEMPTABLETRADE.ContractNotes_TotalTO,
+			#TEMPTABLETRADE.ContractNotes_ServiceTaxOnBrkg,#TEMPTABLETRADE.ContractNotes_EduCessOnBrkg,#TEMPTABLETRADE.ContractNotes_TransactionCharges,
+			#TEMPTABLETRADE.ContractNotes_HgrEduCessOnBrkg,
+			#TEMPTABLETRADE.ContractNotes_StampDuty,#TEMPTABLETRADE.ContractNotes_NetAmount,#TEMPTABLETRADE.ContractNotes_TranChargeMode,
+			#TEMPTABLETRADE.ContractNotes_ServiceTaxMode,
+			#TEMPTABLETRADE.ContractNotes_ServiceTaxOnTranCharge,#TEMPTABLETRADE.ContractNotes_EduCessOnTranCharge,
+			#TEMPTABLETRADE.ContractNotes_HgrEduCessOnTranCharge,
+            #TEMPTABLETRADE.ContractNotes_TotalServiceTax,#TEMPTABLETRADE.ContractNotes_TotalEduCess,#TEMPTABLETRADE.ContractNotes_TotalHgrEduCess,
+			#TEMPTABLETRADE.Data,#TEMPTABLETRADE.SebiFees,#TEMPTABLETRADE.securitycode
+ 
+       from #TEMPTABLETRADE 
+       left outer join
+       trans_sttaxsummary
+		ON(trans_sttaxsummary.Sttaxsummary_SegmentID=#TEMPTABLETRADE.customertrades_ExchangeSegment 
+		AND trans_sttaxsummary.Sttaxsummary_SegmentID=#TEMPTABLETRADE.customertrades_ExchangeSegment 
+		AND trans_sttaxsummary.Sttaxsummary_CompanyID=#TEMPTABLETRADE.customertrades_CompanyID 
+		AND trans_sttaxsummary.Sttaxsummary_CustomerID=#TEMPTABLETRADE.customertrades_CustomerID 
+		AND trans_sttaxsummary.Sttaxsummary_Type='Prov' 
+		AND trans_sttaxsummary.Sttaxsummary_SettlementNumber=#TEMPTABLETRADE.CustomerTrades_SettlementNumber 
+		AND  trans_sttaxsummary.Sttaxsummary_SettlementType=#TEMPTABLETRADE.CustomerTrades_SettlementType 
+		AND trans_sttaxsummary.Sttaxsummary_STTDate=#TEMPTABLETRADE.customertrades_tradedate)) as a2
+        
+        left outer join
+         trans_sttax
+			ON(trans_sttax.Sttax_CustomerID=a2.CustomerTrades_CustomerID 
+			AND trans_sttax.Sttax_STTDate=a2.CustomerTrades_TradeDate       
+			AND trans_sttax.Sttax_Type='Prov' 
+			AND trans_sttax.Sttax_SegmentID=a2.CustomerTrades_ExchangeSegment       
+			AND trans_sttax.Sttax_ProductSeriesID=a2.CustomerTrades_ProductSeriesID      
+			AND trans_sttax.Sttax_SettlementNumber=a2.customertrades_SettlementNumber      
+			AND trans_sttax.Sttax_SettlementType=a2.customertrades_SettlementType)) AS TAB
+
+
+     Select * into #Temp1
+     FROM
+       (Select  Distinct ExchangeTrades_FinYear,ExchangeTrades_CompanyID,ExchangeTrades_Segment,
+	   ExchangeTrades_SettlementNumber,ExchangeTrades_SettlementType,ExchangeTrades_BranchID,
+		ExchangeTrades_TradeDate,ExchangeTrades_TradeNumber,
+		ExchangeTrades_TradeEntryTime,ExchangeTrades_TradeModifyTime,
+		ExchangeTrades_OrderNumber,ExchangeTrades_OrderEntryTime,
+		ExchangeTrades_CustomerID,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecuritySeries,ExchangeTrades_SecurityExpiry,ExchangeTrades_StrikePrice,
+		ExchangeTrades_SecurityType,ExchangeTrades_BuySellFlag,ExchangeTrades_CustTransactionID,CustomerTrades_CompanyID,CustomerTrades_ExchangeSegment,CustomerTrades_UnitPrice,CustomerTrades_ID,
+		CustomerTrades_MarketValue,CustomerTrades_TotalBrokerage,CustomerTrades_TradeDate,CustomerTrades_NetRatePerUnit,
+		CustomerTrades_ServiceTaxOnBrkg,CustomerTrades_EduCessOnBrkg,CustomerTrades_HgrEduCessOnBrkg,
+		CustomerTrades_ServiceTaxMode,CustomerTrades_StampDutyMode,CustomerTrades_ContractNoteNumber,CustomerTrades_BranchID,
+		CustomerTrades_TranChargeMode,CustomerTrades_AverageType,CustomerTrades_BrokerageType,CustomerTrades_NetValue,
+		CustomerTrades_ProductSeriesID,CustomerTrades_ProductSeries,TotalTAX,
+		CustomerTrades_UnitPriceQuantity,CustomerTrades_CustomerID,CustomerTrades_SettlementNumber,CustomerTrades_SettlementType,
+       sttaxsummary_TotalSTT,sttaxsummary_RoundOffAmount,sttaxsummary_NetSTT,
+       Sttax_ProductSeriesID,Sttax_TotalStt,Sttax_DeliveryBuyStt,Sttax_DeliverySaleStt,Sttax_DifferenceStt,
+       branch_Description,branch_address1,branch_address2,
+	   branch_address3,branch_Country,branch_State,
+		branch_City,branch_Pin,branch_cpEmail,
+		branch_Fax,branch_cpPhone,branch_code,
+		branch_phone,cnt_UCC,cnt_firstName as firstname,cnt_middleName as middlename,
+		cnt_lastName as lastname,cnt_branchid,cnt_ContractDeliveryMode,branch_Description as branchDescription,
+		ContractNotes_BranchID,ContractNotes_SegmentID,ContractNotes_TradeDate,
+		ContractNotes_SettlementNumber,ContractNotes_SettlementType,ContractNotes_Number,
+		ContractNotes_CustomerID,ContractNotes_TotalBrokerage,ContractNotes_TotalTO,
+		ContractNotes_ServiceTaxOnBrkg,ContractNotes_EduCessOnBrkg,ContractNotes_TransactionCharges,
+		ContractNotes_HgrEduCessOnBrkg,
+		ContractNotes_StampDuty,ContractNotes_NetAmount,ContractNotes_TranChargeMode,
+		ContractNotes_ServiceTaxMode,
+		ContractNotes_ServiceTaxOnTranCharge,ContractNotes_EduCessOnTranCharge,
+		ContractNotes_HgrEduCessOnTranCharge,
+        ContractNotes_TotalServiceTax,ContractNotes_TotalEduCess,ContractNotes_TotalHgrEduCess,
+		Data,SebiFees,securitycode
+
+
+
+      from #tEMP,
+	  tbl_master_branch,tbl_master_contact
+
+
+	 where 
+	  branch_id=cnt_branchID
+     AND 
+	 cnt_internalID=CustomerTrades_CustomerID 
+	) as tab
+
+Select * into #TempFinal
+from
+(Select Distinct ExchangeTrades_FinYear,ExchangeTrades_CompanyID,ExchangeTrades_Segment,
+	   ExchangeTrades_SettlementNumber,ExchangeTrades_SettlementType,ExchangeTrades_BranchID,
+		ExchangeTrades_TradeDate,ExchangeTrades_TradeNumber,
+		ExchangeTrades_TradeEntryTime,ExchangeTrades_TradeModifyTime,
+		ExchangeTrades_OrderNumber,ExchangeTrades_OrderEntryTime,
+		ExchangeTrades_CustomerID,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecuritySeries,ExchangeTrades_SecurityExpiry,ExchangeTrades_StrikePrice,
+		ExchangeTrades_SecurityType,ExchangeTrades_BuySellFlag,ExchangeTrades_CustTransactionID,CustomerTrades_CompanyID,CustomerTrades_ExchangeSegment,CustomerTrades_UnitPrice,CustomerTrades_ID,
+		CustomerTrades_MarketValue,CustomerTrades_TotalBrokerage,CustomerTrades_TradeDate,CustomerTrades_NetRatePerUnit,
+		CustomerTrades_ServiceTaxOnBrkg,CustomerTrades_EduCessOnBrkg,CustomerTrades_HgrEduCessOnBrkg,
+		CustomerTrades_ServiceTaxMode,CustomerTrades_StampDutyMode,CustomerTrades_ContractNoteNumber,CustomerTrades_BranchID,
+		CustomerTrades_TranChargeMode,CustomerTrades_AverageType,CustomerTrades_BrokerageType,CustomerTrades_NetValue,
+		CustomerTrades_ProductSeriesID,CustomerTrades_ProductSeries,TotalTAX,
+		CustomerTrades_UnitPriceQuantity,CustomerTrades_CustomerID,CustomerTrades_SettlementNumber,CustomerTrades_SettlementType,
+       sttaxsummary_TotalSTT,sttaxsummary_RoundOffAmount,sttaxsummary_NetSTT,
+       Sttax_ProductSeriesID,Sttax_TotalStt,Sttax_DeliveryBuyStt,Sttax_DeliverySaleStt,Sttax_DifferenceStt,
+       branch_Description,branch_address1,branch_address2,
+	   branch_address3,branch_Country,branch_State,
+		branch_City,branch_Pin,branch_cpEmail,
+		branch_Fax,branch_cpPhone,branch_code,
+		branch_phone,cnt_UCC,firstname,middlename,
+		lastname,cnt_branchid,cnt_ContractDeliveryMode,
+		(Select top 1 eml_email from tbl_master_email where eml_cntId=CustomerTrades_CustomerID AND eml_entity='Customer/Client' and eml_type='Official') as eml_email,
+		(Select top 1 isnull(eml_Status,'Y') from tbl_master_email where eml_cntId=CustomerTrades_CustomerID AND eml_entity='Customer/Client' and eml_type='Official') as eml_status,
+		add_address1,add_address2,add_address3,add_country,
+		add_State,add_city,add_area,add_pin,add_activityId,
+		(Select isnull(crg_tcode,'') from tbl_master_contactexchange where crg_cntID=CustomerTrades_CustomerID 
+		and crg_exchange=@dp and crg_company=@CompanyID) as Crg_Tcode,
+        			(Select cmp_name from tbl_master_company where cmp_internalId=@CompanyID) as cmp_name,
+			(Select cmp_NatureOfBusiness from tbl_master_company where cmp_internalId=@CompanyID) as NatureOfBusiness,
+			(Select cmp_Directors from tbl_master_company where cmp_internalId=@CompanyID) as Directors,
+			(Select cmp_authorizedSignatories from tbl_master_company where cmp_internalId=@CompanyID) as authorizedSignatories,
+			(Select cmp_registrationNo from tbl_master_company where cmp_internalId=@CompanyID) as registrationNo,
+			(Select cmp_panNo from tbl_master_company where cmp_internalId=@CompanyID) as CompanyPanNo, 
+			(Select cmp_ServiceTaxNo+' '+ case when len(isnull(cmp_CIN,''))>0 then 'CIN :'+cmp_CIN
+			else '' end
+			 from tbl_master_company where cmp_internalId=@CompanyID) as ServiceTaxNo,
+			(Select cmp_sebiRegnNo from tbl_master_company where cmp_internalId=@CompanyID) as sebiRegnNo,
+			(Select cmp_salesTaxNo from tbl_master_company where cmp_internalId=@CompanyID) as cmp_salesTaxNo,
+			(Select  (isnull(tbl_master_phonefax.phf_countryCode,'')+'-'+isnull(tbl_master_phonefax.phf_areacode,'')+'-'+isnull(tbl_master_phonefax.phf_phoneNumber,'')) 
+			from tbl_master_phonefax where tbl_master_phonefax.phf_cntId=@CompanyID AND phf_entity='Company' AND phf_type=(select top 1 phf_type from 
+					(select phf_Type,
+					  case when rtrim(ltrim(phf_Type))='Office' then 1
+						when rtrim(ltrim(phf_Type))='Registered' then 2
+						when rtrim(ltrim(phf_Type))='Correspondence' then 3
+						else 4 end as addreorder
+						from tbl_master_phonefax where 
+						phf_cntId=@CompanyID
+                        --and CustomerTrades_ContractNoteNumber is not null
+						and phf_entity='Company') tb
+						order by addreorder))AS CompanyPhone,    
+			(Select top (1) (tbl_master_phonefax.phf_countryCode+'-'+tbl_master_phonefax.phf_areacode+'-'+tbl_master_phonefax.phf_phoneNumber) FROM tbl_master_phonefax 
+			where tbl_master_phonefax.phf_cntId=@CompanyID AND phf_entity='Company' AND phf_type='Fax')AS CompanyFax,
+			(Select Tbl_Master_Company.cmp_PanNo from Tbl_Master_Company where cmp_internalID=@CompanyID) as CompanyPan,
+			(Select Tbl_Master_Company.cmp_ServiceTaxNo from Tbl_Master_Company where cmp_internalID=@CompanyID) as CompanyServiceNo,
+			(Select Tbl_Master_Company.cmp_name from Tbl_Master_Company where cmp_internalID=@CompanyID) as CompanyName,
+
+			(Select isnull(add_address1,'') from tbl_master_address  where add_cntID=@CompanyID AND add_entity='Company' AND add_addressType=(select top 1 add_addressType from 
+					(select add_addressType,
+					  case when rtrim(ltrim(add_addressType))='Office' then 1
+						when rtrim(ltrim(add_addressType))='Registered' then 2
+						when rtrim(ltrim(add_addressType))='Correspondence' then 3
+						else 4 end as addreorder
+						from tbl_master_address where 
+						add_cntID=@CompanyID
+                        and CustomerTrades_ContractNoteNumber is not null
+						and add_entity='Company') tb
+						order by addreorder))as CompanyAddress1,
+			(Select isnull(add_address2,'')from tbl_master_address  where add_cntID=@CompanyID AND add_entity='Company' AND add_addressType=(select top 1 add_addressType from 
+					(select add_addressType,
+					  case when rtrim(ltrim(add_addressType))='Office' then 1
+						when rtrim(ltrim(add_addressType))='Registered' then 2
+						when rtrim(ltrim(add_addressType))='Correspondence' then 3
+						else 4 end as addreorder
+						from tbl_master_address where 
+						add_cntID=@CompanyID
+                        and CustomerTrades_ContractNoteNumber is not null
+						and add_entity='Company') tb
+						order by addreorder))as CompanyAddress2,
+			(Select isnull(add_address3,'')from tbl_master_address  where add_cntID=@CompanyID AND add_entity='Company' AND add_addressType=(select top 1 add_addressType from 
+					(select add_addressType,
+					   case when rtrim(ltrim(add_addressType))='Office' then 1
+						when rtrim(ltrim(add_addressType))='Registered' then 2
+						when rtrim(ltrim(add_addressType))='Correspondence' then 3
+						else 4 end as addreorder
+						from tbl_master_address where 
+						add_cntID=@CompanyID
+                        and CustomerTrades_ContractNoteNumber is not null
+						and add_entity='Company') tb
+						order by addreorder))as CompanyAddress3,  
+			(Select add_pin from tbl_master_address where add_cntID=@CompanyID AND add_entity='Company' AND add_addressType=(select top 1 add_addressType from 
+					(select add_addressType,
+					   case when rtrim(ltrim(add_addressType))='Office' then 1
+						when rtrim(ltrim(add_addressType))='Registered' then 2
+						when rtrim(ltrim(add_addressType))='Correspondence' then 3
+						else 4 end as addreorder
+						from tbl_master_address where 
+						add_cntID=@CompanyID
+                        and CustomerTrades_ContractNoteNumber is not null
+						and add_entity='Company') tb
+						order by addreorder)) as CompanyPin,
+			(Select tbl_master_city.City_Name from tbl_master_city,tbl_master_address where tbl_master_address.add_city=tbl_master_city.city_id AND tbl_master_address.add_cntID=@CompanyID AND add_addressType=(select top 1 add_addressType from 
+					(select add_addressType,
+					  case when rtrim(ltrim(add_addressType))='Office' then 1
+						when rtrim(ltrim(add_addressType))='Registered' then 2
+						when rtrim(ltrim(add_addressType))='Correspondence' then 3
+						else 4 end as addreorder
+						from tbl_master_address where 
+						add_cntID=@CompanyID
+                        and CustomerTrades_ContractNoteNumber is not null
+						and add_entity='Company') tb
+						order by addreorder)) as CompanyCity,
+			(Select top (1) tbl_master_city.City_Name from tbl_master_city,tbl_master_address where tbl_master_address.add_city=tbl_master_city.city_id AND tbl_master_address.add_cntID=CustomerTrades_CustomerID
+            AND add_addressType=
+            (select top 1 add_addressType from 
+					(select add_addressType,
+					  case when rtrim(ltrim(add_addressType))='Registered' then 1
+						when rtrim(ltrim(add_addressType))='Correspondence' then 2
+						when rtrim(ltrim(add_addressType))='Residence' then 3
+						else 4 end as addreorder
+						from tbl_master_address where 
+						add_cntID=CustomerTrades_CustomerID
+                        and CustomerTrades_ContractNoteNumber is not null
+						and add_entity='Customer/Client') tb
+						order by addreorder))as customerCity,
+			(Select tbl_master_city.City_Name from tbl_master_city,tbl_master_branch where tbl_master_city.city_id=tbl_master_branch.branch_city AND tbl_master_branch.branch_id=CustomerTrades_BranchID) as BranchCity,
+			(Select crg_Number from tbl_master_contactregistration where crg_cntID=CustomerTrades_CustomerID AND crg_Type='Pancard') as CustomerPanCard,
+			(Select isnull(eml_email,'') from tbl_master_email where eml_cntId=@CompanyID AND eml_entity='Company' AND eml_type=(select top 1 eml_type from 
+					(select eml_type,
+					  case when rtrim(ltrim(eml_type))='Official' then 1
+						when rtrim(ltrim(eml_type))='Investor Grievance' then 2
+						when rtrim(ltrim(eml_type))='Personal' then 3
+						else 4 end as addreorder
+						from tbl_master_email where 
+						eml_cntid=@CompanyID
+                        --and CustomerTrades_ContractNoteNumber is not null
+						and eml_entity='Company' ) tb
+						order by addreorder)) as CompanyEmail,
+			(Select exch_TMCode from tbl_master_companyexchange where exch_internalID=@DpId AND exch_compID=@CompanyID) as CompanyTMCode,
+			(Select exch_sebiNo from tbl_master_companyexchange where exch_internalID=@DpId AND exch_compID=@CompanyID) as CompanySebiNo,
+			(Select T2.STT as STT from
+			(Select SUM(STT) as STT,T1.customertrades_CustomerID From 
+			
+			(Select DISTINCT(trans_sttax.Sttax_TotalStt) as STT,#Temp1.customertrades_CustomerID from trans_sttax,#Temp1 
+			where trans_sttax.STTax_CompanyID=@CompanyID 
+			AND trans_sttax.Sttax_CompanyID=#Temp1.customertrades_CompanyID 
+			AND trans_sttax.Sttax_SegmentID=#Temp1.customertrades_ExchangeSegment 
+			AND trans_sttax.Sttax_CustomerID=#Temp1.customertrades_CustomerID 
+			AND trans_sttax.Sttax_Type='Prov' AND trans_sttax.Sttax_SettlementNumber=#Temp1.CustomerTrades_SettlementNumber 
+			AND  trans_sttax.Sttax_SettlementType=#Temp1.CustomerTrades_SettlementType 
+			AND  trans_sttax.Sttax_ProductSeriesID=#Temp1.CustomerTrades_ProductSeriesID 
+			AND trans_sttax.Sttax_STTDate=#Temp1.customertrades_tradedate AND trans_sttax.Sttax_STTDate=@tradedate
+            AND trans_sttax.Sttax_SegmentID=@DpId 
+            
+            and trans_sttax.Sttax_SettlementNumber= case 
+														when @Reporttype<>'Digital' then @SettlementNumber 
+														else trans_sttax.Sttax_SettlementNumber 
+													end
+            and trans_sttax.Sttax_SettlementType= case 
+														when @Reporttype<>'Digital' then @SettlementType 
+														else trans_sttax.Sttax_SettlementType 
+												  end
+            --AND trans_sttax.Sttax_SettlementNumber=@SettlementNumber 
+            --AND trans_sttax.Sttax_SettlementType=@SettlementType
+			)as T1 
+			where T1.customertrades_CustomerID=#Temp1.customertrades_CustomerID group by T1.customertrades_CustomerID)as T2) AS TOTALSTT,
+			(select Top 1(SttaxSummary_RoundOffAmount) from trans_sttaxsummary,trans_customertrades where trans_sttaxsummary.Sttaxsummary_CompanyID=@CompanyID AND trans_sttaxsummary.Sttaxsummary_SegmentID=trans_customertrades.customertrades_ExchangeSegment AND trans_sttaxsummary.Sttaxsummary_CompanyID=trans_customertrades.customertrades_CompanyID AND trans_sttaxsummary.Sttaxsummary_CustomerID=trans_customertrades.customertrades_CustomerID AND trans_sttaxsummary.Sttaxsummary_Type='Prov' AND trans_sttaxsummary.Sttaxsummary_SettlementNumber=trans_customertrades.CustomerTrades_SettlementNumber AND  trans_sttaxsummary.Sttaxsummary_SettlementType=trans_customertrades.CustomerTrades_SettlementType AND trans_sttaxsummary.Sttaxsummary_STTDate=trans_customertrades.customertrades_tradedate AND trans_sttaxsummary.Sttaxsummary_STTDate=@tradedate) AS SttaxSummary_RoundOffAmount1,
+			
+			
+              
+--------			(Select TOP 1(Convert(decimal(10,2),(isnull(ServTax_Rate,0.00))+(isnull(ServTax_Rate,0.00)*(isnull(ServTax_EduCess,0.00)/100))+(isnull(ServTax_Rate,0.00)*(isnull(ServTax_HgrEduCess,0.00)/100))))  from config_servtax where ServTax_CompanyID=@CompanyID AND ServTax_ExchangeSegmentID=@DpId AND ServTax_ChargeGroupID='DEFAULT'AND  @tradedate=CASE when @tradedate< ServTax_DateFrom AND ServTax_DateTo Is Null  then ServTax_DateFrom when @tradedate Between  ServTax_DateFrom AND ServTax_DateTo AND ServTax_DateTo Is not Null  then ServTax_DateFrom else @tradedate end)as TotalServiceTax,
+			
+
+			(Select TOP 1(Convert(decimal(10,2),(isnull(ServTax_Rate,0.00))+(isnull(ServTax_Rate,0.00)*(isnull(ServTax_EduCess,0.00)/100))+(isnull(ServTax_Rate,0.00)*(isnull(ServTax_HgrEduCess,0.00)/100))))  from config_servtax where ServTax_CompanyID=@CompanyID AND ServTax_ExchangeSegmentID=@DpId AND rtrim(ltrim(ServTax_ChargeGroupID))='DEFAULT' AND cast(@tradedate as datetime) between cast(ServTax_DateFrom as datetime) AND cast(isnull(ServTax_DateTo,'2100-01-01 00:00:00.000') as datetime)) as TotalServiceTax,
+			(Select TOP 1(Convert(decimal(10,2),(isnull(ServTax_Rate,0.00)))) from config_servtax where ServTax_CompanyID=@CompanyID AND ServTax_ExchangeSegmentID=@DpId AND rtrim(ltrim(ServTax_ChargeGroupID))='DEFAULT' AND cast(@tradedate as datetime) between cast(ServTax_DateFrom as datetime) AND cast(isnull(ServTax_DateTo,'2100-01-01 00:00:00.000') as datetime)) as ServTaxRate,
+			
+			(Select TOP 1(Convert(decimal(10,2),(isnull(ServTax_EduCess,0.00)+(isnull(ServTax_HgrEduCess,0.00))))) from config_servtax where ServTax_CompanyID=@CompanyID AND ServTax_ExchangeSegmentID=@DpId AND rtrim(LTRIM(ServTax_ChargeGroupID))='DEFAULT' AND cast(@tradedate as datetime) between cast(ServTax_DateFrom as datetime) AND cast(isnull(ServTax_DateTo,'2100-01-01 00:00:00.000') as datetime)) as ServTaxEducess,           
+
+            @strFundPayoutDate as FundpayoutDate,@BrkgFlag as BrokerageFlag,@AuthorizeName as AuthorizeName,
+            buyqty as BuyUnitPriceQuantity,sellqty as SellUnitPriceQuantity,BuyMkt as BuyMarketValue,SellMkt as SellMarketValue,
+            DeliverysellValue,DeliverybuyValue,BuyNetValue,SellNetValue,branchDescription,
+		ContractNotes_BranchID,ContractNotes_SegmentID,ContractNotes_TradeDate,
+		ContractNotes_SettlementNumber,ContractNotes_SettlementType,ContractNotes_Number,
+		ContractNotes_CustomerID,ContractNotes_TotalBrokerage,ContractNotes_TotalTO,
+		ContractNotes_ServiceTaxOnBrkg,ContractNotes_EduCessOnBrkg,ContractNotes_TransactionCharges,
+		ContractNotes_HgrEduCessOnBrkg,
+		ContractNotes_StampDuty,ContractNotes_NetAmount,ContractNotes_TranChargeMode,
+		ContractNotes_ServiceTaxMode,
+		ContractNotes_ServiceTaxOnTranCharge,ContractNotes_EduCessOnTranCharge,
+		ContractNotes_HgrEduCessOnTranCharge,
+        ContractNotes_TotalServiceTax,ContractNotes_TotalEduCess,ContractNotes_TotalHgrEduCess,
+		Data,SebiFees,securitycode
+
+     From #Temp1
+
+     left outer join
+    			tbl_master_address
+			ON(tbl_master_address.add_cntid=CustomerTrades_CustomerID and isnull(add_status,'Y')='Y' AND tbl_master_address.add_addressType=(select top 1 add_addressType from 
+					(select add_addressType,
+					  case when rtrim(ltrim(add_addressType))='Registered' then 1
+						when rtrim(ltrim(add_addressType))='Correspondence' then 2
+						when rtrim(ltrim(add_addressType))='Residence' then 3
+						else 4 end as addreorder
+						from tbl_master_address where 
+						add_cntID=CustomerTrades_CustomerID
+                        and CustomerTrades_ContractNoteNumber is not null
+						and add_entity='Customer/Client' and isnull(add_status,'Y')='Y') tb
+						order by addreorder))
+
+left outer join
+
+(Select ABS(SUM(isnull(CustomerTrades_UnitPriceQuantity,0))) as buyqty,CustomerTrades_CustomerID as custid from #Temp where CustomerTrades_UnitPriceQuantity<0
+            group by CustomerTrades_CustomerID)as tab
+
+on (CustomerTrades_CustomerID=custid)
+
+
+left outer join
+
+(Select ABS(SUM(isnull(CustomerTrades_UnitPriceQuantity,0))) as sellqty,CustomerTrades_CustomerID as sellcustid from #Temp where CustomerTrades_UnitPriceQuantity>0
+            group by CustomerTrades_CustomerID)as tab1
+
+on (CustomerTrades_CustomerID=sellcustid)
+
+left outer join
+
+(Select ABS(SUM(isnull(cast(CustomerTrades_MarketValue as numeric (28,4)),0.00))) as BuyMkt,CustomerTrades_CustomerID as BuyMKTcustid from #Temp where CustomerTrades_UnitPriceQuantity<0
+            group by CustomerTrades_CustomerID)as tab2
+
+on (CustomerTrades_CustomerID=BuyMKTcustid)
+left outer join
+
+(Select ABS(SUM(isnull(cast(CustomerTrades_MarketValue as numeric (28,4)),0.00))) as SellMkt,CustomerTrades_CustomerID as sellMKTcustid from #Temp where CustomerTrades_UnitPriceQuantity>0
+            group by CustomerTrades_CustomerID)as tab3
+
+
+on (CustomerTrades_CustomerID=sellMKTcustid)
+Left Outer Join
+
+(Select ABS(SUM(isnull(cast(CustomerTrades_NetValue as numeric (28,4)),0.00))) as DeliverybuyValue,CustomerTrades_CustomerID 
+as CustomerID,CustomerTrades_ProductSeriesID as ProductID from #Temp where 
+CustomerTrades_UnitPriceQuantity<0 and CustomerTrades_BrokerageType='D'
+group by CustomerTrades_CustomerID,CustomerTrades_ProductSeriesID)as tab4
+
+on (CustomerTrades_CustomerID=CustomerID AND CustomerTrades_ProductSeriesID=ProductID)
+
+Left Outer Join
+
+(Select ABS(SUM(isnull(cast(CustomerTrades_NetValue as numeric (28,4)),0.00))) as DeliverysellValue,CustomerTrades_CustomerID 
+as CustomerID1,CustomerTrades_ProductSeriesID as ProductID1  from #Temp where 
+CustomerTrades_UnitPriceQuantity>0 and CustomerTrades_BrokerageType='D'
+group by CustomerTrades_CustomerID,CustomerTrades_ProductSeriesID)as tab5
+
+on (CustomerTrades_CustomerID=CustomerID1 AND CustomerTrades_ProductSeriesID=ProductID1)
+
+Left Outer Join
+
+(Select ABS(SUM(isnull(cast(CustomerTrades_NetValue as numeric (28,4)),0.00))) as BuyNetValue,CustomerTrades_CustomerID 
+as CustomerID2,CustomerTrades_ProductSeriesID as ProductID2 from #Temp where 
+CustomerTrades_UnitPriceQuantity<0 and CustomerTrades_BrokerageType='S'
+group by CustomerTrades_CustomerID,CustomerTrades_ProductSeriesID)as tab6
+
+on (CustomerTrades_CustomerID=CustomerID2 AND CustomerTrades_ProductSeriesID=ProductID2)
+
+Left Outer Join
+
+(Select ABS(SUM(isnull(cast(CustomerTrades_NetValue as numeric (28,4)),0.00))) as SellNetValue,CustomerTrades_CustomerID 
+as CustomerID3,CustomerTrades_ProductSeriesID as ProductID3  from #Temp where 
+CustomerTrades_UnitPriceQuantity>0 and CustomerTrades_BrokerageType='S'
+group by CustomerTrades_CustomerID,CustomerTrades_ProductSeriesID)as tab7
+
+on (CustomerTrades_CustomerID=CustomerID3 AND CustomerTrades_ProductSeriesID=ProductID3)
+
+
+)as finaltab
+Alter table #TempFinal add netsttsum numeric(12,4),calculatedsttsum numeric(12,4),calculatednet numeric(28,4)--,securitycode varchar(20)
+
+--update #TempFinal set securitycode=(select ExchangeTrades_SecurityCode from Trans_ExchangeTrades
+--									where #TempFinal.ExchangeTrades_CustomerID=ExchangeTrades_CustomerID
+--									and #TempFinal.ExchangeTrades_BranchID=ExchangeTrades_BranchID
+--									and #TempFinal.CustomerTrades_SettlementNumber=ExchangeTrades_SettlementNumber
+--									and #TempFinal.CustomerTrades_SettlementType=ExchangeTrades_SettlementType
+--									and #TempFinal.CustomerTrades_TradeDate=ExchangeTrades_TradeDate)
+
+
+--update #TempFinal set netsttsum= Totalsttsum from 
+--(Select ABS(SUM(isnull(cast(Trans_Sttax.Sttax_TotalSTT as numeric (28,4)),0.00)))
+-- as Totalsttsum,
+--Sttax_CustomerID,Sttax_SegmentID,Sttax_Type,Sttax_STTDate,
+--Sttax_SettlementNumber,Sttax_SettlementType from Trans_Sttax
+--group by Sttax_CustomerID,Sttax_SegmentID,Sttax_Type,Sttax_STTDate,
+--Sttax_SettlementNumber,Sttax_SettlementType) STTax
+--Where #TempFinal.CustomerTrades_CustomerID= Sttax_CustomerID
+--and #TempFinal.CustomerTrades_SettlementNumber=Sttax_SettlementNumber
+--and #TempFinal.CustomerTrades_SettlementType=Sttax_SettlementType
+--and #TempFinal.CustomerTrades_TradeDate=Sttax_STTDate
+
+
+--update #TempFinal set calculatedsttsum=(select isnull(netsttsum,0.00)+isnull(Trans_SttaxSummary.SttaxSummary_RoundOffAmount,0.00) from Trans_SttaxSummary
+--where  #TempFinal.CustomerTrades_CustomerID= SttaxSummary_CustomerID
+--and #TempFinal.CustomerTrades_SettlementNumber=SttaxSummary_SettlementNumber
+--and #TempFinal.CustomerTrades_SettlementType=SttaxSummary_SettlementType
+--and #TempFinal.CustomerTrades_TradeDate=SttaxSummary_STTDate
+--and #TempFinal.CustomerTrades_ExchangeSegment=SttaxSummary_SegmentID
+--and SttaxSummary_Type='Prov'
+--group by SttaxSummary_CustomerID,SttaxSummary_SegmentID,SttaxSummary_Type,SttaxSummary_STTDate,
+--SttaxSummary_SettlementNumber,SttaxSummary_SettlementType,SttaxSummary_RoundOffAmount) --as calstt
+create table #contractnote(autoid int identity,contractnote varchar(10))
+insert into #contractnote
+select Distinct ContractNotes_Number from #TempFinal
+declare @staticloop bigint,@dynamicloop bigint,@clientid1 varchar(20),@cntrno varchar(10)
+select @staticloop=MAX(autoid) from #contractnote
+select @dynamicloop=1
+while (@dynamicloop<=@staticloop)
+	Begin
+		select @cntrno=contractnote from #contractnote where autoid=@dynamicloop
+		
+		
+		update #TempFinal set netsttsum= Totalsttsum from 
+		(Select ABS(SUM(isnull(cast(Trans_Sttax.Sttax_TotalSTT as numeric (28,4)),0.00)))
+		 as Totalsttsum,
+		Sttax_CustomerID,Sttax_SegmentID,Sttax_Type,Sttax_STTDate,
+		Sttax_SettlementNumber,Sttax_SettlementType,Sttax_ContractNoteNumber from Trans_Sttax
+		group by Sttax_CustomerID,Sttax_SegmentID,Sttax_Type,Sttax_STTDate,
+		Sttax_SettlementNumber,Sttax_SettlementType,Sttax_ContractNoteNumber) STTax
+		Where #TempFinal.CustomerTrades_CustomerID= Sttax_CustomerID
+		and #TempFinal.CustomerTrades_SettlementNumber=Sttax_SettlementNumber
+		and #TempFinal.CustomerTrades_SettlementType=Sttax_SettlementType
+		and #TempFinal.CustomerTrades_ContractNoteNumber=@cntrno
+		and Sttax_ContractNoteNumber=@cntrno
+		
+		
+		
+		
+		update #TempFinal set calculatedsttsum=(select isnull(netsttsum,0.00)+isnull(Trans_SttaxSummary.SttaxSummary_RoundOffAmount,0.00) from Trans_SttaxSummary
+		where  #TempFinal.CustomerTrades_CustomerID= SttaxSummary_CustomerID
+		and #TempFinal.CustomerTrades_SettlementNumber=SttaxSummary_SettlementNumber
+		and #TempFinal.CustomerTrades_SettlementType=SttaxSummary_SettlementType
+		and #TempFinal.CustomerTrades_TradeDate=SttaxSummary_STTDate
+		and #TempFinal.CustomerTrades_ExchangeSegment=SttaxSummary_SegmentID
+		and SttaxSummary_Type='Prov'
+		and #TempFinal.CustomerTrades_ContractNoteNumber=@cntrno
+		and SttaxSummary_CntrNo=@cntrno
+		group by SttaxSummary_CustomerID,SttaxSummary_SegmentID,SttaxSummary_Type,SttaxSummary_STTDate,
+		SttaxSummary_SettlementNumber,SttaxSummary_SettlementType,SttaxSummary_RoundOffAmount,SttaxSummary_CntrNo)
+		
+		
+		update #TempFinal set calculatednet=(select isnull(Trans_ContractNotes.ContractNotes_STTAmount,0.00)+isnull(Trans_ContractNotes.ContractNotes_NetAmount,0.00) from Trans_ContractNotes
+		where  #TempFinal.CustomerTrades_CustomerID= ContractNotes_CustomerID
+		and #TempFinal.CustomerTrades_SettlementNumber=ContractNotes_SettlementNumber
+		and #TempFinal.CustomerTrades_SettlementType=ContractNotes_SettlementType
+		and #TempFinal.CustomerTrades_TradeDate=ContractNotes_TradeDate
+		and #TempFinal.CustomerTrades_ExchangeSegment=ContractNotes_SegmentID
+		and ContractNotes_Status is null
+		and ContractNotes_Number=@cntrno
+		and #TempFinal.CustomerTrades_ContractNoteNumber=@cntrno
+		group by ContractNotes_CustomerID,ContractNotes_SegmentID,ContractNotes_TradeDate,
+		ContractNotes_SettlementNumber,ContractNotes_SettlementType,ContractNotes_STTAmount,
+		ContractNotes_NetAmount,ContractNotes_Number)
+		
+		
+
+
+		
+		
+		
+		
+		select @dynamicloop=@dynamicloop+1
+	End
+if(@netammountchk='True')
+	Begin
+		if(@dp='NSE - FO' or @dp='BSE - FO' or @dp='MCXSX - FO')
+			Begin
+				
+				Create table #distinctclient1 (incrementid int identity,clientid varchar(20))
+				insert into #distinctclient1
+				select distinct CustomerTrades_CustomerID from #TempFinal
+				select @staticloop=MAX(incrementid) from #distinctclient1
+				select @dynamicloop=1
+				while (@dynamicloop<=@staticloop)
+					Begin
+						Select @clientid1=clientid from #distinctclient1 where incrementid=@dynamicloop
+						select @netamountforfo=(select FOPositionSummary_NetBillAmount from Trans_FOPositionSummary
+						where FOPositionSummary_SegmentID=@DpId and FOPositionSummary_CustomerExchangeID=@clientid1 
+						and FOPositionSummary_Date=@tradedate)
+						update #TempFinal set ExchangeTrades_Segment=case when @netamountforfo>0 then
+						 dbo.format_number(cast(isnull(cast(@netamountforfo as numeric(28,2)),0.00) as varchar))+ ' (Payable to You)' when @netamountforfo<0 then
+						 dbo.format_number(cast(isnull(cast(abs(@netamountforfo) as numeric(28,2)),0.00) as varchar)) +' (Receivable from You)'
+						else cast(@netamountforfo as varchar) end
+						where ExchangeTrades_CustomerID=@clientid1
+						and CustomerTrades_CustomerID=@clientid1
+						select @dynamicloop=@dynamicloop+1
+					End
+			End
+	End
+
+if (@pdforhtml='pdf')
+	Begin
+           Select 
+	--(case when calculatedsttsum is null then abs(isnull(ContractNotes_NetAmount,0.00))+isnull(netsttsum,0.00)
+   --else ContractNotes_NetAmount end) 
+   @netammountchk as DPClientID,ContractNotes_NetAmount as Sttax_DeliveryBuyStt,--isnull(calculatednet,0.00)-ISNULL(calculatedsttsum,0.00) as ContractNotes_NetAmount, --(case when calculatedsttsum is null then netsttsum else calculatedsttsum end)
+calculatednet,(case when calculatedsttsum is null then netsttsum else calculatedsttsum end) as sttaxsummary_NetSTT,
+calculatedsttsum,netsttsum,--isnull(sttaxsummary_NetSTT,0.00) as sttaxsummary_NetSTT,
+ ltrim(rtrim(isnull(ExchangeTrades_SecurityType,'')))+' '+ltrim(rtrim(isnull(ExchangeTrades_SecuritySymbol,'')))+' '+
+ ltrim(rtrim(CONVERT(varchar(12),ExchangeTrades_SecurityExpiry,106)))+' '+
+ case when ExchangeTrades_SecuritySeries='FF' then ' ' else LTRIM(RTRIM(isnull(ExchangeTrades_SecuritySeries,''))) end+' '+
+ case when ExchangeTrades_SecuritySeries='FF' then '' else dbo.format_number(cast(isnull(ExchangeTrades_StrikePrice,0.00) as varchar)) end
+ as ExchangeTrades_FinYear,ExchangeTrades_CompanyID,ExchangeTrades_Segment,
+	   ExchangeTrades_SettlementNumber,ExchangeTrades_SettlementType,ExchangeTrades_BranchID,
+		convert(datetime,ExchangeTrades_TradeDate,106) as ExchangeTrades_TradeDate,ExchangeTrades_TradeNumber,
+		ExchangeTrades_TradeEntryTime,@Employeename as ExchangeTrades_TradeModifyTime,
+		securitycode as ExchangeTrades_SecurityCode,ExchangeTrades_OrderNumber,ExchangeTrades_OrderEntryTime,
+		ExchangeTrades_CustomerID,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecuritySeries,Convert(varchar(11),ExchangeTrades_SecurityExpiry,106) as ExchangeTrades_SecurityExpiry,dbo.format_number(cast(isnull(ExchangeTrades_StrikePrice,0.00) as varchar))as ExchangeTrades_StrikePrice,
+		ExchangeTrades_SecurityType,ExchangeTrades_BuySellFlag,ExchangeTrades_CustTransactionID,
+CustomerTrades_CompanyID,CustomerTrades_ExchangeSegment,CustomerTrades_UnitPrice,CustomerTrades_ID,
+		CustomerTrades_MarketValue,CustomerTrades_TotalBrokerage,CustomerTrades_TradeDate,CustomerTrades_NetRatePerUnit,
+		CustomerTrades_ServiceTaxOnBrkg,CustomerTrades_EduCessOnBrkg,CustomerTrades_HgrEduCessOnBrkg,
+		CustomerTrades_ServiceTaxMode,CustomerTrades_StampDutyMode,CustomerTrades_ContractNoteNumber,CustomerTrades_BranchID,
+		CustomerTrades_TranChargeMode,CustomerTrades_AverageType,CustomerTrades_BrokerageType,CustomerTrades_NetValue,
+		CustomerTrades_ProductSeriesID,CustomerTrades_ProductSeries,isnull(TotalTAX,0.00) as TotalTAX,
+		CustomerTrades_UnitPriceQuantity,CustomerTrades_CustomerID,CustomerTrades_SettlementNumber,CustomerTrades_SettlementType,
+       isnull(sttaxsummary_TotalSTT,0.00) as sttaxsummary_TotalSTT,
+		isnull(sttaxsummary_RoundOffAmount,0.00) as sttaxsummary_RoundOffAmount,
+		--isnull(sttaxsummary_NetSTT,0.00) as sttaxsummary_NetSTT,
+       isnull(Sttax_ProductSeriesID,'') as Sttax_ProductSeriesID,
+		isnull(Sttax_TotalStt,0.00) as Sttax_TotalStt,
+		--isnull(Sttax_DeliveryBuyStt,0.00) as Sttax_DeliveryBuyStt,
+		isnull(Sttax_DeliverySaleStt,0.00) as Sttax_DeliverySaleStt,
+		isnull(Sttax_DifferenceStt,0.00) as Sttax_DifferenceStt,
+       isnull(branch_Description,'') as branch_Description,isnull(branch_address1,'') as branch_address1,isnull(branch_address2,'') as branch_address2,
+	   isnull(branch_address3,'') as branch_address3,branch_Country,branch_State,
+		branch_City,branch_Pin,branch_cpEmail,
+		isnull(branch_Fax,0) as branch_Fax,branch_cpPhone,branch_code,
+		branch_phone,(case when crg_tcode='' then cnt_UCC else Crg_Tcode end) as cnt_UCC,firstname,isnull(middlename,'') as middlename,
+		isnull(lastname,'') as lastname,cnt_branchid,cnt_ContractDeliveryMode,isnull(eml_email,'') as eml_email,eml_status,
+		isnull(add_address1,'') as add_address1,
+		isnull(add_address2,'') as add_address2,isnull(add_address3,'') as add_address3,add_country,
+		add_State,add_city,isnull(add_area,0) as add_area,add_pin,isnull(add_activityId,0) as add_activityId,cmp_name,@Reporttype as NatureOfBusiness,Directors,authorizedSignatories,
+		registrationNo,CompanyPanNo, ServiceTaxNo,
+			isnull(sebiRegnNo,'') as sebiRegnNo,
+			cmp_salesTaxNo,
+			CompanyPhone as Company_Phone, CompanyPhone, 
+			CompanyFax as Company_Fax,CompanyFax,
+			 CompanyPan,
+			CompanyServiceNo,
+			CompanyName,
+			 CompanyAddress1,
+			CompanyAddress2,
+			CompanyAddress3,  
+			CompanyPin as Company_Pin,CompanyPin,
+			CompanyCity,
+			customerCity,
+			 BranchCity,
+			CustomerPanCard,
+			CompanyEmail,
+			CompanyTMCode,
+			CompanySebiNo,
+			TOTALSTT,
+			SttaxSummary_RoundOffAmount1 as RoundOffAmount,
+TotalServiceTax,
+ isnull(ServTaxRate,0.00) as ServTaxRate,
+isnull(ServTaxEducess,0.00) as ServTaxEducess,
+FundpayoutDate,BrokerageFlag,AuthorizeName,
+            isnull(BuyUnitPriceQuantity,0) as BuyUnitPriceQuantity,isnull(SellUnitPriceQuantity,0) as SellUnitPriceQuantity,isnull(BuyMarketValue,0.00) as BuyMarketValue,isnull(SellMarketValue,0.00) as SellMarketValue,isnull(DeliverybuyValue,0.00) as DeliverybuyValue,isnull(DeliverysellValue,0.00)as DeliverysellValue,isnull(BuyNetValue,0.00) as BuyNetValue,isnull(SellNetValue,0.00) as SellNetValue,
+(isnull(SellNetValue,0.00)-isnull(BuyNetValue,0.00)) as CalculatedNetValue,
+branchDescription,
+ContractNotes_BranchID,ContractNotes_SegmentID,ContractNotes_TradeDate,
+		ContractNotes_SettlementNumber,ContractNotes_SettlementType,ContractNotes_Number,
+		ContractNotes_CustomerID,ContractNotes_TotalBrokerage,ContractNotes_TotalTO,
+		ContractNotes_ServiceTaxOnBrkg,ContractNotes_EduCessOnBrkg,ContractNotes_TransactionCharges,
+		ContractNotes_HgrEduCessOnBrkg,
+		isnull(ContractNotes_StampDuty,0.00) as ContractNotes_StampDuty,
+		ContractNotes_NetAmount,
+		ContractNotes_TranChargeMode,
+		ContractNotes_ServiceTaxMode,
+		ContractNotes_ServiceTaxOnTranCharge,ContractNotes_EduCessOnTranCharge,
+		ContractNotes_HgrEduCessOnTranCharge,
+        ContractNotes_TotalServiceTax,ContractNotes_TotalEduCess,ContractNotes_TotalHgrEduCess,
+		Data,SebiFees,
+		(select top 1 isnull(Cnt_FirstName,'')+' '+isnull(Cnt_MiddleName,'')+' '+isnull(Cnt_LastName,'')from tbl_master_Contact where cnt_internalid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As CompilanceofficerName,
+		(select top 1 isnull(phf_countrycode,'')+' '+isnull(phf_areacode,'')+' '+isnull(phf_phonenumber,'') from tbl_master_PhoneFax where  Phf_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As CompilanceofficerPhone,
+		(select top 1 isnull(eml_email,'') from tbl_master_Email where eml_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As CompilanceofficerEmail,
+		(select top 1 isnull(eml_website,'') from tbl_master_Email where eml_cntid=@CompanyID and rtrim(ltrim(eml_entity))='Company' and rtrim(ltrim(eml_type))='Web Site') as companywebsite,
+		(select top 1 isnull(add_address1,'') from tbl_master_address where add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As complianceadd1,
+		(select top 1 isnull(add_address2,'') from tbl_master_address where add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As complianceadd2,
+		(select top 1 isnull(add_address3,'') from tbl_master_address where add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As complianceadd3,
+		(select top 1 isnull(add_pin,'') from tbl_master_address where add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As compliancepin,
+		(Select top 1 exch_cmbpid from tbl_Master_CompanyeXchange where exch_internalID=@DpId and exch_compid=@CompanyID) as cmbpid,
+		(select top 1 isnull(city_name,'') from tbl_master_city,tbl_master_address where city_id=add_city and add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As compliancecity
+
+
+     FROM #TempFinal Order By cnt_ContractDeliveryMode,isnull (eml_email,'zzzz'),CustomerTrades_ContractNoteNumber,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecurityType,CustomerTrades_BrokerageType
+    End
+Else
+	Begin
+           Create Table #cmcontractnotefinal
+(Autoid int identity,Customer_partitionid int,Product_partitionid int,Sttax_DeliveryBuyStt varchar(max),calculatednet varchar(max),sttaxsummary_NetSTT varchar(max),calculatedsttsum varchar(max),netsttsum varchar(max),
+ExchangeTrades_FinYear varchar(max),ExchangeTrades_CompanyID varchar(max),ExchangeTrades_Segment varchar(max),
+ExchangeTrades_SettlementNumber varchar(max),ExchangeTrades_SettlementType varchar(max),ExchangeTrades_BranchID varchar(max),
+ExchangeTrades_TradeDate varchar(max),ExchangeTrades_TradeNumber varchar(max),ExchangeTrades_TradeEntryTime varchar(max),
+ExchangeTrades_TradeModifyTime varchar(max),ExchangeTrades_OrderNumber varchar(max),ExchangeTrades_OrderEntryTime varchar(max),
+ExchangeTrades_CustomerID varchar(max),ExchangeTrades_SecuritySymbol varchar(max),ExchangeTrades_SecuritySeries varchar(max),ExchangeTrades_SecurityExpiry varchar(max),ExchangeTrades_StrikePrice varchar(max),
+ExchangeTrades_SecurityType varchar(max),ExchangeTrades_BuySellFlag varchar(max),ExchangeTrades_CustTransactionID varchar(max),
+CustomerTrades_CompanyID varchar(max),CustomerTrades_ExchangeSegment varchar(max),CustomerTrades_UnitPrice varchar(max),CustomerTrades_ID varchar(max),
+CustomerTrades_MarketValue varchar(max),CustomerTrades_TotalBrokerage varchar(max),CustomerTrades_TradeDate varchar(max),CustomerTrades_NetRatePerUnit varchar(max),
+CustomerTrades_ServiceTaxOnBrkg varchar(max),CustomerTrades_EduCessOnBrkg varchar(max),CustomerTrades_HgrEduCessOnBrkg varchar(max),
+CustomerTrades_ServiceTaxMode varchar(max),CustomerTrades_StampDutyMode varchar(max),CustomerTrades_ContractNoteNumber varchar(max),CustomerTrades_BranchID varchar(max),
+CustomerTrades_TranChargeMode varchar(max),CustomerTrades_AverageType varchar(max),CustomerTrades_BrokerageType varchar(max),CustomerTrades_NetValue varchar(max),
+CustomerTrades_ProductSeriesID varchar(max),CustomerTrades_ProductSeries varchar(max),TotalTAX varchar(max),
+CustomerTrades_UnitPriceQuantity varchar(max),CustomerTrades_CustomerID varchar(max),CustomerTrades_SettlementNumber varchar(max),CustomerTrades_SettlementType varchar(max),
+sttaxsummary_TotalSTT varchar(max),sttaxsummary_RoundOffAmount varchar(max),Sttax_ProductSeriesID varchar(max),Sttax_TotalStt varchar(max),	
+Sttax_DeliverySaleStt varchar(max),Sttax_DifferenceStt varchar(max),branch_Description varchar(max),branch_address1 varchar(max),branch_address2 varchar(max),branch_address3 varchar(max),branch_Country varchar(max),branch_State varchar(max),
+branch_City varchar(max),branch_Pin varchar(max),branch_cpEmail varchar(max),branch_Fax varchar(max),branch_cpPhone varchar(max),branch_code varchar(max),branch_phone varchar(max),cnt_UCC varchar(max),firstname varchar(max),middlename varchar(max),
+lastname varchar(max),cnt_branchid varchar(max),cnt_ContractDeliveryMode varchar(max),eml_email varchar(max),eml_status varchar(max),add_address1 varchar(max),
+add_address2 varchar(max),add_address3 varchar(max),add_country varchar(max),add_State varchar(max),add_city varchar(max),add_area varchar(max),add_pin varchar(max),add_activityId varchar(max),cmp_name varchar(max),NatureOfBusiness varchar(max),Directors varchar(max),authorizedSignatories varchar(max),
+registrationNo varchar(max),CompanyPanNo varchar(max), ServiceTaxNo varchar(max),sebiRegnNo varchar(max),cmp_salesTaxNo varchar(max),Company_Phone varchar(max), CompanyPhone varchar(max), 
+Company_Fax varchar(max),CompanyFax varchar(max),CompanyPan varchar(max),CompanyServiceNo varchar(max),CompanyName varchar(max),CompanyAddress1 varchar(max),CompanyAddress2 varchar(max),CompanyAddress3 varchar(max),  
+Company_Pin varchar(max),CompanyPin varchar(max),CompanyCity varchar(max),customerCity varchar(max),BranchCity varchar(max),CustomerPanCard varchar(max),CompanyEmail varchar(max),CompanyTMCode varchar(max),
+CompanySebiNo varchar(max),TOTALSTT varchar(max),RoundOffAmount varchar(max),TotalServiceTax varchar(max),ServTaxRate varchar(max),ServTaxEducess varchar(max),FundpayoutDate varchar(max),BrokerageFlag varchar(max),AuthorizeName varchar(max),
+BuyUnitPriceQuantity varchar(max),SellUnitPriceQuantity varchar(max),BuyMarketValue varchar(max),SellMarketValue varchar(max),DeliverybuyValue varchar(max),DeliverysellValue varchar(max),BuyNetValue varchar(max),SellNetValue varchar(max),
+CalculatedNetValue varchar(max),branchDescription varchar(max),ContractNotes_BranchID varchar(max),ContractNotes_SegmentID varchar(max),ContractNotes_TradeDate varchar(max),ContractNotes_SettlementNumber varchar(max),ContractNotes_SettlementType varchar(max),ContractNotes_Number varchar(max),
+ContractNotes_CustomerID varchar(max),ContractNotes_TotalBrokerage varchar(max),ContractNotes_TotalTO varchar(max),ContractNotes_ServiceTaxOnBrkg varchar(max),ContractNotes_EduCessOnBrkg varchar(max),ContractNotes_TransactionCharges varchar(max),
+ContractNotes_HgrEduCessOnBrkg varchar(max),ContractNotes_StampDuty varchar(max),ContractNotes_NetAmount varchar(max),ContractNotes_TranChargeMode varchar(max),ContractNotes_ServiceTaxMode varchar(max),ContractNotes_ServiceTaxOnTranCharge varchar(max),ContractNotes_EduCessOnTranCharge varchar(max),
+ContractNotes_HgrEduCessOnTranCharge varchar(max),ContractNotes_TotalServiceTax varchar(max),ContractNotes_TotalEduCess varchar(max),ContractNotes_TotalHgrEduCess varchar(max),Data varchar(max),SebiFees varchar(max),CompilanceofficerName varchar(max),CompilanceofficerPhone varchar(max),
+CompilanceofficerEmail varchar(max),companywebsite varchar(max),complianceadd1 varchar(max),complianceadd2 varchar(max),complianceadd3 varchar(max),compliancepin varchar(max),cmbpid varchar(max),compliancecity varchar(max))
+
+           insert into #cmcontractnotefinal
+Select 
+	--(case when calculatedsttsum is null then abs(isnull(ContractNotes_NetAmount,0.00))+isnull(netsttsum,0.00)
+   --else ContractNotes_NetAmount end) 
+   ROW_NUMBER() OVER(Partition By CustomerTrades_ContractNoteNumber ORDER By cnt_ContractDeliveryMode,isnull (eml_email,'zzzz'),CustomerTrades_ContractNoteNumber,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecurityType,CustomerTrades_BrokerageType),
+   ROW_NUMBER() OVER(Partition By CustomerTrades_ProductSeriesID,CustomerTrades_ContractNoteNumber ORDER By cnt_ContractDeliveryMode,isnull (eml_email,'zzzz'),CustomerTrades_ContractNoteNumber,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecurityType,CustomerTrades_BrokerageType),
+   ContractNotes_NetAmount as Sttax_DeliveryBuyStt,--isnull(calculatednet,0.00)-ISNULL(calculatedsttsum,0.00) as ContractNotes_NetAmount, --(case when calculatedsttsum is null then netsttsum else calculatedsttsum end)
+calculatednet,(case when calculatedsttsum is null then netsttsum else calculatedsttsum end) as sttaxsummary_NetSTT,
+calculatedsttsum,netsttsum,--isnull(sttaxsummary_NetSTT,0.00) as sttaxsummary_NetSTT,
+ ltrim(rtrim(isnull(ExchangeTrades_SecurityType,'')))+' '+ltrim(rtrim(isnull(ExchangeTrades_SecuritySymbol,'')))+' '+
+ ltrim(rtrim(CONVERT(varchar(12),ExchangeTrades_SecurityExpiry,106)))+' '+
+ case when ExchangeTrades_SecuritySeries='FF' then ' ' else LTRIM(RTRIM(ExchangeTrades_SecuritySeries)) end+' '+
+ case when ExchangeTrades_SecuritySeries='FF' then '' else dbo.format_number(cast(isnull(ExchangeTrades_StrikePrice,0.00) as varchar)) end
+ as ExchangeTrades_FinYear,ExchangeTrades_CompanyID,ExchangeTrades_Segment,
+	   ExchangeTrades_SettlementNumber,ExchangeTrades_SettlementType,ExchangeTrades_BranchID,
+		convert(datetime,ExchangeTrades_TradeDate,106) as ExchangeTrades_TradeDate,ExchangeTrades_TradeNumber,
+		ExchangeTrades_TradeEntryTime,ExchangeTrades_TradeModifyTime,
+		ExchangeTrades_OrderNumber,ExchangeTrades_OrderEntryTime,
+		ExchangeTrades_CustomerID,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecuritySeries,Convert(varchar(11),ExchangeTrades_SecurityExpiry,106) as ExchangeTrades_SecurityExpiry,dbo.format_number(cast(isnull(ExchangeTrades_StrikePrice,0.00) as varchar))as ExchangeTrades_StrikePrice,
+		ExchangeTrades_SecurityType,ExchangeTrades_BuySellFlag,ExchangeTrades_CustTransactionID,
+CustomerTrades_CompanyID,CustomerTrades_ExchangeSegment,CustomerTrades_UnitPrice,CustomerTrades_ID,
+		CustomerTrades_MarketValue,CustomerTrades_TotalBrokerage,CustomerTrades_TradeDate,CustomerTrades_NetRatePerUnit,
+		CustomerTrades_ServiceTaxOnBrkg,CustomerTrades_EduCessOnBrkg,CustomerTrades_HgrEduCessOnBrkg,
+		CustomerTrades_ServiceTaxMode,CustomerTrades_StampDutyMode,CustomerTrades_ContractNoteNumber,CustomerTrades_BranchID,
+		CustomerTrades_TranChargeMode,CustomerTrades_AverageType,CustomerTrades_BrokerageType,CustomerTrades_NetValue,
+		CustomerTrades_ProductSeriesID,CustomerTrades_ProductSeries,isnull(TotalTAX,0.00) as TotalTAX,
+		CustomerTrades_UnitPriceQuantity,CustomerTrades_CustomerID,CustomerTrades_SettlementNumber,CustomerTrades_SettlementType,
+       isnull(sttaxsummary_TotalSTT,0.00) as sttaxsummary_TotalSTT,
+		isnull(sttaxsummary_RoundOffAmount,0.00) as sttaxsummary_RoundOffAmount,
+		--isnull(sttaxsummary_NetSTT,0.00) as sttaxsummary_NetSTT,
+       isnull(Sttax_ProductSeriesID,'') as Sttax_ProductSeriesID,
+		isnull(Sttax_TotalStt,0.00) as Sttax_TotalStt,
+		--isnull(Sttax_DeliveryBuyStt,0.00) as Sttax_DeliveryBuyStt,
+		isnull(Sttax_DeliverySaleStt,0.00) as Sttax_DeliverySaleStt,
+		isnull(Sttax_DifferenceStt,0.00) as Sttax_DifferenceStt,
+       isnull(branch_Description,'') as branch_Description,isnull(branch_address1,'') as branch_address1,isnull(branch_address2,'') as branch_address2,
+	   isnull(branch_address3,'') as branch_address3,branch_Country,branch_State,
+		branch_City,branch_Pin,branch_cpEmail,
+		isnull(branch_Fax,0) as branch_Fax,branch_cpPhone,branch_code,
+		branch_phone,(case when crg_tcode='' then cnt_UCC else Crg_Tcode end) as cnt_UCC,firstname,isnull(middlename,'') as middlename,
+		isnull(lastname,'') as lastname,cnt_branchid,cnt_ContractDeliveryMode,isnull(eml_email,'') as eml_email,eml_status,
+		isnull(add_address1,'') as add_address1,
+		isnull(add_address2,'') as add_address2,isnull(add_address3,'') as add_address3,add_country,
+		add_State,add_city,isnull(add_area,0) as add_area,add_pin,isnull(add_activityId,0) as add_activityId,cmp_name,@Reporttype as NatureOfBusiness,Directors,authorizedSignatories,
+		registrationNo,CompanyPanNo, ServiceTaxNo,
+			isnull(sebiRegnNo,'') as sebiRegnNo,
+			cmp_salesTaxNo,
+			CompanyPhone as Company_Phone, CompanyPhone, 
+			CompanyFax as Company_Fax,CompanyFax,
+			 CompanyPan,
+			CompanyServiceNo,
+			CompanyName,
+			 CompanyAddress1,
+			CompanyAddress2,
+			CompanyAddress3,  
+			CompanyPin as Company_Pin,CompanyPin,
+			CompanyCity,
+			customerCity,
+			 BranchCity,
+			CustomerPanCard,
+			CompanyEmail,
+			CompanyTMCode,
+			CompanySebiNo,
+			TOTALSTT,
+			SttaxSummary_RoundOffAmount1 as RoundOffAmount,
+TotalServiceTax,
+ isnull(ServTaxRate,0.00) as ServTaxRate,
+isnull(ServTaxEducess,0.00) as ServTaxEducess,
+FundpayoutDate,BrokerageFlag,AuthorizeName,
+            isnull(BuyUnitPriceQuantity,0) as BuyUnitPriceQuantity,isnull(SellUnitPriceQuantity,0) as SellUnitPriceQuantity,isnull(BuyMarketValue,0.00) as BuyMarketValue,isnull(SellMarketValue,0.00) as SellMarketValue,isnull(DeliverybuyValue,0.00) as DeliverybuyValue,isnull(DeliverysellValue,0.00)as DeliverysellValue,isnull(BuyNetValue,0.00) as BuyNetValue,isnull(SellNetValue,0.00) as SellNetValue,
+(isnull(SellNetValue,0.00)-isnull(BuyNetValue,0.00)) as CalculatedNetValue,
+branchDescription,
+ContractNotes_BranchID,ContractNotes_SegmentID,ContractNotes_TradeDate,
+		ContractNotes_SettlementNumber,ContractNotes_SettlementType,ContractNotes_Number,
+		ContractNotes_CustomerID,ContractNotes_TotalBrokerage,ContractNotes_TotalTO,
+		ContractNotes_ServiceTaxOnBrkg,ContractNotes_EduCessOnBrkg,ContractNotes_TransactionCharges,
+		ContractNotes_HgrEduCessOnBrkg,
+		isnull(ContractNotes_StampDuty,0.00) as ContractNotes_StampDuty,
+		ContractNotes_NetAmount,
+		ContractNotes_TranChargeMode,
+		ContractNotes_ServiceTaxMode,
+		ContractNotes_ServiceTaxOnTranCharge,ContractNotes_EduCessOnTranCharge,
+		ContractNotes_HgrEduCessOnTranCharge,
+        ContractNotes_TotalServiceTax,ContractNotes_TotalEduCess,ContractNotes_TotalHgrEduCess,
+		Data,SebiFees,
+		(select top 1 isnull(Cnt_FirstName,'')+' '+isnull(Cnt_MiddleName,'')+' '+isnull(Cnt_LastName,'')from tbl_master_Contact where cnt_internalid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As CompilanceofficerName,
+		(select top 1 isnull(phf_countrycode,'')+' '+isnull(phf_areacode,'')+' '+isnull(phf_phonenumber,'') from tbl_master_PhoneFax where  Phf_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As CompilanceofficerPhone,
+		(select top 1 isnull(eml_email,'') from tbl_master_Email where eml_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As CompilanceofficerEmail,
+		(select top 1 isnull(eml_website,'') from tbl_master_Email where eml_cntid=@CompanyID and rtrim(ltrim(eml_entity))='Company' and rtrim(ltrim(eml_type))='Web Site') as companywebsite,
+		(select top 1 isnull(add_address1,'') from tbl_master_address where add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As complianceadd1,
+		(select top 1 isnull(add_address2,'') from tbl_master_address where add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As complianceadd2,
+		(select top 1 isnull(add_address3,'') from tbl_master_address where add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As complianceadd3,
+		(select top 1 isnull(add_pin,'') from tbl_master_address where add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As compliancepin,
+		(Select top 1 exch_cmbpid from tbl_Master_CompanyeXchange where exch_internalID=@DpId and exch_compid=@CompanyID) as cmbpid,
+		(select top 1 isnull(city_name,'') from tbl_master_city,tbl_master_address where city_id=add_city and add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID=@DpId))As compliancecity
+
+
+     FROM #TempFinal Order By cnt_ContractDeliveryMode,isnull (eml_email,'zzzz'),CustomerTrades_ContractNoteNumber,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecurityType,CustomerTrades_BrokerageType
+     if exists(select * from #TempFinal)
+		Begin
+			 Declare @mainloopcounterstatic int,@mainloopcounterdynamic int,@customerloopcounterstatic int,
+			 @customerloopcounterdynamic int,@productloopcounterstatic int,@productloopcounterdynamic int,
+			 @clientid varchar(20),@productid varchar(20),
+			 @strHtmlheader varchar(max),@strhtmlbody varchar(max),@strhtmlfooter varchar(max)
+			 ----static data selection and variable declaretion from table for like header and footer
+			 Declare @companyname varchar(500),@membername varchar(500),@companyaddress varchar(max),@companycitypin varchar(500),
+			 @companyphonefax varchar(500),@companywebsite varchar(150),@companytmcodesebicmbp varchar(800),@companypanstax varchar(500),
+			 @complianceoffname varchar(500),@complianceaddress varchar(max),@compliancecitypin varchar(500),@complianceemailphone varchar(500),
+			 @brokermailid varchar(500),@exchangemailid varchar(500),@authorisename1 varchar(max),@authorisename2 varchar(max),@authorisename3 varchar(max),
+			 @authorisename4 varchar(max),@authorisename5 varchar(max),@branchaddress1 varchar(800),
+			 @branchaddress23 varchar(max),@branchcitypin varchar(500),@branchphone varchar(500),@branchfax varchar(250),@branchemail varchar(250),
+			 @branchcode varchar(250),@clientnamewithucc varchar(500),@clientaddress varchar(max),@clientcitypin varchar(500),@clientpan varchar(50),
+			 @clientemail varchar(500),@contractnoteno varchar(40),@tradedatehtml varchar(50),@settnohtml varchar(50),@payoutdate varchar(40),@productwisestt varchar(50),
+			 @netword varchar(500),@totalbrkg varchar(30),@totalsrvtax varchar(30),@totalstt varchar(30),@totaltranchrg varchar(30),@totalsebifee varchar(30),
+			 @totalstamduty varchar(30),@netammount varchar(30),@databrokerage varchar(50),@Srvtaxontrancharge varchar(50)
+			 create table #distinctproduct(autoidproduct int identity,productid varchar(20))
+			 create table #authorisedname(aid int identity,name varchar(500))
+			 insert into #authorisedname
+			 select col from dbo.fnSplitReturnTable(replace(@AuthorizeName,'</br>',','),',')
+			 create table #distinctclient(autoid int identity,clientid varchar(20))
+			 insert into #distinctclient
+			 select distinct CustomerTrades_CustomerID from #cmcontractnotefinal
+			 --select * from #cmcontractnotefinal
+			 --select * from #distinctclient
+			 ----static data selection and variable declaretion from table for like header and footer
+			 --select * from #distinctclient
+			 ----------Main Body prepare for contractnote in html-------------
+			 create table #finalselection(htmlfield varchar(max),clientid varchar(20),contractnoteno varchar(20),
+			 clientnamewithucc varchar(500),tradedate varchar(20),dp varchar(20))
+		     
+			 Select @mainloopcounterstatic=MAX(autoid) from #distinctclient
+			 select @mainloopcounterdynamic=1
+			set @strhtmlbody=''
+			set @strhtmlfooter=''
+			set @strHtmlheader=''
+		    
+			declare @html1 varchar(max)
+			set @html1=''
+				While(@mainloopcounterdynamic<=@mainloopcounterstatic)
+					Begin---Main loop begin
+						--set @strhtmlbody=''
+						--set @strhtmlfooter=''
+						Select @clientid=clientid from #distinctclient where autoid=@mainloopcounterdynamic
+						--select @clientid
+						------variable data select for html header start-----------------
+						select @netword=(select top 1 case when cast(ContractNotes_NetAmount AS numeric(28,2)) <0 then 'Receivable from you' else 'Payable to you'  end from #cmcontractnotefinal where CustomerTrades_CustomerID=@clientid)
+						select @totalbrkg=(select top 1 dbo.format_number(cast(isnull(cast(ContractNotes_TotalBrokerage as numeric(28,2)),0.00) as varchar)) from #cmcontractnotefinal where CustomerTrades_CustomerID=@clientid)
+						select @totaltranchrg=(select top 1 dbo.format_number(cast(isnull(cast(ContractNotes_TransactionCharges as numeric(28,2)),0.00) as varchar)) from #cmcontractnotefinal where CustomerTrades_CustomerID=@clientid)
+						select @totalstt=(select top 1 dbo.format_number(cast(isnull(cast(sttaxsummary_NetSTT as numeric(28,2)),0.00) as varchar)) from #cmcontractnotefinal where CustomerTrades_CustomerID=@clientid)
+						select @totalsebifee=(select top 1 dbo.format_number(cast(isnull(cast(SebiFees as numeric(28,2)),0.00) as varchar)) from #cmcontractnotefinal where CustomerTrades_CustomerID=@clientid)
+						select @totalstamduty=(select top 1 dbo.format_number(cast(isnull(cast(ContractNotes_StampDuty as numeric(28,2)),0.00) as varchar)) from #cmcontractnotefinal where CustomerTrades_CustomerID=@clientid)
+						select @netammount=(select top 1 dbo.format_number(cast(isnull(cast(Sttax_DeliveryBuyStt as numeric(28,2)),0.00) as varchar)) from #cmcontractnotefinal where CustomerTrades_CustomerID=@clientid)
+						select @databrokerage=(select top 1 case when ContractNotes_ServiceTaxMode='E' then 'Exclusive of Brokerage' else 'Inclusive of Brokerage' end from #cmcontractnotefinal where CustomerTrades_CustomerID=@clientid)
+						select @totalsrvtax=(select top 1 case when ContractNotes_ServiceTaxMode='E' then dbo.format_number(cast(isnull(cast(ContractNotes_ServiceTaxOnBrkg as numeric(28,2)),0.00)+isnull(cast(ContractNotes_EduCessOnBrkg as numeric(28,2)),0.00)+isnull(cast(ContractNotes_HgrEducessOnBrkg as numeric(28,2)),0.00) as varchar)) end from #cmcontractnotefinal where CustomerTrades_CustomerID=@clientid)
+						select @Srvtaxontrancharge=(select top 1 case when ContractNotes_TranChargeMode='E' then dbo.format_number(cast(isnull(cast(ContractNotes_ServiceTaxOnTranCharge as numeric(28,2)),0.00)+isnull(cast(ContractNotes_EduCessOnTranCharge as numeric(28,2)),0.00)+isnull(cast(ContractNotes_HgrEduCessOnTranCharge as numeric(28,2)),0.00) as varchar)) end from #cmcontractnotefinal where CustomerTrades_CustomerID=@clientid)
+						Select @companyname=(select top 1 isnull(CompanyName,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @membername=case when @dp='NSE - CM' then 'MEMBER : NATIONAL STOCK EXCHANGE OF INDIA LTD.' 
+												when @dp='BSE - CM' then 'MEMBER : Bombay Stock Exchange Limited.' 
+												when @dp='MCXSX - CM' then 'MEMBER : MCX Stock Exchange Limited.' else '' end
+						Select @companyaddress=(select top 1 isnull(isnull(CompanyAddress1,'')+isnull(CompanyAddress2,'')+isnull(CompanyAddress3,''),'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @companycitypin=(select top 1 isnull(CompanyCity,'')+' - '+isnull(CompanyPin,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @companyphonefax=(select top 1 'Phone : '+ isnull(Company_Phone,'')+' Fax : '+isnull(Company_Fax,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @companywebsite=(select top 1 'Website :'+isnull(companywebsite,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @companytmcodesebicmbp=(select top 1 'TM Code : '+isnull(CompanyTMCode,'')+' SEBI REGN No. :'+isnull(CompanySebiNo,'')+' CMBP ID '+isnull(cmbpid,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @companypanstax=(select top 1 'PAN :'+isnull(CompanyPan,'')+' Srv.Tax No. :'+isnull(CompanyServiceNo,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @complianceoffname=(select top 1 'Compliance Officer : '+ isnull(CompilanceofficerName,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @complianceaddress=(select top 1 isnull(complianceadd1,'')+' '+isnull(complianceadd2,'')+' '+isnull(complianceadd3,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @compliancecitypin=(select top 1 isnull(compliancecity,'')+' - '+isnull(compliancepin,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @complianceemailphone=(select top 1 'Email :'+ isnull(CompilanceofficerEmail,'')+' Phone : '+isnull(CompilanceofficerPhone,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @brokermailid=(select top 1 'Grievance EmailID[Member]: - '+isnull(exch_GrievanceID,'') from tbl_master_companyexchange where exch_internalID=@DpId  and exch_compid=@CompanyID)
+						Select @exchangemailid=(select top 1 'Grievance EmailID[Exchange]: - '+isnull(exch_InvestorGrievanceID,'') from tbl_master_companyexchange where exch_internalID=@DpId  and exch_compid=@CompanyID)
+						Select @authorisename1=(select ISNULL(name,'') from #authorisedname where aid=1)
+						Select @authorisename2=(select ISNULL(name,'') from #authorisedname where aid=2)
+						Select @authorisename3=(select ISNULL(name,'') from #authorisedname where aid=3)
+						Select @authorisename4=(select ISNULL(name,'') from #authorisedname where aid=4)
+						Select @authorisename5=(select ISNULL(name,'') from #authorisedname where aid=5)
+						Select @branchaddress1=(select top 1 isnull(branch_address1,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @branchaddress23=(select top 1 isnull(branch_address2,'')+' '+isnull(branch_address3,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @branchcitypin=(select top 1 isnull(BranchCity,'')+' - '+ isnull(branch_Pin,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @branchphone=(select top 1 'Phone : '+isnull(branch_phone,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @branchfax=(select top 1 'Fax : '+isnull(branch_Fax,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @branchemail=(select top 1 'Email : '+isnull(branch_cpEmail,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @branchcode=(select top 1 'Branch : '+isnull(branch_code,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @clientnamewithucc=(select top 1 isnull(firstname,'')+' '+ isnull(middlename,'')+' '+ isnull(lastname,'')+' [ '+ isnull(cnt_UCC,'')+' ]' from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @clientaddress=(select top 1 isnull(add_address1,'')+' '+ isnull(add_address2,'')+' '+ isnull(add_address3,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @clientcitypin=(select top 1 isnull(customerCity,'')+' - '+isnull(add_pin,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @clientpan=(select top 1 'Pan :'+isnull(CustomerPanCard,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @clientemail=(select top 1 'Email :'+isnull(eml_email,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @contractnoteno=(select top 1 'CONTRACT NOTE NO. :'+isnull(CustomerTrades_ContractNoteNumber,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @tradedatehtml=(select top 1 'TRADE DATE : '+Convert(varchar(11),convert(datetime,CustomerTrades_TradeDate),106) from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @settnohtml=(select top 1 'SETTLEMENT NO.:'+isnull(CustomerTrades_SettlementNumber,'')+' '+isnull(CustomerTrades_SettlementType,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						Select @payoutdate=(select top 1 'SETTLEMENT DATE :'+isnull(FundpayoutDate,'') from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid)
+						
+						Select @strHtmlheader=@strHtmlheader+'<div style="width: 100%; overflow:scroll; background-color:#eee;">
+						<table  width="100%" align="left" border="2" cellpadding="4" cellspacing="0" 
+												 bordercolor="#FFCC00" style=" padding: 2px 1px; font-size: 10px; font-family: Tahoma,Arial,Verdana,sans-serif;" >
+												 
+												 <tr><td width="200px" bgcolor="#FFE682" align="left"><b><U>Name of the Authorized Signatories</U></b><br/>'+isnull(@authorisename1,'') +'<br/>'+isnull(@authorisename2,'')+'<br/>'+isnull(@authorisename3,'')+'<br/>'+isnull(@authorisename4,'')+'<br/>'+isnull(@authorisename5,'')+'</td>
+													<td  width="600px" bgcolor="#FFE682" align="center" ><strong><font size="2">CONTRACT NOTE<br/>(Capital Market Segment of NSE)<br/>(Pursuant to Regulation 3.5)<br/>
+													<U>'+isnull(@companyname,'') +'</U><br/>'+@membername+'
+												 </font></strong><br/>'+isnull(@companyaddress,'')+'<br/>'+isnull(@companycitypin,'')+
+												 '<br/>'+isnull(@companyphonefax,'')+
+												 '<br/>'+isnull(@companywebsite,'')+ '<br/>'+isnull(@companytmcodesebicmbp,'')+'<br/>'+isnull(@companypanstax,'')
+												 +'<br/>'+isnull(@complianceoffname,'')+'<br/>'+isnull(@complianceaddress,'')+'<br/>'+isnull(@compliancecitypin,'')+
+												 '<br/>'+isnull(@complianceemailphone,'')+'<br/>'+isnull(@brokermailid,'')+'<br/>'+isnull(@exchangemailid,'')+'</td>
+												 <td width="200px" bgcolor="#FFE682" align="right"><U>Dealing Office Address of the Member</U><br/>'+isnull(@branchaddress1,'') +'
+												 <br/>'+isnull(@branchaddress23,'')+'<br/>'+isnull(@branchcitypin,'')+'<br/>'+isnull(@branchphone,'')+'
+												 <br/>'+isnull(@branchfax,'')+'<br/>'+isnull(@branchemail,'')+'<br/>'+isnull(@branchcode,'')+'</td>
+												 </tr></table>
+												 <table cellpadding="4" cellspacing="0" 
+												 style=" padding: 2px 1px; font-size: 10px; font-family: Tahoma,Arial,Verdana,sans-serif;">
+												 <tr>
+												 <td width="700px">
+												 To <br/>'+isnull(@clientnamewithucc,'')+'<br/>'+isnull(@clientaddress,'')+
+												 '<br/>'+isnull(@clientcitypin,'')+'<br/>'+isnull(@clientpan,'')+'<br/>'+isnull(@clientemail,'')+
+												 '<br/> Dear Sir/Madam <br/>
+												 I / We have this day done by your order and on your account the following transactions :</td>
+												 <td width="300px">
+												  <br/>'+isnull(@contractnoteno,'')+'<br/>'+isnull(@tradedatehtml,'')+
+												 '<br/>'+isnull(@settnohtml,'')+'<br/>'+isnull(@payoutdate,'')+'
+												 <br/><br/>To be Stamped as per the Provisions Applicable
+												 <br/>Under the Relevant Stamp Act
+												 </td>
+												 </tr>
+												 </table>
+												 <table width="100%" cellpadding="4" border="1" cellspacing="0"  style=" padding: 2px; font-size: 10px;">										 
+												 <tr>
+												 <td ><b>ORDER NO.</b></td>
+												 <td><b>ORD TIME</b></td>
+												 <td><b>TRADE NO.</b></td>
+												 <td><b>TRD TIME</b></td>
+												  <td ><b>SECURITY</b></td>
+												 <td><b>PUR QTY</b></td>
+												 <td><b>SALE QTY</b></td>
+												 <td><b>RATE</b></td>
+												  <td ><b>TOTAL</b></td>
+												 <td><b>BROKERAGE</b></td>
+												 <td><b>SER TAX</b></td>
+												 <td><b>STT</b></td>
+												 <td><b>NET TOTAL</b></td>
+												 </tr>
+												 '
+												 
+						truncate table #distinctproduct
+						insert into #distinctproduct
+						select distinct CustomerTrades_ProductSeriesID from #cmcontractnotefinal where CustomerTrades_CustomerID=@clientid
+						--select * from #distinctproduct
+						--select * from #distinctproduct
+						------variable data select for html header end-----------------
+						--Select @customerloopcounterstatic=MAX(Customer_partitionid) from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid
+						--select @customerloopcounterdynamic=1
+							--While(@customerloopcounterdynamic<=@customerloopcounterstatic)
+							--	Begin---Client loop begin
+									--Select @productid=CustomerTrades_ProductSeriesID from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid --and Customer_partitionid=@customerloopcounterdynamic
+									--select @productid as ast
+									Select @productloopcounterstatic=MAX(autoidproduct) from #distinctproduct --where ExchangeTrades_CustomerID=@clientid --and CustomerTrades_ProductSeriesID=@productid
+									Declare @scripwisesum varchar(50)
+									select @productloopcounterdynamic=1
+										While(@productloopcounterdynamic<=@productloopcounterstatic)
+											Begin---Product loop begin
+											--select @productid as bnd
+											
+											Select @productid=productid from #distinctproduct where autoidproduct=@productloopcounterdynamic --and Customer_partitionid=@customerloopcounterdynamic
+											select @productwisestt=(select distinct dbo.format_number(cast(isnull(cast(isnull(Sttax_TotalStt,'&nbsp;') as numeric(28,2)),0.00) as varchar)) from #cmcontractnotefinal where ExchangeTrades_CustomerID=@clientid and CustomerTrades_ProductSeriesID=@productid)
+											Select @scripwisesum=(select distinct SUM(isnull(cast(isnull(CustomerTrades_UnitPriceQuantity,'&nbsp;') as numeric(28,0)),0.00)) from #cmcontractnotefinal where CustomerTrades_ProductSeriesID=@productid and CustomerTrades_BrokerageType='D' and ExchangeTrades_CustomerID=@clientid)
+											
+												 select @strhtmlbody=@strhtmlbody+'<tr >
+												  
+												 <td style="text-align:right ">'+isnull(ExchangeTrades_OrderNumber,'&nbsp;') +'</td>		     		     
+												 <td style="text-align:right ">'+CONVERT(VARCHAR(8),convert(datetime,ExchangeTrades_OrderEntryTime),108)+'</td> 
+												 <td style="text-align:right ">'+isnull(ExchangeTrades_TradeNumber,'&nbsp;')+'</td> 
+												 <td style="text-align:right ">'+CONVERT(VARCHAR(8),convert(datetime,ExchangeTrades_TradeEntryTime),108)+'</td>
+												 <td style="text-align:right ">'+isnull(ExchangeTrades_SecuritySymbol,'&nbsp;')+' '+isnull(ExchangeTrades_SecurityType,'&nbsp;')+'</td>
+												 <td style="text-align:right ">'+case when ExchangeTrades_BuySellFlag='1' then cast(isnull(cast(abs(CustomerTrades_UnitPriceQuantity) AS numeric(28,0)),'&nbsp;')as varchar) else '&nbsp;' end+'</td>
+												 <td style="text-align:right ">'+case when ExchangeTrades_BuySellFlag='2' then cast(isnull(cast(CustomerTrades_UnitPriceQuantity AS numeric(28,0)),'&nbsp;')as varchar)  else '&nbsp;' end+'</td>
+												 
+												 <td style="text-align:right ">'+cast(cast(isnull(CustomerTrades_UnitPrice,'&nbsp;')as numeric(28,4))as varchar)  +'</td>
+												 
+												 <td style="text-align:right ">'+dbo.format_number(cast(isnull(cast(abs(isnull(CustomerTrades_MarketValue,'&nbsp;')) as numeric(28,2)),0.00) as varchar))+'</td> 
+												 <td style="text-align:right ">'+dbo.format_number(cast(isnull(cast(isnull(CustomerTrades_TotalBrokerage,'&nbsp;') as numeric(28,2)),0.00) as varchar))+'</td> 
+												 <td style="text-align:right ">'+dbo.format_number(cast(isnull(cast(isnull(TotalTAX,'&nbsp;') as numeric(28,2)),0.00) as varchar))+'</td>
+												 <td style="text-align:right ">&nbsp;</td>
+												 <td style="text-align:right ">'+case when ContractNotes_ServiceTaxMode='E'
+												 then (case when Exchangetrades_BuySellFlag='1' then dbo.format_number(cast(isnull(isnull(cast(CustomerTrades_MarketValue as numeric(28,2)),0.00)-
+												 (isnull(cast(CustomerTrades_TotalBrokerage as numeric(28,2)),0.00)
+												 +isnull(cast(TotalTAX as numeric(28,2)),0.00)),0.00) as varchar))else 
+												 dbo.format_number(cast(isnull(isnull(cast(CustomerTrades_MarketValue as numeric(28,2)),0.00)-
+												 isnull(cast(CustomerTrades_TotalBrokerage as numeric(28,2)),0.00)
+												 -isnull(cast(TotalTAX as numeric(28,2)),0.00),0.00) as varchar)) end)
+												 else
+												 (case when Exchangetrades_BuySellFlag='1' then dbo.format_number(cast(isnull(isnull(cast(CustomerTrades_MarketValue as numeric(28,2)),0.00)-
+												 isnull(cast(CustomerTrades_TotalBrokerage as numeric(28,2)),0.00),0.00) as varchar))
+												 --else 
+												 --isnull(cast(CustomerTrades_MarketValue as numeric(28,2)),0.00)-
+												 --isnull(cast(CustomerTrades_TotalBrokerage as numeric(28,2)),0.00)
+												 ---isnull(cast(TotalTAX as numeric(28,2)),0.00) 
+												 end)
+												 end+'</td>
+												 
+												 
+												 
+												 </tr>'  from #cmcontractnotefinal 
+												where CustomerTrades_ProductSeriesID=@productid and CustomerTrades_CustomerID=@clientid
+													select @productloopcounterdynamic=@productloopcounterdynamic+1
+													--select cast(isnull(@productwisestt,0) as numeric(28,0)),@clientid,@productid
+													--select cast(isnull(@scripwisesum,0) as numeric(28,0)),@clientid,@productid
+													if((cast(isnull(replace(@productwisestt,',',''),0) as numeric(28,0))<>0) or (cast(isnull(replace(@scripwisesum,',',''),0) as numeric(28,0))<>0))
+													--if(@productloopcounterdynamic=@productloopcounterstatic)
+														Begin
+															select @strhtmlbody=(select distinct @strhtmlbody+'<tr >
+															  
+															 <td style="text-align:right ">&nbsp;</td>		     		     
+															 <td style="text-align:right ">&nbsp;</td> 
+															 <td style="text-align:right ">&nbsp;</td> 
+															 <td style="text-align:right ">&nbsp;</td>
+															 <td style="text-align:right ">Scripwise</td>
+															 <td style="text-align:right ">'+case when cast(@scripwisesum as numeric(28,0))<0 then 
+															 isnull(cast(abs(cast(@scripwisesum as numeric(28,0))) as varchar),'&nbsp;') else '&nbsp;' end+'</td>
+															 <td style="text-align:right ">'+case when cast(@scripwisesum as numeric(28,0))>0 then 
+															 isnull(cast(abs(cast(@scripwisesum as numeric(28,0))) as varchar),'&nbsp;') else '&nbsp;' end+' </td>
+															 
+															 <td style="text-align:right ">&nbsp;</td>		     		     
+															 <td style="text-align:right ">&nbsp;</td> 
+															 <td style="text-align:right ">&nbsp;</td> 
+															 <td style="text-align:right ">&nbsp;</td>
+															 <td style="text-align:right ">'+isnull(@productwisestt,'&nbsp;')+'</td>
+															 <td style="text-align:right ">&nbsp;</td>
+															 
+															 
+															 
+															 </tr> '
+															 from #cmcontractnotefinal 
+															where CustomerTrades_ProductSeriesID=@productid
+															--and ExchangeTrades_CustomerID=@clientid
+															)
+														End
+												--select @strhtmlbody
+											End---Product loop End
+											--select @strHtmlheader+@strhtmlbody+'</table>'
+											select @strhtmlfooter=@strhtmlfooter+
+											'</table><table width="100%" cellpadding="4" border="1" cellspacing="0"  style=" padding: 2px; font-size: 10px;">
+											<tr>
+											<td style="text-align:right " width="300px">Total Brkg</td>
+													     		     
+											<td style="text-align:right " width="700px">'+isnull(@totalbrkg,'&nbsp;')+'</td> 
+											</tr>
+											<tr>
+											<td style="text-align:right " width="300px">ServiceTax & Edu. cess On Transaction Charge Rs. :</td>		     		     
+											<td style="text-align:right " width="700px">'+isnull(@Srvtaxontrancharge,'&nbsp;')+'</td> 
+											</tr>
+											<tr>
+											<td style="text-align:right " width="300px">Total Securities Transaction Tax Rs. :</td>		     		     
+											<td style="text-align:right " width="700px">'+isnull(@totalstt,'&nbsp;')+'</td> 
+											</tr>
+											<tr>
+											<td style="text-align:right " width="300px">SEBI Fee Rs. :</td>		     		     
+											<td style="text-align:right " width="700px">'+isnull(@totalsebifee,'&nbsp;')+'</td> 
+											</tr>
+											<tr>
+											<td style="text-align:right " width="300px">Total ServiceTax &nbsp;&nbsp;(&nbsp;'+isnull(@databrokerage,'&nbsp;')+'&nbsp;)</td>		     		     
+											<td style="text-align:right " width="700px">'+isnull(@totalsrvtax,'&nbsp;')+'</td> 
+											</tr>
+											<tr>
+											<td style="text-align:right " width="300px">Stamp Duty Rs. :</td>		     		     
+											<td style="text-align:right " width="700px">'+isnull(@totalstamduty,'&nbsp;')+'</td> 
+											</tr>
+											<tr>
+											<td style="text-align:right " width="300px"><b>'+isnull(@netword,'&nbsp;')+'</b></td>		     		     
+											<td style="text-align:right " width="700px"><b>'+isnull(@netammount,'&nbsp;')+'</b></td> 
+											</tr>
+											
+											</table>'
+											select @strhtmlfooter=@strhtmlfooter+
+											'<table width="100%" cellpadding="4" border="1" cellspacing="0"  style=" padding: 2px; font-size: 10px;">
+												<tr>
+													<td>
+														Brokerage has been charged as stated and has been at rates not exceeding the official scale of brokerage permitted by the Exchange and indicated separately.
+														</br>
+														This contract shall be governed and is subject to the Rules, Bye-laws and Regulations and Circulars of National Stock Exchange of India Limited and Securities and Exchange Board of India from time to time.
+														</br>
+														The Exchange provides Complaint Resolution,Arbitration and Appellate arbitration facilities at the Regional Arbitration Centres(RAC).The client may approach its nearest centre,details of which are available on 
+														</br>
+														http://www.nseindia.com/invest/content/about_arbitration.htm.
+													</td>
+												</tr>
+											</table>'
+											select @strhtmlfooter=@strhtmlfooter+
+											'<table width="100%" cellpadding="4" border="1" cellspacing="0"  style=" padding: 2px; font-size: 10px;">
+												<tr>
+													<td style="text-align:left " width="600px">
+													Dated : '+SUBSTRING(@tradedatehtml, CHARINDEX(':', @tradedatehtml) + 1, LEN(@tradedatehtml))+'
+													 	
+													</td>
+													<td style="text-align:right " width="400px">
+														Your faithfully,
+														</br>
+														For : '+isnull(@companyname,'&nbsp;')+'
+														</br>
+														Name & Signature of Authorised Signatory
+													</td>
+												</tr>
+											</table>
+									</div>'
+								--	select @customerloopcounterdynamic=@customerloopcounterdynamic+1
+								--End---Client loop End
+								if(@outputhtmltype='1')
+									Begin
+										if(@html1='')
+											set @html1=@strHtmlheader+@strhtmlbody+@strhtmlfooter
+										else
+											set @html1=@html1+'</br></br>'+@strHtmlheader+@strhtmlbody+@strhtmlfooter
+											
+										set @strhtmlbody=''
+										set @strhtmlfooter=''
+										set @strHtmlheader=''
+									end
+								else
+									begin
+										insert into #finalselection
+										select @strHtmlheader+@strhtmlbody+@strhtmlfooter,@clientid,SUBSTRING(@contractnoteno, CHARINDEX(':', @contractnoteno) + 1, LEN(@contractnoteno)),
+												@clientnamewithucc,SUBSTRING(@tradedatehtml, CHARINDEX(':', @tradedatehtml) + 1, LEN(@tradedatehtml)),@dp
+												set @strhtmlbody=''
+												set @strhtmlfooter=''
+												set @strHtmlheader=''
+									
+									end
+						Set @mainloopcounterdynamic=@mainloopcounterdynamic+1
+						
+					End---Main loop End
+						if(@outputhtmltype='1')
+							Begin
+								select @html1,@clientid,SUBSTRING(@contractnoteno, CHARINDEX(':', @contractnoteno) + 1, LEN(@contractnoteno)),
+								@clientnamewithucc,SUBSTRING(@tradedatehtml, CHARINDEX(':', @tradedatehtml) + 1, LEN(@tradedatehtml)),@dp
+							End
+						else
+							Begin
+								select * from #finalselection
+							end
+			End
+			--select * from #distinctclient
+         ----------Main Body prepare for contractnote in html------------- 
+          --select CustomerTrades_ProductSeriesID,cnt_UCC,ExchangeTrades_SecuritySymbol,CustomerTrades_ProductSeriesID,* from #cmcontractnotefinal
+          --select @strhtmlbody
+          --insert into Trans_Emails (Emails_Content)
+--select @strHtmlheader+@strhtmlbody+@strhtmlfooter--+'</div>'
+	End
+
+
+drop table #TempFinal
+       
+     
+      
+
+
+   
+
+--       Exec @Sql1
+
+
+
+           
+
+
+       
+       
+         
+
+--     END
+
+
+END
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

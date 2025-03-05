@@ -1,0 +1,149 @@
+
+
+ALTER PROCEDURE [dbo].[StampInsert]
+
+            @StampDuty_CompanyID  char(10), 
+            @StampDuty_ApplicableState bigint, 
+            @StampDuty_ExchangeSegmentID bigint, 
+            @StampDuty_ChargeGroupID char(10),
+          	@StampDuty_DateFrom datetime, 
+			@StampDuty_CalBasis varchar(20),
+			@StampDuty_RateCLDel numeric(8,6),
+			@StampDuty_MinCLDel numeric(8,6), 
+			@StampDuty_MaxCLDel numeric(8,6), 
+			@StampDuty_RateCLSqr numeric(8,6), 
+			@StampDuty_MinCLSqr numeric(8,6), 
+			@StampDuty_MaxCLSqr numeric(8,6), 
+			@StampDuty_RatePRODel numeric(8,6),
+			@StampDuty_MinPRODel numeric(8,6), 
+			@StampDuty_MaxPRODel numeric(8,6), 
+			@StampDuty_RatePROSqr numeric(8,6), 
+			@StampDuty_MinPROSqr numeric(8,6), 
+			@StampDuty_MaxPROSqr numeric(8,6), 
+			@StampDuty_CntrSlabMultiple numeric(20,6), 
+			@StampDuty_SlabAmount numeric(8,6), 
+			@StampDuty_MinCntr numeric(10,6),
+			@StampDuty_MaxCntr numeric(10,6), 
+			@StampDuty_RateCLFut numeric(8,6), 
+			@StampDuty_MinCLFut numeric(8,6), 
+			@StampDuty_MaxCLFut numeric(8,6), 
+			@StampDuty_RatePROFut numeric(8,6), 
+			@StampDuty_MinPROFut numeric(8,6), 
+			@StampDuty_MaxPROFut numeric(8,6), 
+			@StampDuty_OptBasis varchar(20),
+			@StampDuty_RateCLOpt numeric(8,6), 
+			@StampDuty_MinCLOpt numeric(8,6), 
+			@StampDuty_MaxCLOpt numeric(8,6), 
+			@StampDuty_RatePROOpt numeric(8,6), 
+			@StampDuty_MinPROOpt numeric(8,6), 
+			@StampDuty_MaxPROOpt numeric(8,6), 
+			@StampDuty_FSBasis varchar(20), 
+			@StampDuty_RateCLFS numeric(8,6), 
+			@StampDuty_MinCLFS numeric(8,6), 
+			@StampDuty_MaxCLFS numeric(8,6), 
+			@StampDuty_RatePROFS numeric(8,6), 
+			@StampDuty_MinPROFS numeric(8,6), 
+			@StampDuty_MaxPROFS numeric(8,6), 
+			@StampDuty_STApplicable char(3) , 
+			@StampDuty_ApplicableFor varchar(20), 
+			@StampDuty_GnAcCode varchar(20), 
+			@StampDuty_SbAcCode varchar(20), 
+			@StampDuty_GnAcCodeST varchar(20), 
+			@StampDuty_SbAcCodeST varchar(20), 
+			@StampDuty_CreateUser int,
+			@StampDuty_CreateDateTime datetime,
+			@StampDuty_ModifyUser int
+
+AS
+ declare @localid bigint,@oldData varchar(20)
+Begin
+
+   
+	select @oldData=StampDuty_CompanyID from Config_StampDuty 
+	where StampDuty_CompanyID=@StampDuty_CompanyID 
+			and StampDuty_ExchangeSegmentID=@StampDuty_ExchangeSegmentID
+			and  StampDuty_ChargeGroupID= @StampDuty_ChargeGroupID
+			and StampDuty_ApplicableState=@StampDuty_ApplicableState
+	
+	  if(@oldData is not null)
+		BEGIN
+				declare @PrevDate datetime,@NextDate datetime,@prevRowID int,@nextRowID int
+				set @prevRowID=null
+				set @nextRowID=null
+				
+					select top 1 @PrevDate=StampDuty_DateFrom,@prevRowID=StampDuty_ID from Config_StampDuty 
+					where StampDuty_CompanyID=@StampDuty_CompanyID 
+							and StampDuty_ExchangeSegmentID=@StampDuty_ExchangeSegmentID  
+							and  StampDuty_ChargeGroupID= @StampDuty_ChargeGroupID 
+							and StampDuty_ApplicableState=@StampDuty_ApplicableState
+							and StampDuty_DateFrom<@StampDuty_DateFrom 
+					order by StampDuty_DateFrom desc
+					
+					select top 1 @NextDate=StampDuty_DateFrom from Config_StampDuty 
+					where StampDuty_CompanyID=@StampDuty_CompanyID 
+							and StampDuty_ExchangeSegmentID=@StampDuty_ExchangeSegmentID  
+							and  StampDuty_ChargeGroupID= @StampDuty_ChargeGroupID 
+							and StampDuty_ApplicableState=@StampDuty_ApplicableState
+							and StampDuty_DateFrom>@StampDuty_DateFrom 
+					order by StampDuty_DateFrom
+	
+			Insert into Config_StampDuty (StampDuty_ChargeGroupID,StampDuty_CompanyID,StampDuty_ApplicableState,StampDuty_ExchangeSegmentID,StampDuty_DateFrom,
+			StampDuty_CalBasis,StampDuty_RateCLDel,StampDuty_MinCLDel,StampDuty_MaxCLDel,StampDuty_RateCLSqr,StampDuty_MinCLSqr, 
+			StampDuty_MaxCLSqr,StampDuty_RatePRODel,StampDuty_MinPRODel,StampDuty_MaxPRODel,StampDuty_RatePROSqr,StampDuty_MinPROSqr, 
+			StampDuty_MaxPROSqr,StampDuty_CntrSlabMultiple,StampDuty_SlabAmount,StampDuty_MinCntr,StampDuty_MaxCntr,StampDuty_RateCLFut, 
+			StampDuty_MinCLFut,StampDuty_MaxCLFut,StampDuty_RatePROFut,StampDuty_MinPROFut,StampDuty_MaxPROFut,StampDuty_OptBasis,
+			StampDuty_RateCLOpt,StampDuty_MinCLOpt,StampDuty_MaxCLOpt,StampDuty_RatePROOpt,StampDuty_MinPROOpt,StampDuty_MaxPROOpt, 
+			StampDuty_FSBasis,StampDuty_RateCLFS,StampDuty_MinCLFS,StampDuty_MaxCLFS,StampDuty_RatePROFS,StampDuty_MinPROFS, 
+			StampDuty_MaxPROFS,StampDuty_STApplicable,StampDuty_ApplicableFor,StampDuty_GnAcCode,StampDuty_SbAcCode, 
+			StampDuty_GnAcCodeST,StampDuty_SbAcCodeST,StampDuty_CreateUser,StampDuty_CreateDateTime,StampDuty_ModifyUser) 
+
+
+		   values( @StampDuty_ChargeGroupID,@StampDuty_CompanyID,@StampDuty_ApplicableState,@StampDuty_ExchangeSegmentID,@StampDuty_DateFrom,
+		   @StampDuty_CalBasis,@StampDuty_RateCLDel,@StampDuty_MinCLDel,@StampDuty_MaxCLDel,@StampDuty_RateCLSqr,@StampDuty_MinCLSqr, 
+			@StampDuty_MaxCLSqr,@StampDuty_RatePRODel,@StampDuty_MinPRODel,@StampDuty_MaxPRODel,@StampDuty_RatePROSqr,@StampDuty_MinPROSqr, 
+			@StampDuty_MaxPROSqr,@StampDuty_CntrSlabMultiple,@StampDuty_SlabAmount,@StampDuty_MinCntr,@StampDuty_MaxCntr,@StampDuty_RateCLFut, 
+			@StampDuty_MinCLFut,@StampDuty_MaxCLFut,@StampDuty_RatePROFut,@StampDuty_MinPROFut,@StampDuty_MaxPROFut,@StampDuty_OptBasis,
+			@StampDuty_RateCLOpt,@StampDuty_MinCLOpt,@StampDuty_MaxCLOpt,@StampDuty_RatePROOpt,@StampDuty_MinPROOpt,@StampDuty_MaxPROOpt, 
+			@StampDuty_FSBasis,@StampDuty_RateCLFS,@StampDuty_MinCLFS,@StampDuty_MaxCLFS,@StampDuty_RatePROFS,@StampDuty_MinPROFS, 
+			@StampDuty_MaxPROFS,@StampDuty_STApplicable,@StampDuty_ApplicableFor,@StampDuty_GnAcCode,@StampDuty_SbAcCode, 
+			@StampDuty_GnAcCodeST,@StampDuty_SbAcCodeST,@StampDuty_CreateUser,@StampDuty_CreateDateTime,@StampDuty_ModifyUser)
+				set @nextRowID=@@identity
+				
+				if(@prevRowID is not null)
+					Update Config_StampDuty set StampDuty_DateTo=DATEADD(day,-1,@StampDuty_DateFrom) 
+					where StampDuty_ID=@prevRowID
+				if(@NextDate is not null)
+					if(@nextRowID is not null)
+					Update Config_StampDuty set StampDuty_DateTo=DATEADD(day,-1,@NextDate) 
+					where StampDuty_ID=@nextRowID
+
+       End
+else
+
+      Begin
+			Insert into Config_StampDuty (StampDuty_ChargeGroupID,StampDuty_CompanyID,StampDuty_ApplicableState,StampDuty_ExchangeSegmentID,StampDuty_DateFrom,
+			StampDuty_CalBasis,StampDuty_RateCLDel,StampDuty_MinCLDel,StampDuty_MaxCLDel,StampDuty_RateCLSqr,StampDuty_MinCLSqr, 
+			StampDuty_MaxCLSqr,StampDuty_RatePRODel,StampDuty_MinPRODel,StampDuty_MaxPRODel,StampDuty_RatePROSqr,StampDuty_MinPROSqr, 
+			StampDuty_MaxPROSqr,StampDuty_CntrSlabMultiple,StampDuty_SlabAmount,StampDuty_MinCntr,StampDuty_MaxCntr,StampDuty_RateCLFut, 
+			StampDuty_MinCLFut,StampDuty_MaxCLFut,StampDuty_RatePROFut,StampDuty_MinPROFut,StampDuty_MaxPROFut,StampDuty_OptBasis,
+			 StampDuty_RateCLOpt,StampDuty_MinCLOpt,StampDuty_MaxCLOpt,StampDuty_RatePROOpt,StampDuty_MinPROOpt,StampDuty_MaxPROOpt, 
+			StampDuty_FSBasis,StampDuty_RateCLFS,StampDuty_MinCLFS,StampDuty_MaxCLFS,StampDuty_RatePROFS,StampDuty_MinPROFS, 
+			StampDuty_MaxPROFS,StampDuty_STApplicable,StampDuty_ApplicableFor,StampDuty_GnAcCode,StampDuty_SbAcCode, 
+			StampDuty_GnAcCodeST,StampDuty_SbAcCodeST,StampDuty_CreateUser,StampDuty_CreateDateTime,StampDuty_ModifyUser) 
+
+
+		   values( @StampDuty_ChargeGroupID,@StampDuty_CompanyID,@StampDuty_ApplicableState,@StampDuty_ExchangeSegmentID,@StampDuty_DateFrom,
+		   @StampDuty_CalBasis,@StampDuty_RateCLDel,@StampDuty_MinCLDel,@StampDuty_MaxCLDel,@StampDuty_RateCLSqr,@StampDuty_MinCLSqr, 
+			@StampDuty_MaxCLSqr,@StampDuty_RatePRODel,@StampDuty_MinPRODel,@StampDuty_MaxPRODel,@StampDuty_RatePROSqr,@StampDuty_MinPROSqr, 
+			@StampDuty_MaxPROSqr,@StampDuty_CntrSlabMultiple,@StampDuty_SlabAmount,@StampDuty_MinCntr,@StampDuty_MaxCntr,@StampDuty_RateCLFut, 
+			@StampDuty_MinCLFut,@StampDuty_MaxCLFut,@StampDuty_RatePROFut,@StampDuty_MinPROFut,@StampDuty_MaxPROFut,@StampDuty_OptBasis,
+			@StampDuty_RateCLOpt,@StampDuty_MinCLOpt,@StampDuty_MaxCLOpt,@StampDuty_RatePROOpt,@StampDuty_MinPROOpt,@StampDuty_MaxPROOpt, 
+			@StampDuty_FSBasis,@StampDuty_RateCLFS,@StampDuty_MinCLFS,@StampDuty_MaxCLFS,@StampDuty_RatePROFS,@StampDuty_MinPROFS, 
+			@StampDuty_MaxPROFS,@StampDuty_STApplicable,@StampDuty_ApplicableFor,@StampDuty_GnAcCode,@StampDuty_SbAcCode, 
+			@StampDuty_GnAcCodeST,@StampDuty_SbAcCodeST,@StampDuty_CreateUser,@StampDuty_CreateDateTime,@StampDuty_ModifyUser)
+      End
+
+End
+
+
+

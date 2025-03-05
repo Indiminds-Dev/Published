@@ -1,0 +1,337 @@
+
+ALTER  PROCEDURE [dbo].[SP_INSUP_FOTradeODINMODIFIED]
+@Module varchar(100),
+@ModifyUser	varchar(10)=null,
+@ExcSegmt int,
+@FilePath varchar(250)=null,
+@ExchangeTrades_CompanyID char(10)=null,
+@LckTradeDate datetime,
+@ExpireDate datetime
+
+AS
+BEGIN
+
+
+		IF @Module='InsertTradeData'
+		BEGIN
+				declare @ReadFrom as int
+				declare @Q as varchar(250)
+				declare @P int 
+				Declare @Min as Int
+				Declare @Max As Int
+			
+	
+			CREATE TABLE  #tmpTrans_TradeODIN (
+
+				[TradeODIN_TradeNumber] varchar(100) null,
+				[TradeODIN_TradeStatus]  varchar(100) null,
+				[TradeODIN_InstrumentType] varchar(100) null,
+				[TradeODIN_SecuritySymbol] varchar(100) NULL,
+				[TradeODIN_EXPIRYDATE] varchar(100) NULL,
+				[TradeODIN_StrikePrice] varchar(100) NULL,
+				[TradeODIN_OptionType] varchar(100) NULL,
+				[TradeODIN_SecurityCode] varchar(100) NULL,
+				[TradeODIN_BranchID] varchar(100) null,
+				[TradeODIN_RESERVED7] varchar(100) null,
+				[TradeODIN_MARKETTYPE] varchar(200) null,
+				[TradeODIN_TRADINGTERMINAL] varchar(100) null,
+				[TradeODIN_BOOKTYPE] varchar(100) null,
+				[TradeODIN_BUYSELLINDICATOR] varchar(100) null,
+				[TradeODIN_TradeQuantity] varchar(100) null,
+				[TradeODIN_TradePrice] varchar(100) null,
+				[TradeODIN_ProClient] varchar(100) null,
+				[TradeODIN_ClientAcc] varchar(100) null,
+				[TradeODIN_ParticipantCode] varchar(100) null, 
+				[TradeODIN_RESERVED4] varchar(100) null,
+				[TradeODIN_RESERVED5] varchar(100) null,
+				[TradeODIN_TradeEntryTime] varchar(100) null,
+                [TradeODIN_OrderEntryTime] varchar(100) null,
+				[TradeODIN_ORDERNUMBER] varchar(100) null,
+				[TradeODIN_CPID] varchar(100) null,
+				[TradeODIN_RESERVED1] varchar(100) null,
+				[TradeODIN_RESERVED2] varchar(100) null,
+				[TradeODIN_RESERVED3] varchar(100) null
+				)
+				set @ReadFrom=1
+				
+				set @Q='BULK INSERT #tmpTrans_TradeODIN FROM '+ char(39) + @FilePath + char(39) + ' with (firstrow = ' + convert(varchar,@ReadFrom) + ' , FIELDTERMINATOR = ' + char(39) + ',' + char(39) + ' , ROWTERMINATOR = ' + char(39) + char(10)+ + char(39) +')'
+				print @Q
+				exec (@Q)
+
+				alter table #tmpTrans_TradeODIN
+						add  	[TradeODIN_ID] [bigint] IDENTITY(1,1) NOT NULL	,
+								[TradeODIN_ProductSeriesID] varchar(100) null,
+								[TradeODIN_CustomerID] varchar(100) null
+				
+				set @Min=(Select MIN([TradeODIN_ID]) from #tmpTrans_TradeODIN)
+				set @Max=(Select MAX([TradeODIN_ID]) from #tmpTrans_TradeODIN)
+
+				DECLARE @FY VARCHAR(250)  
+				DECLARE @SETT_FY VARCHAR(250)
+				DECLARE @DTDIFF	int
+                Declare @Cflag char(1)
+                declare @ww char(20)
+				
+					-------------------------------------------Financial Year-------------------------------------
+					set @FY=(select Top (1) Convert(datetime,[TradeODIN_TradeEntryTime],120) From #tmpTrans_TradeODIN )
+					SET @DTDIFF=CAST(MONTH(@FY) AS INT)
+					IF(@DTDIFF>=1 AND @DTDIFF<=3)
+					BEGIN
+						SET @SETT_FY=NULL
+						SET @SETT_FY=  CAST((CAST(YEAR(@FY) AS INT)-1) AS VARCHAR(50) )+'-'+CAST(YEAR(@FY) AS VARCHAR(50))
+					END
+					IF(@DTDIFF>=4 AND @DTDIFF<=12)
+					BEGIN
+						SET @SETT_FY=NULL
+						SET @SETT_FY=  CAST(YEAR(@FY) AS VARCHAR(50))+'-'+CAST((CAST(YEAR(@FY) AS INT)+1) AS VARCHAR(50) )
+					END
+					---------------------------------Update ProductSeriesID--------------------------------------------
+					UPDATE #tmpTrans_TradeODIN set [TradeODIN_ProductSeriesID]=a1.Equity_SeriesID
+					from
+					 (select ME.Equity_SeriesID,ME.Equity_TickerSymbol,ME.Equity_Series,ME.Equity_StrikePrice,ME.Equity_FOIdentifier,ME.Equity_EffectUntil,ME.Equity_ExchSegmentID 
+						from Master_Equity ME,#tmpTrans_TradeODIN O
+					 where ME.Equity_TickerSymbol=O.[TradeODIN_SecuritySymbol]
+					and  ME.Equity_Series=(case when LEN(O.[TradeODIN_OptionType])<>0 then  LTRIM(RTRIM(O.[TradeODIN_OptionType])) when LEN(O.[TradeODIN_OptionType])=0 then 'FF' else '' end)
+					and  ME.Equity_StrikePrice=(case when O.TradeODIN_StrikePrice<>' ' then Convert(numeric(14,4),O.[TradeODIN_StrikePrice]) when LEN(O.TradeODIN_StrikePrice)<>0 then Convert(numeric(14,4),O.[TradeODIN_StrikePrice]) when LEN(O.TradeODIN_StrikePrice)=0 then Convert(numeric(14,4),0.00000000) when O.TradeODIN_StrikePrice=' ' then Convert(numeric(14,4),0.00000000) else '' end)
+					and  ME.Equity_FOIdentifier=O.[TradeODIN_InstrumentType]
+					and  ME.Equity_EffectUntil=Convert(datetime,[TradeODIN_ExpiryDate],120) and ME.Equity_ExchSegmentID=2)as a1
+					where a1.Equity_TickerSymbol=[TradeODIN_SecuritySymbol]
+					And a1.Equity_StrikePrice=(case when TradeODIN_StrikePrice<>' ' then Convert(numeric(14,4),[TradeODIN_StrikePrice]) when LEN(TradeODIN_StrikePrice)<>0 then Convert(numeric(14,4),[TradeODIN_StrikePrice]) when LEN(TradeODIN_StrikePrice)=0 then Convert(numeric(14,4),0.00000000) when TradeODIN_StrikePrice=' ' then Convert(numeric(14,4),0.00000000) else '' end)
+					AND a1.Equity_Series=(case when LEN([TradeODIN_OptionType])<>0 then  LTRIM(RTRIM([TradeODIN_OptionType])) when LEN([TradeODIN_OptionType])=0 then 'FF' else '' end)
+					AND a1.Equity_FOIdentifier=[TradeODIN_InstrumentType]
+					AND a1.Equity_EffectUntil=Convert(datetime,[TradeODIN_ExpiryDate],120)
+					AND a1.Equity_ExchSegmentID=2
+					--------------------------------------CUSTOMERID---------------------------------------------------
+					UPDATE #tmpTrans_TradeODIN set [TradeODIN_CustomerID]=a1.crg_cntID
+					from
+					(select TE.crg_cntID,TE.crg_tcode,TE.crg_exchange from tbl_master_contactExchange TE,#tmpTrans_TradeODIN O 
+					where TE.crg_tcode=O.[TradeODIN_ClientAcc] AND TE.crg_exchange='NSE - FO'
+					and TE.srg_Company=@ExchangeTrades_CompanyID)as a1
+					where a1.crg_tcode=[TradeODIN_ClientAcc] AND a1.crg_exchange='NSE - FO'
+	-------------------------------------------------------------------------------------------------------
+-------------------- Delete all unidentified trades in this segment for this date
+
+						Delete from TRANS_EXCHANGETRADES WHERE
+						EXCHANGETRADES_SEGMENT=@ExcSegmt AND ExchangeTrades_TradeDate=cast(@FY as datetime)
+						and ExchangeTrades_CompanyID=@ExchangeTrades_CompanyID
+						and (ExchangeTrades_Customerid is NULL Or ExchangeTrades_ProductSeriesID is NULL Or ExchangeTrades_Customerid='')
+						and ExchangeTrades_CustTransactionID is NULL
+
+---------------------------------------------------------
+	CREATE TABLE  #tmpTrans_TradeTemp (	ExchangeTradesID int,Tradedate datetime,TradeNumber varchar(100) null,OrderNumber varchar(100) null,
+				CustomerId varchar(100) null,BranchId varchar(100) null,CompanyID varchar(100) null,Segment varchar(100)null)
+
+
+				insert into #tmpTrans_TradeTemp
+				(
+					ExchangeTradesID,Tradedate ,TradeNumber ,
+					OrderNumber ,CustomerId ,BranchId,
+					CompanyID ,	Segment 
+				)
+
+				Select 
+				ExchangeTrades_ID,
+				ExchangeTrades_TradeDate,
+				ExchangeTrades_TradeNumber,
+				ExchangeTrades_OrderNumber,
+				ExchangeTrades_CustomerID,
+				ExchangeTrades_BranchID,
+				ExchangeTrades_CompanyID,
+				ExchangeTrades_Segment
+
+				from
+				Trans_ExchangeTrades,#tmpTrans_TradeODIN
+				where
+				ExchangeTrades_CompanyID=@ExchangeTrades_CompanyID AND ExchangeTrades_Segment=@ExcSegmt
+				AND convert(varchar(10),ExchangeTrades_TradeDate,105)=convert(varchar(10),cast(@FY as datetime),105 )
+				AND LTRIM(RTRIM(ExchangeTrades_TradeNumber))=LTRIM(RTRIM([TradeODIN_TradeNumber])) and LTRIM(RTRIM(ExchangeTrades_OrderNumber))=LTRIM(RTRIM([TradeODIN_ORDERNUMBER]))
+
+
+-------------------------------Insert Into Main Table------------------------------------------------------------
+
+					insert into Trans_ExchangeTrades
+                   (
+                   ExchangeTrades_FinYear,
+				   ExchangeTrades_CompanyID,
+                   ExchangeTrades_Segment,
+				   ExchangeTrades_BranchID,
+				   ExchangeTrades_TerminalID,
+                   ExchangeTrades_SettlementNumber,
+                   ExchangeTrades_SettlementType,
+				   ExchangeTrades_TradeDate,
+                   ExchangeTrades_TradeNumber,
+				   ExchangeTrades_TradeStatus,
+                   ExchangeTrades_TradeEntryTime,
+                   ExchangeTrades_OrderNumber,
+				   ExchangeTrades_OrderEntryTime,
+				   ExchangeTrades_SecurityExpiry,
+				   ExchangeTrades_TransactionType,
+                   ExchangeTrades_ProCli,
+				   ExchangeTrades_CustomerUcc,
+                   ExchangeTrades_CustodialParticipantCode,
+				   ExchangeTrades_CustomerID,
+                   ExchangeTrades_CounterPartyID,
+				   ExchangeTrades_SecurityOptionType,
+				   ExchangeTrades_SecurityStrikePrice,
+				   ExchangeTrades_SecurityType,
+                   ExchangeTrades_SecuritySymbol,
+				   ExchangeTrades_SecuritySeries,
+                   ExchangeTrades_ProductSeriesID,
+				   ExchangeTrades_BookType,
+                   ExchangeTrades_MarketType,
+				   ExchangeTrades_StrikePrice,
+				   ExchangeTrades_CTCLID,
+                   ExchangeTrades_ExchangeBranchID,
+				   ExchangeTrades_BuySellFlag,
+                   ExchangeTrades_QuantityLots,
+				   ExchangeTrades_UnitPrice,
+                   ExchangeTrades_UnitPriceQuantity,
+				   ExchangeTrades_MarketValue,
+				   ExchangeTrades_CustodialFlag,
+                   ExchangeTrades_CreateUser,
+				   ExchangeTrades_CreateDateTime,
+                   ExchangeTrades_CustodianCode
+				   )
+				    select 
+					@SETT_FY,
+					@ExchangeTrades_CompanyID,
+					@ExcSegmt,
+					(select cnt_branchid from tbl_master_contact where cnt_internalId=isnull((Select CASE 
+								WHEN  ([TradingTerminal_AllTradeID] is not null and LEN(REPLACE(isnull([TradingTerminal_AllTradeID],''),CHAR(13),''))>0) then TradingTerminal_AllTradeID
+								when  (TradingTerminal_AllTradeID is null OR LEN(REPLACE([TradingTerminal_AllTradeID],CHAR(13),''))=0) AND (TradingTerminal_ProTradeID is null OR LEN(REPLACE(TradingTerminal_ProTradeID,CHAR(13),''))=0) AND (TradingTerminal_CliTradeID is null OR LEN(REPLACE(TradingTerminal_CliTradeID,CHAR(13),''))=0) then [TradeODIN_CustomerID] 
+								WHEN  (TradingTerminal_AllTradeID is null OR LEN(REPLACE([TradingTerminal_AllTradeID],CHAR(13),''))=0) AND A.[TradeODIN_ProClient]='2' then TradingTerminal_ProTradeID
+								when  (TradingTerminal_AllTradeID is null OR LEN(REPLACE([TradingTerminal_AllTradeID],CHAR(13),''))=0) AND A.[TradeODIN_ProClient]='1' then TradingTerminal_CliTradeID
+								else [TradeODIN_CustomerID] end	
+								from Master_TradingTerminal where LTRIM(RTRIM(TradingTerminal_TerminalID))=LTRIM(RTRIM(A.[TradeODIN_TRADINGTERMINAL])) AND TradingTerminal_ExchangeSegmentID=@ExcSegmt AND TradingTerminal_CompanyID=@ExchangeTrades_CompanyID),[TradeODIN_CustomerID])),
+					isnull((Select CASE When LEN(a1.TradingTerminal_ParentTerminalID)=0 then a1.TradingTerminal_TerminalID When LTRIM(RTRIM(a1.TradingTerminal_ParentTerminalID)) is not null then LTRIM(RTRIM(a1.TradingTerminal_ParentTerminalID)) When LTRIM(RTRIM(a1.TradingTerminal_ParentTerminalID)) is null then LTRIM(RTRIM(a1.TradingTerminal_TerminalID)) else [TradeODIN_TRADINGTERMINAL] end From (Select TradingTerminal_ParentTerminalID,TradingTerminal_TerminalID from Master_TradingTerminal WHERE LTRIM(RTRIM(Master_TradingTerminal.TradingTerminal_TerminalID)) IN(''+LTRIM(RTRIM([TradeODIN_TRADINGTERMINAL]))+'') AND Master_TradingTerminal.TradingTerminal_ExchangeSegmentID=@ExcSegmt AND Master_TradingTerminal.TradingTerminal_CompanyID=''+@ExchangeTrades_CompanyID+'')as a1),LTRIM(RTRIM([TradeODIN_TRADINGTERMINAL]))),
+					(Select Top(1) Master_Settlements.Settlements_Number FROM #tmpTrans_TradeODIN,Master_Settlements WHERE Master_Settlements.Settlements_ExchangeSegmentID=2 AND Substring(Convert(varchar(20),Convert(datetime,LTRIM(RTRIM(#tmpTrans_TradeODIN.[TradeODIN_TradeEntryTime])),120),120),1,11) Between Settlements_StartDateTime AND Settlements_EndDateTime AND Master_Settlements.Settlements_TypeSuffix='F'AND Master_Settlements.Settlements_FinYear=@SETT_FY), 
+					'F',
+					Substring(Convert(varchar(20),Convert(datetime,LTRIM(RTRIM([TradeODIN_TradeEntryTime])),120),120),1,11),
+					[TradeODIN_TradeNumber],
+					[TradeODIN_TradeStatus],
+					CONVERT(datetime,[TradeODIN_TradeEntryTime],120),
+					[TradeODIN_OrderNumber],
+					Convert(datetime,LTRIM(RTRIM([TradeODIN_OrderEntryTime])),120),
+					Convert(datetime,[TradeODIN_EXPIRYDATE],120),
+					'Orgnl',
+					[TradeODIN_ProClient],
+					[TradeODIN_ClientAcc],
+					[TradeODIN_ParticipantCode],
+					isnull((Select CASE 
+								WHEN  ([TradingTerminal_AllTradeID] is not null and LEN(REPLACE(isnull([TradingTerminal_AllTradeID],''),CHAR(13),''))>0) then TradingTerminal_AllTradeID 
+								when  (TradingTerminal_AllTradeID is null OR LEN(REPLACE([TradingTerminal_AllTradeID],CHAR(13),''))=0) AND (TradingTerminal_ProTradeID is null OR LEN(REPLACE(TradingTerminal_ProTradeID,CHAR(13),''))=0) AND (TradingTerminal_CliTradeID is null OR LEN(REPLACE(TradingTerminal_CliTradeID,CHAR(13),''))=0) then [TradeODIN_CustomerID] 
+								WHEN  (TradingTerminal_AllTradeID is null OR LEN(REPLACE([TradingTerminal_AllTradeID],CHAR(13),''))=0) AND A.[TradeODIN_ProClient]='2' then TradingTerminal_ProTradeID
+								when  (TradingTerminal_AllTradeID is null OR LEN(REPLACE([TradingTerminal_AllTradeID],CHAR(13),''))=0) AND A.[TradeODIN_ProClient]='1' then TradingTerminal_CliTradeID
+								else [TradeODIN_CustomerID] end	
+								from Master_TradingTerminal where LTRIM(RTRIM(TradingTerminal_TerminalID))=LTRIM(RTRIM(A.[TradeODIN_TRADINGTERMINAL])) AND TradingTerminal_ExchangeSegmentID=@ExcSegmt AND TradingTerminal_CompanyID=@ExchangeTrades_CompanyID),[TradeODIN_CustomerID]),
+					[TradeODIN_CPID],
+					(case when [TradeODIN_OptionType]=' ' then 'XX' else [TradeODIN_OptionType] end),
+					(CASE WHEN [TradeODIN_StrikePrice]=' ' then Convert(numeric(14,4),0.00)
+					 WHEN LEN([TradeODIN_StrikePrice])is null then Convert(numeric(14,4),0.00)
+					 WHEN LEN([TradeODIN_StrikePrice])=0 then Convert(numeric(14,4),0.00)
+					 ELSE
+					 Convert(numeric(14,4),[TradeODIN_StrikePrice])
+					end),
+					[TradeODIN_InstrumentType],
+					[TradeODIN_SecuritySymbol],
+					(case when [TradeODIN_OptionType]=' ' then 'FF' else [TradeODIN_OptionType] end),
+					[TradeODIN_ProductSeriesID],
+					[TradeODIN_BookType],
+					[TradeODIN_MARKETTYPE],
+					(CASE WHEN [TradeODIN_StrikePrice]=' ' then Convert(numeric(14,4),0.00)
+					 WHEN LEN([TradeODIN_StrikePrice])is null then Convert(numeric(14,4),0.00)
+					 WHEN LEN([TradeODIN_StrikePrice])=0 then Convert(numeric(14,4),0.00)
+					 ELSE
+					 Convert(numeric(14,4),[TradeODIN_StrikePrice])
+					end),
+					isnull((Select CASE When LEN(a1.TradingTerminal_parentterminalID)=0 then null When LTRIM(RTRIM(a1.TradingTerminal_ParentTerminalID)) is not null then LTRIM(RTRIM(a1.TradingTerminal_TerminalID)) When LTRIM(RTRIM(a1.TradingTerminal_ParentTerminalID)) is null then null else null end From (Select TradingTerminal_ParentTerminalID,TradingTerminal_TerminalID from Master_TradingTerminal WHERE LTRIM(RTRIM(Master_TradingTerminal.TradingTerminal_TerminalID)) IN(''+LTRIM(RTRIM([TradeODIN_TRADINGTERMINAL]))+'') AND Master_TradingTerminal.TradingTerminal_ExchangeSegmentID=@ExcSegmt AND Master_TradingTerminal.TradingTerminal_CompanyID=''+@ExchangeTrades_CompanyID+'')as a1),[TradeODIN_TRADINGTERMINAL]),
+					(select cnt_branchid from tbl_master_contact where cnt_internalId=(select top(1)  T.crg_cntID from tbl_master_contactExchange T,#tmpTrans_TradeODIN O  where T.crg_tcode=O.[TradeODIN_ClientAcc])),
+					[TradeODIN_BuySellIndicator],
+					[TradeODIN_TradeQuantity],
+					[TradeODIN_TradePrice],
+					[TradeODIN_TradeQuantity], 
+					convert(decimal(12,2),[TradeODIN_TradePrice])*convert(decimal(12,2),[TradeODIN_TradeQuantity]),
+					(Case When [TradeODIN_ParticipantCode] IN(Select [TradeODIN_ParticipantCode] from #tmpTrans_TradeODIN O,tbl_master_companyExchange TE where O.[TradeODIN_ParticipantCode]=TE.exch_TMCode)
+					THEN 'N' ELSE 'Y'
+					end),
+					@ModifyUser,
+					getdate(),
+					(Case When [TradeODIN_ParticipantCode] NOT IN(Select [TradeODIN_ParticipantCode] from #tmpTrans_TradeODIN O,tbl_master_companyExchange TE where O.[TradeODIN_ParticipantCode]=TE.exch_TMCode)
+					THEN SUBSTRING([TradeODIN_ParticipantCode],1,4) ELSE null
+					end)
+					from #tmpTrans_TradeODIN AS A
+					LEFT OUTER JOIN
+					tbl_master_contactExchange AS B ON (B.crg_tcode=A.[TradeODIN_ClientAcc]
+					AND B.crg_exchange='NSE - FO'
+					AND not exists(select ExchangeTradesID from #tmpTrans_TradeTemp where convert(varchar(10),Tradedate,105)=convert(varchar(10),cast(A.[TradeODIN_TRADEENTRYTIME] as datetime),105 ) and LTRIM(RTRIM(TradeNumber))=LTRIM(RTRIM(A.[TradeODIN_TradeNumber])) and LTRIM(RTRIM(OrderNumber))=LTRIM(RTRIM(A.[TradeODIN_ORDERNUMBER])) AND Segment=@ExcSegmt AND CompanyID=@ExchangeTrades_CompanyID))
+					Where not exists(select ExchangeTradesID from #tmpTrans_TradeTemp where convert(varchar(10),Tradedate,105)=convert(varchar(10),cast([TradeODIN_TRADEENTRYTIME] as datetime),105 ) and LTRIM(RTRIM(TradeNumber))=LTRIM(RTRIM([TradeODIN_TradeNumber])) and LTRIM(RTRIM(OrderNumber))=LTRIM(RTRIM([TradeODIN_ORDERNUMBER])) AND Segment=@ExcSegmt AND CompanyID=@ExchangeTrades_CompanyID)
+
+-------------------------------------------------Checking For CustomerID Is Null---------------------------------
+
+					SELECT DISTINCT ExchangeTrades_CustomerUcc FROM Trans_ExchangeTrades,#tmpTrans_TradeODIN WHERE
+					ExchangeTrades_Segment=@ExcSegmt AND  convert(varchar(10),ExchangeTrades_TradeDate,120)=convert(varchar(10),convert(datetime,@FY,120),120)
+					AND (ExchangeTrades_CustomerID IS NULL or len(ExchangeTrades_CustomerID)=0) and ExchangeTrades_CompanyID=@ExchangeTrades_CompanyID
+
+
+-------------------------------------------------Showing the Import Summary --------------------------------------------------------
+				select ExchangeTrades_settlementnumber as [Sett.No],ExchangeTrades_settlementtype as [Sett.Type],
+				sum(rowcnt) as Records,
+				sum(isnull(buy,0)) as [Buy Obligation],
+				sum(isnull(sell,0)) as [Sell Obligation],
+				(sum(isnull(sell,0))-sum(isnull(buy,0))) as [Net Obligation]
+				 from
+				(select ExchangeTrades_settlementnumber,ExchangeTrades_settlementtype,COUNT(ExchangeTrades_settlementtype) as rowcnt,
+				case when ExchangeTrades_buysellflag=1 then sum(ExchangeTrades_marketvalue) else null end buy,
+				case when  ExchangeTrades_buysellflag=2 then sum(ExchangeTrades_marketvalue)  else null end as sell
+				from TRANS_ExchangeTrades WHERE
+				ExchangeTrades_SEGMENT=@ExcSegmt 
+				and ExchangeTrades_TransactionType='Orgnl'
+				AND convert(varchar(10),ExchangeTrades_TradeDate,120)=convert(varchar(10),convert(datetime,@FY,120),120)
+				and ExchangeTrades_CompanyID=@ExchangeTrades_CompanyID
+				group by ExchangeTrades_settlementnumber,ExchangeTrades_settlementtype,ExchangeTrades_buysellflag)as bb
+				group by ExchangeTrades_settlementnumber,ExchangeTrades_settlementtype
+--------------------------------------------------Select Terminal ID not present in tradingterminal----------------------------------
+					SELECT DISTINCT	[TradeODIN_TRADINGTERMINAL] as TERMINALID 
+					from #tmpTrans_TradeODIN WHERE [TradeODIN_TRADINGTERMINAL] 
+					NOT IN (Select TradingTerminal_TerminalID from Master_tradingTerminal 
+					where tradingterminal_ExchangeSegmentID=@ExcSegmt AND tradingterminal_companyID=@ExchangeTrades_CompanyID)
+--------------------------------------------------------------------------------------------------------------
+	Select cast(@FY as datetime) as TradeDate
+
+-----------------------------------------------------------------------------------------------------------------
+							Select cast(@FY as datetime) as TradeDate
+--------------------------------------------------Select Terminal IDs ----------------------------------
+					SELECT DISTINCT	ExchangeTrades_TerminalID from TRANS_EXCHANGETRADES WHERE
+						EXCHANGETRADES_SEGMENT=@ExcSegmt AND ExchangeTrades_TradeDate=cast(@FY as datetime)
+						and ExchangeTrades_CompanyID=@ExchangeTrades_CompanyID
+						and ExchangeTrades_TransactionType='Orgnl'
+--------------------------------------------------------------------------------------------------------------
+--------------------------------------------------Select UCC----------------------------------
+						SELECT DISTINCT	ExchangeTrades_CustomerUCC from TRANS_EXCHANGETRADES WHERE
+						EXCHANGETRADES_SEGMENT=@ExcSegmt AND ExchangeTrades_TradeDate=cast(@FY as datetime)
+						and ExchangeTrades_CompanyID=@ExchangeTrades_CompanyID
+						and ExchangeTrades_TransactionType='Orgnl'
+--------------------------------------------------------------------------------------------------------------
+
+          END
+
+END
+
+--truncate table trans_exchangetrades
+
+--exec [SP_INSUP_Trade] 'InsertTradeDataCSV',373,16,'COR0000001'
+
+--exec [SP_INSUP_TradeODIN] 'InsertTradeData',235,1,'\\server\\CommonFolderInfluxCRM\\4652_29012010.TXT','COI0000001'
+--exec [SP_INSUP_FOTradeODINMODIFIED] 'InsertTradeData',235,2,'\\server\\CommonFolderInfluxCRM\\2681_1102.TXT','COI0000001'
+--exec [SP_INSUP_FOTradeODINMODIFIED] 'InsertTradeData',235,2,'\\binay\\CommonFolderInfluxCRM\\0610TRD.TXT','COR0000001'
+--exec [SP_INSUP_FOTradeODINMODIFIED] 'InsertTradeData',235,27,'E:\CommonFolderInfluxCRM\\0128TRD.TXT','COR0000002'
+
+
+
+--SELECT * from Trans_ExchangeTrades where ExchangeTrades_TradeDate='2010-09-27' AND ExchangeTrades_Segment=1 09:14:10.000'
+
+
+--Select * from master_Settlements where settlements_exchangesegmentID=1
+
+
+

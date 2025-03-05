@@ -1,0 +1,65 @@
+<%@ page language="C#" autoeventwireup="true" inherits="management_frmImportMarginsNCDEX, App_Web_njtlujlb" %>
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml" >
+<head runat="server">
+    <title>Import NCDEX Margins</title>
+    <link href="../CSS/style.css" rel="stylesheet" type="text/css" />
+
+    <script type="text/javascript" src="../JSFUNCTION/init.js"></script>
+<script language="javascript" type="text/javascript">
+    function SignOff()
+    {
+        window.parent.SignOff();
+    }
+    
+   </script>
+  
+</head>
+<body style="margin: 0px 0px 0px 0px; background-color:#DDECFE">
+    <form id="form1" runat="server">
+    <div>
+          <asp:Panel ID="Panelmain" runat="server" Visible="true" HorizontalAlign="Center">
+                <table id="tbl_main" class="login" cellspacing="0" cellpadding="0" width="410"
+                    style="border: solid 1px blue">
+                    <tbody>
+                        <tr>
+                            <td class="EHEADER">
+                                <span style="color: blue"><strong>NCDEX Margins</strong></span></td>
+                        </tr>
+                        <tr>
+                            <td class="lt">
+                                <table class="TableMain100" cellspacing="12" cellpadding="0">
+                                    <tbody>
+                                        <tr>
+                                            <td align="right" style="width: 278px">
+                                                <asp:FileUpload ID="NCDEXSelectFile" runat="server" Width="272px" Height="21px" />
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                         <td style="width:200px"><asp:Label ID="lblMsgAccCode" Width="220px" ForeColor="Red"  runat="server"></asp:Label></td>
+                                            <td align="right" valign="middle" >
+                                                <table cellspacing="0" cellpadding="0">
+                                                    <tbody>
+                                                        <tr>
+                                                            <td valign="top" align="left" style="height: 19px">
+                                                                <asp:Button ID="BtnSave" runat="server" Text="Import File" CssClass="btn" 
+                                                                    Width="84px" OnClick="BtnSave_Click" />
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </asp:Panel>
+    </div>
+    </form>
+</body>
+</html>

@@ -1,0 +1,875 @@
+
+ALTER procedure [dbo].[Report_QuatarlyStatement]
+@FINYEAR VARCHAR(50),
+@FORDATE VARCHAR(35),
+@COMPANYID VARCHAR(12),
+@CLIENTS VARCHAR(MAX),
+@BRANCHID VARCHAR(MAX),
+@GRPTYPE varchar(15),
+@Groupby varchar(Max),
+@MASTERSEGMENT int,
+@Header varchar(max),
+@Footer varchar(max),
+@ChkConsiderEntirePeriod varchar(3),
+@ChkDoNotPrintSecurities varchar(3),
+@dpid varchar(10),
+@Fromdatefrmpage varchar(30),
+@Todatefrmpage varchar(30)
+
+-- exec [Report_QuatarlyStatement] '2012-2013','30 Jun 2012','COR0000002','''CLG0000195''','129,130,131,133,134,135,137,139,142,143,145,149,150,153,157,161,162,164,166,167,169,170,174,178,180,185,186,188,189,190,191,192,193,196,197,198,199,200,204,1','BRANCH','ALL',1,'','','N','N'
+
+-- exec [Report_QuatarlyStatement] '2012-2013','30 Jun 2012','COR0000002','ALL','130,129,178','BRANCH','130,129,178',1,'','','N','N',24,'',''
+
+--exec [Report_QuatarlyStatement] '2012-2013','30 Jun 2012','COR0000002','ALL','130,129,178','BRANCH','130,129,178',1,'','','N','N',24,'',''
+
+-- exec [Report_QuatarlyStatement] '2011-2012','31 MAR 2012','COR0000002','ALL','129,130,131,133,134,135,137,139,142,143,145,149,150,153,157,161,162,164,166,167,169,170,174,178,180,185,186,188,189,190,191,192,193,196,197,198,199,200,204,1','BRANCH','ALL',1,'','','N','N'
+as
+begin
+set nocount on
+Declare @quarter varchar(20),@forcolas varchar(max)
+--set @CLIENTS='''CLA0000583'''
+			-------------Declare For Quatar
+
+			If (@Fromdatefrmpage='' and @Todatefrmpage='')
+				Begin
+					Declare @FROMDATE varchar(35),@TODATE varchar(35)
+					--Set @FROMDATE='2012-04-01'
+					--Set @TODATE='2012-06-30'
+					If('30 Jun '+left(@FINYEAR,4)=@fordate)
+					Begin
+							select @FROMDATE=left(@FINYEAR,4)+'-04-01'
+							select @TODATE=left(@FINYEAR,4)+'-06-30'
+							set @quarter='0'
+					End
+					If('30 Sep '+left(@FINYEAR,4)=@fordate)
+					Begin
+							select @FROMDATE=left(@FINYEAR,4)+'-07-01'
+							select @TODATE=left(@FINYEAR,4)+'-09-30'
+							set @quarter='1'
+					End
+					If('31 Dec '+left(@FINYEAR,4)=@fordate)
+					Begin
+							select @FROMDATE=left(@FINYEAR,4)+'-10-01'
+							select @TODATE=left(@FINYEAR,4)+'-12-31'
+							set @quarter='2'
+					End
+					If('31 Mar '+right(@FINYEAR,4)=@fordate)
+					Begin
+							select @FROMDATE=right(@FINYEAR,4)+'-01-01'
+							select @TODATE=right(@FINYEAR,4)+'-03-31'
+							set @quarter='3'
+					End
+					-------------If Entire Period Is Checked
+					If @ChkConsiderEntirePeriod='Y'
+					Begin
+						Select @FROMDATE=left(@FINYEAR,4)+'-04-01'
+					End
+			   End
+			   
+			 Else
+			   Begin
+			         Set @FROMDATE=@Fromdatefrmpage
+			         Set @TODATE=@Todatefrmpage
+			         set @quarter=REPLACE(@Fromdatefrmpage,'-','')+REPLACE(@Todatefrmpage,'-','')+'4'
+			         --select @quarter
+			         
+			   End
+
+
+				DECLARE @SQLSELECT VARCHAR(MAX),@SQLWHERE VARCHAR(MAX),@SQLGROUPBY VARCHAR(MAX)
+
+----------Temp Table Creation For Selection Begin
+				create table #ClientSelection(client varchar(15),clientfullname varchar(200),clientucc varchar(20),GRPID1 varchar(20),GRPNAME1 varchar(200),
+				Address varchar(100),Address1 varchar(100),PIN varchar(10),PhNumber varchar(50),Email  varchar(50),city varchar(20),
+				stateName varchar(50),country varchar(50),Fx_Number varchar(50),Header varchar(max),Footer varchar(max),
+				FromDate varchar(50),Todate varchar(50),Pan varchar(20),
+				FlagRelease int,FlagReleaseStocks int,FlagSecurity int,company varchar(50))
+
+				CREATE TABLE #SECURITY(	  CUSTOMERID VARCHAR(50),CLIENTNAME VARCHAR(500),UCC VARCHAR(50),
+											  PRODUCTID VARCHAR(50),SYMBOLNAME VARCHAR(500),ISINNO VARCHAR(50),
+											  TRADEDATE DATETIME,PURPOSE VARCHAR(800),
+											  RECEIVEDFROM VARCHAR(500),SETTFROM VARCHAR(50),
+											  DELIVEREDTO VARCHAR(500),SETTTO VARCHAR(50),
+											  REMARKS VARCHAR(MAX),
+											  QTYIN NUMERIC(28,0),QTYOUT NUMERIC(28,0),RUNNINGBALN NUMERIC(28,0),
+											  STATUSID INT,UNIQUEID int identity(1,1)
+										  )
+
+				
+				Create Table #QuaterRelease(ClientId varchar(15),WorkingDays int,AverageDailyMargin numeric(28,2),
+				MarkUp numeric(28,0),NeteffectOfMargin numeric(28,2),TradingBaln numeric(28,2),CashMargin numeric(28,2),
+				FDRBaln numeric(28,2),NetCashComponet numeric(28,2),CashMarkUp numeric(28,0),CashDeposit numeric(28,2),
+				HoldBack numeric(28,2),Margin numeric(28,2),Purchase numeric(28,2),Sale numeric(28,2),NoCash numeric(28,2),
+				Effective numeric(28,2),ExcessShortage numeric(28,2),CashReleased numeric(28,2),StockReleased numeric(28,2),
+				CashRetained numeric(28,2),StocksRetained numeric(28,2),lockfunds varchar(50),lockstock varchar(50))
+
+----------Temp Table Creation For Selection End
+
+				---------client details bind begin
+				create table #clientdetail(client varchar(15),clientfullname varchar(200),clientucc varchar(20),GRPID1 varchar(20),GRPNAME1 varchar(200),
+											Address varchar(100),Address1 varchar(100),PIN varchar(10),PhNumber varchar(50),Email  varchar(50),city varchar(20),
+											stateName varchar(50),country varchar(50),Fx_Number varchar(50),Header varchar(max),Footer varchar(max),
+											FromDate varchar(50),Todate varchar(50),Pan varchar(20))
+				select @SQLSELECT='
+				select  cnt_InternalID,
+						isnull(rtrim(ltrim(cnt_firstName)),'' '')+'' ''+isnull(rtrim(cnt_middleName),'' '')+'' ''+isnull(rtrim(cnt_lastName),'' ''),
+						isnull(rtrim(ltrim(cnt_ucc)),'' ''),'
+				IF @GRPTYPE='BRANCH'
+				BEGIN
+						Select @SQLSELECT=@SQLSELECT+' branch_id AS GRPID,''Branch Name :   ''+ isnull(rtrim(branch_description),'+char(39)+''+char(39)+')+''[''+isnull(rtrim(branch_code),'+char(39)+''+char(39)+')+'']'' AS GRPNAME '
+				END
+				ELSE
+				BEGIN
+						Select @SQLSELECT=@SQLSELECT+'gpm_id AS GRPID,'' Group Name :    '' +isnull(rtrim(GPM_DESCRIPTION),'+char(39)+''+char(39)+')+''[''+isnull(rtrim(GPM_CODE),'+char(39)+''+char(39)+')+'']'' AS GRPNAME '
+				END
+				Select @SQLSELECT=@SQLSELECT+' FROM tbl_master_contact,'
+					IF @GRPTYPE='BRANCH'
+							BEGIN
+									Select @SQLSELECT=@SQLSELECT+'tbl_master_branch
+									where cnt_branchid=branch_id'
+									IF @Groupby<>'ALL'
+									BEGIN
+										Select @SQLSELECT=@SQLSELECT+' AND cnt_branchid IN('+@Groupby+')'
+									END
+							END
+						ELSE
+							BEGIN
+									Select @SQLSELECT=@SQLSELECT+'tbl_master_groupmaster,tbl_trans_group
+									where grp_contactid=cnt_InternalID
+									and cnt_internalid=grp_contactid
+									AND gpm_type='''+@GRPTYPE+''' 
+									AND grp_groupmaster=gpm_id
+									AND GRP_GROUPTYPE='''+@GRPTYPE+''''
+									IF @Groupby<>'ALL'
+									BEGIN
+										Select @SQLSELECT=@SQLSELECT+' AND grp_groupMaster IN('+@Groupby+')'
+									END
+									
+							END 
+						IF @CLIENTS<>'ALL'
+							BEGIN
+									SELECT @SQLSELECT=@SQLSELECT+' AND cnt_internalid IN ('+@CLIENTS+') '
+							END
+					SELECT @SQLSELECT=@SQLSELECT+' AND ISNULL(CNT_CLIENTTYPE,''R'') NOT LIKE ''Pro%'''
+
+					insert into #clientdetail(client,clientfullname,clientucc,GRPID1,GRPNAME1)
+					exec(@SQLSELECT)
+					--print (@SQLSELECT)
+
+-------------------------------update Clients Details
+					update #clientdetail set 
+					Address=  isnull(add_address1,'')+isnull(add_address2,''),
+					Address1=isnull(add_address3,''),
+					PIN=isnull(add_pin,'')from tbl_master_address,#clientdetail where add_cntID=client
+
+					update #clientdetail set 
+					--PhNumber=isnull((select top 1 isnull(phf_countryCode,'')+''+isnull(phf_areaCode,'')+''+isnull(phf_phoneNumber,'') from tbl_master_phoneFax,#clientdetail where phf_cntID=client ),'')
+					PhNumber=  isnull(phf_countryCode,'')+''+isnull(phf_areaCode,'')+''+isnull(phf_phoneNumber,'') from tbl_master_phonefax,#clientdetail where phf_cntid=client-- and ltrim(rtrim(phf_type))='office'
+
+					update #clientdetail set 
+					Fx_Number=isnull((select top 1 isnull(phf_countryCode,'')+'-'+isnull(phf_areaCode,'')+'-'+isnull(phf_phoneNumber,'') from tbl_master_phoneFax,#clientdetail where phf_cntID=client and phf_Type='Fax'),'')
+
+					update #clientdetail set 
+					Email=isnull(eml_email,'') from tbl_master_email,#clientdetail where eml_CntID=client and ltrim(rtrim(eml_type))='Official'
+
+					update #clientdetail set 
+					city=city_Name from tbl_master_city,tbl_master_address,#clientdetail where add_cntID=client and add_City=city_id
+
+					update #clientdetail set 
+					stateName=state from tbl_master_State,tbl_master_address,#clientdetail where add_cntID=client and add_State=id
+				
+					update #clientdetail set Header=(select HeaderFooter_Content from Master_HeaderFooter where HeaderFooter_ID=@Header)				
+					
+					update #clientdetail set Footer=(select HeaderFooter_Content from Master_HeaderFooter where HeaderFooter_ID=@Footer)
+
+					update #clientdetail set FromDate=convert(varchar(12),cast( @FROMDATE as datetime),106)
+
+					update #clientdetail set ToDate=convert(varchar(12),cast( @TODATE as datetime),106)
+
+					update #clientdetail set Pan=isnull(crg_Number,'')from tbl_master_ContactRegistration,#clientdetail where crg_CntId=client and crg_type='Pancard'
+
+-------------------------client details bind end
+				create table #tradingac(clientid varchar(15),
+										trndate datetime,valuedate VARCHAR(20),
+										description varchar(300),
+										settno varchar(15),SegmentName varchar(30),payoutdate varchar(20),
+										debit numeric(28,2),credit numeric(28,2),
+										closing numeric(28,2),ledgerorder int,
+										orderstatusid INT)
+				
+				
+				SELECT @SQLSELECT='
+				SELECT AccountsLedger_SubAccountID
+				,accountsledger_transactiondate
+				,accountsledger_valuedate
+				,accountsledger_Narration
+				,settnotype
+				,Segment
+				,PayoutDate
+				,case when sum(isnull(Cr,0))-sum(isnull(Dr,0))<0 then abs(sum(isnull(Cr,0))-sum(isnull(Dr,0))) else 0 end
+				,case when sum(isnull(Cr,0))-sum(isnull(Dr,0))>0 then abs(sum(isnull(Cr,0))-sum(isnull(Dr,0))) else 0 end
+				,0
+				,LEDGERORDER
+				,1
+				From
+				(
+				SELECT AccountsLedger_SubAccountID
+				,accountsledger_transactiondate
+				,convert(varchar(12),accountsledger_valuedate,106) as accountsledger_valuedate
+				,case when AccountsLedger_TransactionType=''Journal'' 
+						  and Left(AccountsLedger_TransactionReferenceID,1) in(''X'',''Y'',''Z'') 
+						  and Left(AccountsLedger_TransactionReferenceID,2) not in(''YD'') 
+						  and accountsledger_SettlementNumber is not null 
+						  and len(accountsledger_SettlementNumber)<>0
+						  then ''Consolidated Entries For ''+convert(varchar(11),accountsledger_transactiondate,113)  
+					 when AccountsLedger_TransactionType=''Journal'' 
+						  and Left(AccountsLedger_TransactionReferenceID,2) in(''YD'') 
+						  and accountsledger_SettlementNumber is not null
+						  and len(accountsledger_SettlementNumber)<>0 
+						  then ''Add Back Short Delivery ''+convert(varchar(11),accountsledger_transactiondate,113)
+					else isnull(accountsledger_Narration,'''') end +
+					isnull(isnull(('' - ''+(select MainAccount_Name from Master_MainAccount 
+					where MainAccount_AccountCode=AccountsLedger_CashBankName)),'' - ''+AccountsLedger_CashBankName),'''') 
+					as accountsledger_Narration
+				,ISNULL(accountsledger_SettlementNumber,'''')+'' ''+ISNULL(accountsledger_SettlementType,'''') as settnotype
+				,abs(ISNULL(Accountsledger_AmountDr,0)) AS Dr
+				,abs(ISNULL(Accountsledger_AmountCr,0))  AS Cr
+				,CASE WHEN accountsledger_MainAccountID=''SYSTM00001'' THEN 1
+					  WHEN accountsledger_MainAccountID=''SYSTM00002'' THEN 2
+					  ELSE 3 END AS LEDGERORDER
+				,(select top 1 convert(varchar(12),Settlements_StartDateTime,106) from master_settlements where Settlements_Number=accountsledger_SettlementNumber and Settlements_TypeSuffix=accountsledger_SettlementType) as PayoutDate
+				,CASE	WHEN EXCH_EXCHID=''EXN0000002'' AND EXCH_SEGMENTID=''CM'' THEN ''NSE-CM''
+						WHEN EXCH_EXCHID=''EXB0000001'' AND EXCH_SEGMENTID=''CM'' THEN ''BSE-CM''
+						WHEN EXCH_EXCHID=''EXC0000001'' AND EXCH_SEGMENTID=''CM'' THEN ''CSE-CM''
+						WHEN EXCH_SEGMENTID=''COMM'' AND EXCH_EXCHID=''EXM0000001'' THEN ''MCX-COMM''
+						WHEN EXCH_SEGMENTID=''COMM'' AND EXCH_EXCHID=''EXI0000001'' THEN ''ICEX-COMM''
+						WHEN EXCH_SEGMENTID=''COMM'' AND EXCH_EXCHID=''EXN0000004'' THEN ''NCDEX-COMM''
+						WHEN EXCH_SEGMENTID=''COMM'' AND EXCH_EXCHID=''EXN0000005'' THEN ''NMCE-COMM''
+						WHEN EXCH_SEGMENTID=''COMM'' AND EXCH_EXCHID=''EXD0000001'' THEN ''DGCX-COMM''
+						WHEN EXCH_SEGMENTID=''CDX'' AND EXCH_EXCHID=''EXM0000002'' THEN ''MCXSX-CDX''
+						WHEN EXCH_SEGMENTID=''CDX'' AND EXCH_EXCHID=''EXU0000001'' THEN ''USE-CDX''
+						WHEN EXCH_SEGMENTID=''CDX'' AND EXCH_EXCHID=''EXB0000001'' THEN ''BSE-CDX''
+						WHEN EXCH_SEGMENTID=''CDX'' AND EXCH_EXCHID=''EXN0000002'' THEN ''NSE-CDX''
+						WHEN EXCH_SEGMENTID=''SPOT'' AND EXCH_EXCHID=''EXN0000006'' THEN ''NSEL-SPOT''
+						WHEN EXCH_EXCHID=''EXN0000002'' AND EXCH_SEGMENTID=''FO''THEN ''NSE-FO''
+						WHEN EXCH_EXCHID=''EXB0000001'' AND EXCH_SEGMENTID=''FO'' THEN ''BSE-FO''				
+				ELSE NULL END AS Segment'
+				SELECT @SQLWHERE='  FROM Trans_accountsledger,TBL_MASTER_COMPANYEXCHANGE where
+							AccountsLedger_SubAccountID is not null 
+							and EXCH_INTERNALID=AccountsLedger_exchangesegmentid
+							AND accountsledger_MainAccountID in(''SYSTM00001'',''SYSTM00002'',''SYSTM00003'')
+							AND AccountsLedger_SubAccountID IN (select distinct client from #clientdetail) 
+							AND accountsledger_companyID='''+@COMPANYID+'''
+							AND accountsledger_finyear='''+@FINYEAR+''''
+
+				SELECT @SQLGROUPBY=' ) as kk group by 
+									AccountsLedger_SubAccountID,accountsledger_transactiondate,accountsledger_valuedate,
+									accountsledger_Narration,settnotype,PayoutDate,LEDGERORDER,Segment
+									
+									'
+				--------insert into main table
+				insert into #tradingac (clientid,trndate,valuedate,description,settno,SegmentName,payoutdate,
+										debit,credit,closing,ledgerorder,orderstatusid)
+				EXEC(@SQLSELECT+@SQLWHERE+
+					 ' AND AccountsLedger_TransactionType<>''OpeningBalance''  
+					   AND accountsledger_transactiondate between '''+@FROMDATE+''' and '''+@TODATE+''''
+					 +@SQLGROUPBY)
+
+print(@SQLSELECT+@SQLWHERE+@SQLGROUPBY)
+--					 ' AND AccountsLedger_TransactionType<>''OpeningBalance''  
+--					   AND accountsledger_transactiondate between '''+@FROMDATE+''' and '''+@TODATE+''''
+--					 +@SQLGROUPBY)
+
+		--------------------INSERT BLANK ROW FOR OPENING BALANCE
+
+					INSERT INTO #tradingac(clientid,closing,trndate,ledgerorder,description,orderstatusid)
+					SELECT distinct clientid
+					,0
+					,CAST(@FROMDATE AS DATETIME)
+					,ledgerorder
+					,'Opening Balance'
+					,0
+					FROM #tradingac
+					
+					--Insert Row of Opening Balance For the Client does have ledger for this quater
+					INSERT INTO #tradingac(clientid,closing,trndate,ledgerorder,description,orderstatusid)
+					select AccountsLedger_SubAccountID
+					,sum(isnull(Accountsledger_AmountCr,0))-sum(isnull(Accountsledger_AmountDr,0)) as opening
+					,cast(@FROMDATE as datetime) as FromDate
+					,CASE WHEN accountsledger_MainAccountID='SYSTM00001' THEN 1
+					WHEN accountsledger_MainAccountID='SYSTM00002' THEN 2
+					ELSE 3 END AS LdOrder
+					,'Opening Balance'
+					,0
+					FROM Trans_accountsledger,TBL_MASTER_COMPANYEXCHANGE where
+					AccountsLedger_SubAccountID is not null 
+					and EXCH_INTERNALID=AccountsLedger_exchangesegmentid
+					AND accountsledger_MainAccountID in('SYSTM00001','SYSTM00002','SYSTM00003')
+					AND AccountsLedger_SubAccountID IN 
+					(
+						(Select Client from #clientdetail 
+						Except
+						Select clientid from #tradingac)
+					) 
+					AND accountsledger_companyID='COR0000002'
+					AND accountsledger_finyear='2014-2015' AND accountsledger_transactiondate<='2014-04-01'
+					AND AccountsLedger_TransactionType='OpeningBalance' 
+					GROUP BY AccountsLedger_SubAccountID,accountsledger_MainAccountID
+					
+					
+					---Client Those Nothing have Opening Balance
+					INSERT INTO #tradingac(clientid,closing,trndate,ledgerorder,description,orderstatusid)
+					SELECT distinct 
+					(Select Client from #clientdetail 
+					Except
+					Select clientid from #tradingac)
+					,0
+					,CAST(@FROMDATE AS DATETIME)
+					,Null
+					,'Opening Balance'
+					,0
+					
+
+
+
+				--------------opening balance calculation
+	
+				SELECT @SQLSELECT='UPDATE #tradingac Set  closing=opening From
+				(select AccountsLedger_SubAccountID
+				,sum(isnull(Accountsledger_AmountCr,0))-sum(isnull(Accountsledger_AmountDr,0)) as opening
+				,cast('''+@FROMDATE+''' as datetime) as FromDate
+				,CASE WHEN accountsledger_MainAccountID=''SYSTM00001'' THEN 1
+					  WHEN accountsledger_MainAccountID=''SYSTM00002'' THEN 2
+					  ELSE 3 END AS LdOrder'
+				IF MONTH(CAST(@FROMDATE AS DATETIME))=4 AND  DAY(CAST(@FROMDATE AS DATETIME))=1
+				BEGIN
+						SELECT @SQLWHERE=@SQLWHERE +' AND accountsledger_transactiondate<='''+@FROMDATE+'''
+													  AND AccountsLedger_TransactionType=''OpeningBalance'''
+				END
+				ELSE
+				BEGIN
+						SELECT @SQLWHERE=@SQLWHERE +' AND accountsledger_transactiondate<'''+@FROMDATE+''''
+				END
+				SELECT @SQLGROUPBY=' GROUP BY AccountsLedger_SubAccountID,accountsledger_MainAccountID)as Kk
+				Where AccountsLedger_SubAccountID=clientid and LdOrder=ledgerorder and orderstatusid=0'
+
+
+				EXEC(@SQLSELECT+@SQLWHERE+@SQLGROUPBY)	
+				
+				--------------------INSERT BLANK ROW FOR CLOSING BALANCE
+					INSERT INTO #tradingac(clientid,closing,trndate,ledgerorder,description,orderstatusid)
+					SELECT distinct clientid
+					,0
+					,CAST(@TODATE AS DATETIME)
+					,ledgerorder
+					,'Closing Balance'
+					,2
+					FROM #tradingac
+				
+	print 1		
+				-----------create table fort final calculation
+				  create table #tradingac_final(ididentity int identity(1,1),clientid varchar(15),
+										trndate datetime,valuedate VARCHAR(20),
+										description varchar(300),
+										settno varchar(15),SegmentName varchar(30),payoutdate varchar(20),
+										debit numeric(28,2),credit numeric(28,2),
+										closing numeric(28,2),ledgerorder int,orderstatusid int,
+										clientname varchar(200),ucc varchar(20),GRPID varchar(20),GRPNAME varchar(200))
+			
+					insert into #tradingac_final
+										(clientid,trndate,valuedate,description,settno,SegmentName,payoutdate,
+										debit,credit,closing,ledgerorder,orderstatusid)
+					select clientid,trndate,valuedate,description,settno,SegmentName,payoutdate,
+						   debit,credit,closing,ledgerorder,orderstatusid
+					from #tradingac
+					order by clientid,LEDGERORDER,orderstatusid,trndate
+
+					CREATE NONCLUSTERED INDEX [tempidentity] ON #tradingac_final  
+					( 
+							ididentity ASC,
+							clientid ASC,
+							ledgerorder ASC
+					)
+
+				
+				----------UPDATE closing BALNC.[for system1]
+				UPDATE #tradingac_final SET closing=AccountRunningTotal FROM 
+				(SELECT td.clientid AS CLIENT,
+				td.ididentity AS UID,
+				td.ledgerorder as ledgrorder,
+				(--==== Triangular join to get the sum of previous rows for each row
+				SELECT SUM((ISNULL(closing,0)+ISNULL(credit,0)-ISNULL(debit,0))) 
+				FROM #tradingac_final td2 
+				WHERE td2.clientid = td.clientid
+				AND td2.ledgerorder=td.ledgerorder
+				AND td2.ididentity <= td.ididentity
+				) AS AccountRunningTotal
+				FROM #tradingac_final td) AS JJ
+				WHERE ididentity=JJ.UID AND clientid=JJ.CLIENT AND ledgerorder=JJ.ledgrorder 
+
+	print 2			
+				---------Company Details Fetch
+						SELECT @SQLSELECT='SELECT 
+						(select Top 1(cmp_panNo) from tbl_master_company where cmp_internalid='''+@Companyid+''')as cmppanno,
+						(select top 1 isnull(Cnt_FirstName,'''')+'' ''+isnull(Cnt_MiddleName,'''')+'' ''+isnull(Cnt_LastName,'''')from tbl_master_Contact where cnt_internalid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID='''+@dpid+'''))As CompilanceofficerName,
+						(select top 1 isnull(phf_countrycode,'''')+'' ''+isnull(phf_areacode,'''')+'' ''+isnull(phf_phonenumber,'''') from tbl_master_PhoneFax where  Phf_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID='''+@dpid+'''))As CompilanceofficerPhone,
+						(select top 1 isnull(eml_email,'''') from tbl_master_Email where eml_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID='''+@dpid+'''))As CompilanceofficerEmail,
+						(select top 1 isnull(eml_website,'''') from tbl_master_Email where eml_cntid='''+@Companyid+''' and rtrim(ltrim(eml_entity))=''Company'' and rtrim(ltrim(eml_type))=''Web Site'') as companywebsite,
+		(select top 1 isnull(add_address1,'''') from tbl_master_address where add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID='''+@dpid+'''))As complianceadd1,
+		(select top 1 isnull(add_address2,'''') from tbl_master_address where add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID='''+@dpid+'''))As complianceadd2,
+		(select top 1 isnull(add_address3,'''') from tbl_master_address where add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID='''+@dpid+'''))As complianceadd3,
+		(select top 1 isnull(add_pin,'''') from tbl_master_address where add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID='''+@dpid+'''))As compliancepin,
+		(Select top 1 exch_cmbpid from tbl_Master_CompanyeXchange where exch_internalID='''+@dpid+''' and exch_compid='''+@Companyid+''') as cmbpid,
+		(select top 1 isnull(city_name,'''') from tbl_master_city,tbl_master_address where city_id=add_city and add_cntid=(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID='''+@dpid+'''))As compliancecity,
+						 isnull((Select top 1 phf_countryCode+''-''+phf_areaCode+''-''+phf_phoneNumber from tbl_master_phonefax where    phf_cntId='''+@Companyid+'''),'''')as cmpphno,
+						 (select Top 1(eml_email) from tbl_master_email where eml_cntid='''+@Companyid+''' and eml_type=''Official'')as cmpemail,
+						 (select Top 1(cmp_Name) from tbl_master_company where cmp_internalid='''+@Companyid+''')as cmpname,
+						  (select Top 1(cmp_ServiceTaxNo) from tbl_master_company where cmp_internalid='''+@Companyid+''')as ServiceTaxNo,
+						 (select top 1(isnull(add_address1,'' '')+'' ''+
+														isnull(add_address2,'' '')+'' ''+isnull(add_address3,'' '')) 
+																from tbl_master_address,tbl_master_company,tbl_master_city
+																	where cmp_internalid=add_cntid and cmp_internalid='''+@Companyid+'''
+																		and add_city=city_id and add_cntID='''+@Companyid+''' 
+																			AND add_entity=''Company'' AND add_addressType=''Office'')as cmpaddress,
+						(select top 1 (isnull(city_name,'' '')+''-''+ isnull(add_pin,'' ''))
+
+																						from tbl_master_address,tbl_master_company,tbl_master_city
+																							where cmp_internalid=add_cntid and cmp_internalid='''+@Companyid+'''
+																								and add_city=city_id and add_cntID='''+@Companyid+''' 
+																									AND add_entity=''Company'' AND add_addressType=''Office'')as cmpaddress1,
+						(SELECT TOP 1 RTRIM(EXCH_TMCODE) FROM TBL_MASTER_COMPANYEXCHANGE 
+						 WHERE EXCH_COMPID='''+@Companyid+'''  '
+
+						IF @MASTERSEGMENT=1
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXN0000002'' AND EXCH_SEGMENTID=''CM'''
+						 END 
+						 IF @MASTERSEGMENT=2
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXN0000002'' AND EXCH_SEGMENTID=''FO'''
+						 END 
+						 IF @MASTERSEGMENT=4
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXB0000001'' AND EXCH_SEGMENTID=''CM'''
+						 END 
+						 IF @MASTERSEGMENT=5
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXB0000001'' AND EXCH_SEGMENTID=''FO'''
+						 END 
+						 IF @MASTERSEGMENT=3
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXM0000002'' AND EXCH_SEGMENTID=''CDX'''
+						 END 
+						 IF @MASTERSEGMENT=7
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXM0000001'' AND EXCH_SEGMENTID=''COMM'''
+						 END 
+						 IF @MASTERSEGMENT=8
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXM0000002'' AND EXCH_SEGMENTID=''CDX'''
+						 END 
+						 IF @MASTERSEGMENT=9
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXN0000004'' AND EXCH_SEGMENTID=''COMM'''
+						 END 
+						 IF @MASTERSEGMENT=11
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXN0000005'' AND EXCH_SEGMENTID=''COMM'''
+						 END 
+						  IF @MASTERSEGMENT=13
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXU0000001'' AND EXCH_SEGMENTID=''CDX'''
+						 END 
+						 SELECT @SQLSELECT=@SQLSELECT+' ) AS MEMBERCODE,
+						 (SELECT TOP 1 RTRIM(EXCH_SEBINO) FROM TBL_MASTER_COMPANYEXCHANGE 
+						 WHERE EXCH_COMPID='''+@Companyid+'''  '
+						 IF @MASTERSEGMENT=3
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXM0000002'' AND EXCH_SEGMENTID=''CDX'''
+						 END 
+						 IF @MASTERSEGMENT=7
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXM0000001'' AND EXCH_SEGMENTID=''COMM'''
+						 END 
+						 IF @MASTERSEGMENT=8
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXM0000002'' AND EXCH_SEGMENTID=''CDX'''
+						 END 
+						 IF @MASTERSEGMENT=9
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXN0000004'' AND EXCH_SEGMENTID=''COMM'''
+						 END 
+						 IF @MASTERSEGMENT=11
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXN0000005'' AND EXCH_SEGMENTID=''COMM'''
+						 END 
+						  IF @MASTERSEGMENT=13
+						 BEGIN
+								SELECT @SQLSELECT=@SQLSELECT+' AND EXCH_EXCHID=''EXU0000001'' AND EXCH_SEGMENTID=''CDX'''
+						 END 
+						 SELECT @SQLSELECT=@SQLSELECT+' ) AS SEBINO'
+						 EXEC(@SQLSELECT)
+
+
+				-------------Record fetch Client Details 
+				Insert Into #ClientSelection(client)
+				select Distinct client
+				from #clientdetail,#tradingac_final
+				Where clientid=client
+
+
+				---------call [CLIENTSECURITY] 
+				exec [CLIENTSECURITY] @FINYEAR,@FROMDATE,@TODATE,@COMPANYID,0,'Quatar',@CLIENTS,@BRANCHID,@GRPTYPE,@Groupby,@Header,@Footer
+				--exec [CLIENTSECURITY] @FINYEAR,@FROMDATE,@TODATE,@COMPANYID,0,@CLIENTS,@BRANCHID,@GRPTYPE,@Groupby,@Header,@Footer,'','PDF'
+
+				If @ChkDoNotPrintSecurities='Y'
+				Begin
+						-------Update Other Information For Client
+						Update #ClientSelection Set  clientfullname=#clientdetail.clientfullname
+													,clientucc=#clientdetail.clientucc
+													,GRPID1=#clientdetail.GRPID1
+													,GRPNAME1=#clientdetail.GRPNAME1
+													,Address=#clientdetail.Address
+													,Address1=#clientdetail.Address1
+													,PIN=#clientdetail.PIN
+													,PhNumber=#clientdetail.PhNumber
+													,Email=#clientdetail.Email
+													,city=#clientdetail.city
+													,stateName=#clientdetail.stateName
+													,country=#clientdetail.country
+													,Fx_Number=#clientdetail.Fx_Number
+													,Header=#clientdetail.Header
+													,Footer=#clientdetail.Footer
+													,FromDate=#clientdetail.FromDate
+													,Todate=#clientdetail.Todate
+													,Pan=#clientdetail.Pan
+													--company=(select Top 1(cmp_Name) from tbl_master_company where cmp_internalid=@Companyid) as cmpname
+						From #clientdetail Where  #ClientSelection.client=#clientdetail.client
+
+
+						Select * From #ClientSelection 
+
+						-----------Record fetch For Quatar
+						select clientid,convert(varchar(12),trndate,106) as TrDate,
+						Case When isnull(valuedate,'01 Jan 1900')='01 Jan 1900' Then null Else convert(varchar(12),valuedate,106) End as ValueDate,
+						description,settno,SegmentName,
+						convert(varchar(12),payoutdate,106) as TradeDate
+						,CASE WHEN ISNULL(debit,0)=0 THEN NULL WHEN debit<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(debit) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(debit AS VARCHAR(8000)),'N') END AS Debit
+						,CASE WHEN ISNULL(credit,0)=0 THEN NULL WHEN credit<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(credit) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(credit AS VARCHAR(8000)),'N') END AS Credit
+						,CASE WHEN closing<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(closing) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(closing AS VARCHAR(8000)),'N') END AS Closing
+						,ledgerorder,orderstatusid from #tradingac_final
+						order by clientid,LEDGERORDER,orderstatusid,trndate
+
+						-----------SELECT ALL RESULT
+						SELECT 'ZZZ' as CUSTOMERID,'ZZZ' AS [Client Name],NULL as [Scrip],
+						NULL AS [Tran.Date] ,'Closing Balance' as [Purpose],
+						NULL as [Received From],NULL as [Sett. From],NULL as [Delivered To],
+						NULL as [Sett. To],NULL as [ISIN],NULL as [Remarks],
+						NULL as [Qty Recvd.[To Dlvr],NULL as [Qty Dlvrd.[To Recv]
+
+						----------Select Main Record For Release
+						Select 'ZZZ' AS ClientId,NULL AS WorkingDays
+						,NULL AS AverageDailyMargin,NULL AS MarkUp,NULL AS NeteffectOfMargin
+						,NULL AS TradingBaln,NULL AS CashMargin,NULL AS FDRBaln
+						,NULL AS NetCashComponet,NULL AS CashMarkUp,NULL AS CashDeposit
+						,NULL AS MarkUp,NULL AS HoldBack,NULL AS Margin,NULL AS Purchase
+						,NULL AS Sale,NULL AS NoCash,NULL AS Effective
+						,NULL AS ExcessShortage,NULL AS CashReleased,NULL AS StockReleased
+						,NULL AS CashRetained,NULL AS StocksRetained
+						
+						----------Retain Stocks
+						Select 'ZZZ' AS  CustomerId,NULL as AcName
+						,NULL AS Segment,NULL ScripName,NULL as ISIN
+						,NULL AS Quantity,NULL AS Price,NULL AS MktValue,NULL AS Haircut,NULL AS StocksValue
+						
+				End
+				Else 
+				Begin
+						---------call [Report_QuatarlyStatementRelease] 
+						exec [Report_QuatarlyStatementRelease] @FINYEAR,@FROMDATE,@TODATE,@COMPANYID--,@FORDATE
+
+						-------Update Other Information For Client
+						Update #ClientSelection Set  clientfullname=#clientdetail.clientfullname
+													,clientucc=#clientdetail.clientucc
+													,GRPID1=#clientdetail.GRPID1
+													,GRPNAME1=#clientdetail.GRPNAME1
+													,Address=#clientdetail.Address
+													,Address1=#clientdetail.Address1
+													,PIN=#clientdetail.PIN
+													,PhNumber=#clientdetail.PhNumber
+													,Email=#clientdetail.Email
+													,city=#clientdetail.city
+													,stateName=#clientdetail.stateName
+													,country=#clientdetail.country
+													,Fx_Number=#clientdetail.Fx_Number
+													,Header=#clientdetail.Header
+													,Footer=#clientdetail.Footer
+													,FromDate=#clientdetail.FromDate
+													,Todate=#clientdetail.Todate
+													,Pan=#clientdetail.Pan
+						From #clientdetail Where  #ClientSelection.client=#clientdetail.client
+
+
+						Select * From #ClientSelection --where FlagRelease=1
+
+						-----------Record fetch For Quatar
+						select clientid,convert(varchar(12),trndate,106) as TrDate,
+						Case When isnull(valuedate,'01 Jan 1900')='01 Jan 1900' Then null Else convert(varchar(12),valuedate,106) End as ValueDate,
+						description,settno,SegmentName,
+						convert(varchar(12),payoutdate,106) as TradeDate
+						,CASE WHEN ISNULL(debit,0)=0 THEN NULL WHEN debit<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(debit) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(debit AS VARCHAR(8000)),'N') END AS Debit
+						,CASE WHEN ISNULL(credit,0)=0 THEN NULL WHEN credit<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(credit) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(credit AS VARCHAR(8000)),'N') END AS Credit
+						,CASE WHEN closing<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(closing) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(closing AS VARCHAR(8000)),'N') END AS Closing
+						,ledgerorder,orderstatusid from #tradingac_final
+						order by clientid,LEDGERORDER,orderstatusid,trndate
+
+						----------Client Security
+						-----------SELECT ALL RESULT
+						SELECT CUSTOMERID,
+						CLIENTNAME+'['+UCC+']' AS [Client Name],
+						SYMBOLNAME as [Scrip],
+						CONVERT(VARCHAR(11),TRADEDATE,106) AS [Tran.Date] ,
+						PURPOSE as [Purpose],
+						RECEIVEDFROM as [Received From],SETTFROM as [Sett. From],
+						DELIVEREDTO as [Delivered To],
+						SETTTO as [Sett. To],
+						ISINNO as [ISIN],
+						REMARKS as [Remarks],
+						QTYIN as [Qty Recvd.[To Dlvr],
+						QTYOUT as [Qty Dlvrd.[To Recv],
+						RUNNINGBALN as [Balance],GRPID1 AS GRPID,GRPNAME1 AS GRPNAME 
+						FROM #SECURITY,#clientdetail Where
+						client=CUSTOMERID ORDER BY GRPNAME1,CLIENTNAME,SYMBOLNAME,STATUSID,TRADEDATE,SETTFROM,SETTTO 
+
+
+						----------Select Main Record For Release
+--Old
+--						Select ClientId,WorkingDays
+--						,CASE WHEN ISNULL(AverageDailyMargin,0)=0 THEN NULL WHEN AverageDailyMargin<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(AverageDailyMargin) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(AverageDailyMargin AS VARCHAR(8000)),'N') END AS AverageDailyMargin
+--						,CASE WHEN ISNULL(MarkUp,0)=0 THEN NULL WHEN MarkUp<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(MarkUp) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(MarkUp AS VARCHAR(8000)),'N') END AS MarkUp
+--						,CASE WHEN ISNULL(NeteffectOfMargin,0)=0 THEN NULL WHEN NeteffectOfMargin<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(NeteffectOfMargin) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(NeteffectOfMargin AS VARCHAR(8000)),'N') END AS NeteffectOfMargin
+--						,CASE WHEN ISNULL(TradingBaln,0)=0 THEN NULL WHEN TradingBaln<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(TradingBaln) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(TradingBaln AS VARCHAR(8000)),'N') END AS TradingBaln
+--						,CASE WHEN ISNULL(CashMargin,0)=0 THEN NULL WHEN CashMargin<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(CashMargin) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(CashMargin AS VARCHAR(8000)),'N') END AS CashMargin
+--						,CASE WHEN ISNULL(FDRBaln,0)=0 THEN NULL WHEN FDRBaln<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(FDRBaln) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(FDRBaln AS VARCHAR(8000)),'N') END AS FDRBaln
+--						,CASE WHEN ISNULL(NetCashComponet,0)=0 THEN NULL WHEN NetCashComponet<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(NetCashComponet) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(NetCashComponet AS VARCHAR(8000)),'N') END AS NetCashComponet
+--						,CASE WHEN ISNULL(CashMarkUp,0)=0 THEN NULL WHEN CashMarkUp<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(CashMarkUp) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(CashMarkUp AS VARCHAR(8000)),'N') END AS CashMarkUp
+--						,CASE WHEN ISNULL(CashDeposit,0)=0 THEN NULL WHEN CashDeposit<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(CashDeposit) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(CashDeposit AS VARCHAR(8000)),'N') END AS CashDeposit
+--						,CASE WHEN ISNULL(MarkUp,0)=0 THEN NULL WHEN MarkUp<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(MarkUp) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(MarkUp AS VARCHAR(8000)),'N') END AS MarkUp
+--						,CASE WHEN ISNULL(HoldBack,0)=0 THEN NULL WHEN HoldBack<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(HoldBack) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(HoldBack AS VARCHAR(8000)),'N') END AS HoldBack
+--						,CASE WHEN ISNULL(Margin,0)=0 THEN NULL WHEN Margin<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(Margin) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(Margin AS VARCHAR(8000)),'N') END AS Margin
+--						,CASE WHEN ISNULL(Purchase,0)=0 THEN NULL WHEN Purchase<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(Purchase) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(Purchase AS VARCHAR(8000)),'N') END AS Purchase
+--						,CASE WHEN ISNULL(Sale,0)=0 THEN NULL WHEN Sale<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(Sale) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(Sale AS VARCHAR(8000)),'N') END AS Sale
+--						,CASE WHEN ISNULL(NoCash,0)=0 THEN NULL WHEN NoCash<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(NoCash) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(NoCash AS VARCHAR(8000)),'N') END AS NoCash
+--						,CASE WHEN ISNULL(Effective,0)=0 THEN NULL WHEN Effective<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(Effective) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(Effective AS VARCHAR(8000)),'N') END AS Effective
+--						,CASE WHEN ISNULL(ExcessShortage,0)=0 THEN NULL WHEN ExcessShortage<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(ExcessShortage) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(ExcessShortage AS VARCHAR(8000)),'N') END AS ExcessShortage
+--						,CASE WHEN ISNULL(CashReleased,0)=0 THEN NULL WHEN CashReleased<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(CashReleased) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(CashReleased AS VARCHAR(8000)),'N') END AS CashReleased
+--						,CASE WHEN ISNULL(StockReleased,0)=0 THEN NULL WHEN StockReleased<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(StockReleased) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(StockReleased AS VARCHAR(8000)),'N') END AS StockReleased
+--						,CASE WHEN ISNULL(CashRetained,0)=0 THEN NULL WHEN CashRetained<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(CashRetained) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(CashRetained AS VARCHAR(8000)),'N') END AS CashRetained
+--						,CASE WHEN ISNULL(StocksRetained,0)=0 THEN NULL WHEN StocksRetained<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(StocksRetained) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(CAST(Effective AS VARCHAR(8000)),'N') END AS StocksRetained
+--						From #QuaterRelease
+
+--New
+						select '<b>(Note : </b> Margin Calculated as '+Cast(Release_MarginMarkup as Varchar)+ ' % Of Daily Average Margin for Previous '+
+						Cast(Release_MarginFor as Varchar)+' Day(s).Cash Component forming Total Margin Deposit Maintained At '+
+							Cast(Release_CashComponent as Varchar)+ ' % of Calculated Margin.<b>)</b>' as Note,cnt_internalId as ClientID,
+						Release_PositionDate as PositionDate,Isnull(Release_LedgerBalance,0) As Ledger,
+						Isnull(Release_cashmarginbalance,0) As MarginLedger,
+						Isnull(Release_tDayfobill,0) As TDayFOBillReversal,
+						Isnull(Release_tdaycdbill,0) As TDayCDBillReversal,
+						0 As TDayCMBillReversal,
+						0 As TM1DayCMBillReversal,
+						Isnull(Release_holdbackstocks,0)+Isnull(Release_marginstocks,0) As TotalSecu,
+						Isnull(Release_LedgerBalance,0)+Isnull(Release_cashmarginbalance,0)+Isnull(Release_holdbackstocks,0)+Isnull(Release_marginstocks,0)-
+						Isnull(Release_tDayfobill,0)-Isnull(Release_tdaycdbill,0) As TotalFundsAndSecu,
+						Isnull(Release_tdayfomargin,0) As TDayFOMargin,
+						Isnull(Release_tdaycdmargin,0) As TDayCDMargin,
+						(Isnull(Release_tdayfomargin,0)+Isnull(Release_tdaycdmargin,0))*Release_MarginMarkup/100 As FOCDMarginAmount,
+						Case When Isnull(Release_tDayfobill,0)<0 then Abs(Isnull(Release_tDayfobill,0)) Else 0 End As TDayFOPayin,
+						Case When Isnull(Release_tDaycdbill,0)<0 then Abs(Isnull(Release_tDaycdbill,0)) Else 0 End As TDayCDPayin,
+						Case When Isnull(Release_tdaycmbill,0)<0 then Abs(Isnull(Release_tdaycmbill,0)) Else 0 End As TDayCMPayin,
+						Case When Isnull(Release_tm1daycmbill,0)<0 then Abs(Isnull(Release_tm1daycmbill,0)) Else 0 End As TM1DayCMPayin,
+						Isnull(Release_tdaycmdeliveryin,0) As TDayCMDeliveryIN,
+						Isnull(Release_tm1daycmdeliveryin,0) As TM1DayCMDeliveryIN,
+						Isnull(Release_tdaycmturnover,0) As TDayValueOfCMTrades,
+						Case When Isnull(Release_tDayfobill,0)<0 then Abs(Isnull(Release_tDayfobill,0)) Else 0 End+
+						Case When Isnull(Release_tDaycdbill,0)<0 then Abs(Isnull(Release_tDaycdbill,0)) Else 0 End+
+						Case When Isnull(Release_tdaycmbill,0)<0 then Abs(Isnull(Release_tdaycmbill,0)) Else 0 End+
+						Case When Isnull(Release_tm1daycmbill,0)<0 then Abs(Isnull(Release_tm1daycmbill,0)) Else 0 End+ 
+						Isnull(Release_tdaycmdeliveryin,0)+Isnull(Release_tm1daycmdeliveryin,0)+Isnull(Release_tdaycmturnover,0)+
+						(Isnull(Release_tdayfomargin,0)+Isnull(Release_tdaycdmargin,0))*Release_MarginMarkup/100 As TotalFundsSecuToRetain,
+
+							Isnull(Release_LedgerBalance,0)+Isnull(Release_cashmarginbalance,0)+Isnull(Release_holdbackstocks,0)+Isnull(Release_marginstocks,0)-
+							Isnull(Release_tDayfobill,0)-Isnull(Release_tdaycdbill,0)-
+							(Case When Isnull(Release_tDayfobill,0)<0 then Abs(Isnull(Release_tDayfobill,0)) Else 0 End+
+							Case When Isnull(Release_tDaycdbill,0)<0 then Abs(Isnull(Release_tDaycdbill,0)) Else 0 End+
+							Case When Isnull(Release_tdaycmbill,0)<0 then Abs(Isnull(Release_tdaycmbill,0)) Else 0 End+
+							Case When Isnull(Release_tm1daycmbill,0)<0 then Abs(Isnull(Release_tm1daycmbill,0)) Else 0 End+ 
+							Isnull(Release_tdaycmdeliveryin,0)+Isnull(Release_tm1daycmdeliveryin,0)+Isnull(Release_tdaycmturnover,0)+
+							(Isnull(Release_tdayfomargin,0)+Isnull(Release_tdaycdmargin,0))*Release_MarginMarkup/100) As ExcessShortage,
+
+						Case
+							When Isnull(Release_LedgerBalance,0)+Isnull(Release_cashmarginbalance,0)+Isnull(Release_holdbackstocks,0)+Isnull(Release_marginstocks,0)-
+							Isnull(Release_tDayfobill,0)-Isnull(Release_tdaycdbill,0)-
+							(Case When Isnull(Release_tDayfobill,0)<0 then Abs(Isnull(Release_tDayfobill,0)) Else 0 End+
+							Case When Isnull(Release_tDaycdbill,0)<0 then Abs(Isnull(Release_tDaycdbill,0)) Else 0 End+
+							Case When Isnull(Release_tdaycmbill,0)<0 then Abs(Isnull(Release_tdaycmbill,0)) Else 0 End+
+							Case When Isnull(Release_tm1daycmbill,0)<0 then Abs(Isnull(Release_tm1daycmbill,0)) Else 0 End+ 
+							Isnull(Release_tdaycmdeliveryin,0)+Isnull(Release_tm1daycmdeliveryin,0)+Isnull(Release_tdaycmturnover,0)+
+							(Isnull(Release_tdayfomargin,0)+Isnull(Release_tdaycdmargin,0))*Release_MarginMarkup/100)>0 Then
+							Isnull(Release_LedgerBalance,0)+Isnull(Release_cashmarginbalance,0)+Isnull(Release_holdbackstocks,0)+Isnull(Release_marginstocks,0)-
+							Isnull(Release_tDayfobill,0)-Isnull(Release_tdaycdbill,0)-
+							(Case When Isnull(Release_tDayfobill,0)<0 then Abs(Isnull(Release_tDayfobill,0)) Else 0 End+
+							Case When Isnull(Release_tDaycdbill,0)<0 then Abs(Isnull(Release_tDaycdbill,0)) Else 0 End+
+							Case When Isnull(Release_tdaycmbill,0)<0 then Abs(Isnull(Release_tdaycmbill,0)) Else 0 End+
+							Case When Isnull(Release_tm1daycmbill,0)<0 then Abs(Isnull(Release_tm1daycmbill,0)) Else 0 End+ 
+							Isnull(Release_tdaycmdeliveryin,0)+Isnull(Release_tm1daycmdeliveryin,0)+Isnull(Release_tdaycmturnover,0)+
+							(Isnull(Release_tdayfomargin,0)+Isnull(Release_tdaycdmargin,0))*Release_MarginMarkup/100) Else 0 End As AmountToReturn,
+						Case
+							When Isnull(Release_fundrelease,0)>0 and Release_IsLockedFunds is not null then Isnull(Release_fundrelease,0) Else 0 End  As FundsRelease,
+						Case
+							When Isnull(Release_stockrelease,0)>0 and Release_IsLockedStocks is not null then Isnull(Release_stockrelease,0) Else 0 End As SecuritiesRelease
+						,Cast(Release_MarginMarkup as Varchar) as Margin_Percent
+		
+		
+		--					ISNULL(Release_IsLockedFunds,'0') as lockfunds1,
+		--ISNULL(Release_IsLockedStocks,'0') as lockstock1
+						from trans_release,
+						tbl_master_contact,tbl_master_branch,
+						#ClientSelection
+						where
+						Release_CompanyID=@CompanyID
+	    and Release_FinYear=@Finyear and Release_CustomerID=client
+						and Release_customerid=cnt_internalid And
+						cnt_branchid = branch_id And
+						(Release_PositionDate Between @FROMDATE and @TODATE)
+						and 
+						(abs(Isnull(Release_LedgerBalance,0))+abs(Isnull(Release_cashmarginbalance,0))+abs(Isnull(Release_holdbackstocks,0))+abs(Isnull(Release_marginstocks,0))+
+						abs(Isnull(Release_tDayfobill,0))+abs(Isnull(Release_tdaycdbill,0))+
+						abs(Isnull(Release_tDayfobill,0))+
+						abs(Isnull(Release_tDaycdbill,0))+
+						abs(Isnull(Release_tdaycmbill,0))+
+						abs(Isnull(Release_tm1daycmbill,0))+ 
+						abs(Isnull(Release_tdaycmdeliveryin,0))+abs(Isnull(Release_tm1daycmdeliveryin,0))+abs(Isnull(Release_tdaycmturnover,0))+
+						abs(Isnull(Release_tdayfomargin,0))+abs(Isnull(Release_tdaycdmargin,0)))<>0
+						order by branch_description,cnt_ucc
+						--------------Detail Of Securities Retained in Margin/Holdback Account
+						----------Retain Stocks
+						--select * from #QuaterRelease
+						Select distinct ReleaseStocks_CustomerID as CustomerId
+						,RTRIM(DPAccounts_ShortName) as AcName
+						,CASE	WHEN EXCH_EXCHID='EXN0000002' AND EXCH_SEGMENTID='CM' THEN 'NSE-CM'
+								WHEN EXCH_EXCHID='EXB0000001' AND EXCH_SEGMENTID='CM' THEN 'BSE-CM'
+								WHEN EXCH_EXCHID='EXC0000001' AND EXCH_SEGMENTID='CM' THEN 'CSE-CM'
+								WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXM0000001' THEN 'MCX-COMM'
+								WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXI0000001' THEN 'ICEX-COMM'
+								WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXN0000004' THEN 'NCDEX-COMM'
+								WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXN0000005' THEN 'NMCE-COMM'
+								WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXD0000001' THEN 'DGCX-COMM'
+								WHEN EXCH_SEGMENTID='CDX' AND EXCH_EXCHID='EXM0000002' THEN 'MCXSX-CDX'
+								WHEN EXCH_SEGMENTID='CDX' AND EXCH_EXCHID='EXU0000001' THEN 'USE-CDX'
+								WHEN EXCH_SEGMENTID='CDX' AND EXCH_EXCHID='EXB0000001' THEN 'BSE-CDX'
+								WHEN EXCH_SEGMENTID='CDX' AND EXCH_EXCHID='EXN0000002' THEN 'NSE-CDX'
+								WHEN EXCH_SEGMENTID='SPOT' AND EXCH_EXCHID='EXN0000006' THEN 'NSEL-SPOT'
+								WHEN EXCH_EXCHID='EXN0000002' AND EXCH_SEGMENTID='FO'THEN 'NSE-FO'
+								WHEN EXCH_EXCHID='EXB0000001' AND EXCH_SEGMENTID='FO' THEN 'BSE-FO'				
+						ELSE NULL END AS Segment
+						,case when isnull(Equity_StrikePrice,0.0)=0.0 and Equity_EffectUntil is null
+								then isnull(rtrim(Equity_TickerSymbol),'')+' '+isnull(rtrim(Equity_Series),'['+rtrim(Equity_tickercode)+']')
+							 when isnull(Equity_StrikePrice,0.0)<>0.0 and Equity_EffectUntil is null
+								then isnull(rtrim(Equity_TickerSymbol),'')+' '+isnull(rtrim(Equity_Series),'['+rtrim(Equity_tickercode)+']')+' '+cast(cast(round(Equity_StrikePrice,2) as numeric(28,2)) as varchar)
+							 when isnull(Equity_StrikePrice,0.0)=0.0 and Equity_EffectUntil is not null
+								then isnull(rtrim(Equity_TickerSymbol),'')+' '+isnull(rtrim(Equity_Series),'['+rtrim(Equity_tickercode)+']')+' '+convert(varchar(9),Equity_EffectUntil,6)
+						 else isnull(rtrim(Equity_TickerSymbol),'')+' '+isnull(rtrim(Equity_Series),'['+rtrim(Equity_tickercode)+']')+' '+cast(cast(round(Equity_StrikePrice,2) as numeric(28,2)) as varchar)+' '+convert(varchar(9),Equity_EffectUntil,6)
+						end AS ScripName
+						,[ReleaseStocks_ISIN] as ISIN
+						,CASE WHEN ISNULL(ReleaseStocks_Quantity,0)=0 THEN NULL WHEN ReleaseStocks_Quantity<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(cast(ReleaseStocks_Quantity as numeric(28,0))) AS VARCHAR(8000)),'Y')  ELSE dbo.fn_FormatNumber(cast(CAST(ReleaseStocks_Quantity  as numeric(28,0)) AS VARCHAR(8000)),'Y') END AS Quantity
+						,CASE WHEN ISNULL(ReleaseStocks_Price,0)=0 THEN NULL WHEN ReleaseStocks_Price<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(cast(ReleaseStocks_Price  as numeric(28,2))) AS VARCHAR(8000)),'N')  ELSE dbo.fn_FormatNumber(cast(CAST(ReleaseStocks_Price  as numeric(28,2)) AS VARCHAR(8000)),'N') END AS Price
+						,CASE WHEN ISNULL(ReleaseStocks_Price,0)*ISNULL(ReleaseStocks_Quantity,0)=0 THEN NULL WHEN ReleaseStocks_Price*ReleaseStocks_Quantity<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(cast(ReleaseStocks_Price*ReleaseStocks_Quantity  as numeric(28,2))) AS VARCHAR(8000)),'N')  ELSE dbo.fn_FormatNumber(CAST(cast(ReleaseStocks_Price*ReleaseStocks_Quantity as numeric(28,2)) AS VARCHAR(8000)),'N') END AS MktValue
+						,CASE WHEN ISNULL(ReleaseStocks_Haircut,0)=0 THEN NULL WHEN ReleaseStocks_Haircut<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(cast(ReleaseStocks_Haircut  as numeric(28,2))) AS VARCHAR(8000)),'N')  ELSE dbo.fn_FormatNumber(cast(CAST(ReleaseStocks_Haircut  as numeric(28,2)) AS VARCHAR(8000)),'N') END AS Haircut
+						,CASE WHEN ISNULL(ReleaseStocks_Value,0)=0 THEN NULL WHEN ReleaseStocks_Value<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(cast(ReleaseStocks_Value  as numeric(28,2))) AS VARCHAR(8000)),'N')  ELSE dbo.fn_FormatNumber(cast(CAST(ReleaseStocks_Value  as numeric(28,2)) AS VARCHAR(8000)),'N') END AS StocksValue
+						From [Trans_ReleaseStocks],master_equity,Master_DPAccounts ,TBL_MASTER_COMPANYEXCHANGE,#QuaterRelease
+						where ReleaseStocks_CustomerID=ClientId and Equity_SeriesID=ReleaseStocks_ProductSeriesID 
+						--and ReleaseStocks_CustomerAccount is null 
+						and ReleaseStocks_IsLocked is null
+						and (ReleaseStocks_TransactionDate Between CAST(@FROMDATE AS DATETIME) and CAST(@TODATE AS DATETIME))
+						--and ReleaseStocks_TransactionDate=cast(convert(varchar(12),cast(@FORDATE as Datetime),101) as datetime)
+						and DPAccounts_ID=ReleaseStocks_AccountID and EXCH_INTERNALID=DPAccounts_exchangesegmentid
+					End 
+				
+select * from #clientdetail
+create Table #Signeddoc(contactid varchar(max))
+select @SQLSELECT='select distinct SignedDocuments_ContactBenID from Trans_SignedDocuments ,'
+					IF @GRPTYPE='BRANCH'
+							BEGIN
+									Select @SQLSELECT=@SQLSELECT+'tbl_master_branch
+									where SignedDocuments_BranchID=branch_id'
+									IF @Groupby<>'ALL'
+									BEGIN
+										Select @SQLSELECT=@SQLSELECT+' AND SignedDocuments_BranchID IN('+@Groupby+')'
+									END
+							END
+					ELSE
+							BEGIN
+									Select @SQLSELECT=@SQLSELECT+'tbl_master_groupmaster,tbl_trans_group
+									where grp_contactid=SignedDocuments_ContactBenID
+									and SignedDocuments_ContactBenID=grp_contactid
+									AND gpm_type='''+@GRPTYPE+''' 
+									AND SignedDocuments_BranchID=gpm_id
+									AND GRP_GROUPTYPE='''+@GRPTYPE+''''
+									IF @Groupby<>'ALL'
+									BEGIN
+										Select @SQLSELECT=@SQLSELECT+' AND SignedDocuments_BranchID IN('+@Groupby+')'
+									END
+									
+							END 
+					IF @CLIENTS<>'ALL'
+							BEGIN
+									SELECT @SQLSELECT=@SQLSELECT+' AND SignedDocuments_ContactBenID IN ('+@CLIENTS+') '
+							END 
+					SELECT @SQLSELECT=@SQLSELECT+' and SignedDocuments_CompanyID='''+@COMPANYID+'''
+					and SignedDocuments_FinYear='''+@FINYEAR+'''
+				    and SignedDocuments_DocumentType='''+@quarter+''' '
+						
+	 
+		
+insert into #Signeddoc exec(@SQLSELECT) 
+select contactid from #Signeddoc
+ 
+ create table #exceptclient(client varchar(max))
+ insert into #exceptclient
+ select client from #ClientSelection where  isnull(Email,'')<>''
+ except
+ select contactid from #Signeddoc
+ select @forcolas=coalesce(@forcolas+''',''','')+client from #exceptclient
+ set @forcolas=''''+@forcolas+''''
+ select @forcolas
+ select client from #ClientSelection where len(ltrim(rtrim(isnull(Email,''))))>0
+ --select * from #ClientSelection where isnull(Email,'')<>''
+Drop Table #QuaterRelease
+drop table #clientdetail
+drop table #tradingac
+drop table #tradingac_final
+drop Table #ClientSelection
+end
+
+
+--declare @clientid varchar(max),@branchhearchy varchar(max),@grptype varchar(10),@grpid varchar(max)
+--select @clientid='''CLA0000226'''
+--select @branchhearchy='1,2,32,421,36,32,18'
+--select @grpid='ALL'
+--EXEC Report_QuatarlyStatement '2010-2011','31 Mar 2011','COR0000002',@clientid,@branchhearchy,'BRANCH',@grpid,1,'',''
+--
+
+
+
+
+
+
+
+
+
+
+
+
+
+

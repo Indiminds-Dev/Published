@@ -1,0 +1,91 @@
+
+ALTER  PROCEDURE [dbo].[SP_INSUP_FOTradeODINCHECK]
+@Module varchar(100),
+@ModifyUser	varchar(10)=null,
+@ExcSegmt int,
+@FilePath varchar(250)=null,
+@ExchangeTrades_CompanyID char(10)=null,
+@LckTradeDate datetime,
+@ExpireDate datetime,
+@LockMsg Varchar(250) Output
+AS
+BEGIN
+
+
+		IF @Module='InsertTradeData'
+		BEGIN
+				declare @ReadFrom as int
+				declare @Q as varchar(250)
+				declare @P int 
+				Declare @Min as Int
+				Declare @Max As Int
+				DECLARE @FY VARCHAR(250)  
+	
+			CREATE TABLE  #tmpTrans_TradeODIN (
+
+				[TradeODIN_TradeNumber] varchar(100) null,
+				[TradeODIN_TradeStatus]  varchar(100) null,
+				[TradeODIN_InstrumentType] varchar(100) null,
+				[TradeODIN_SecuritySymbol] varchar(100) NULL,
+				[TradeODIN_EXPIRYDATE] varchar(100) NULL,
+				[TradeODIN_StrikePrice] varchar(100) NULL,
+				[TradeODIN_OptionType] varchar(100) NULL,
+				[TradeODIN_SecurityCode] varchar(100) NULL,
+				[TradeODIN_BranchID] varchar(100) null,
+				[TradeODIN_RESERVED7] varchar(100) null,
+				[TradeODIN_MARKETTYPE] varchar(200) null,
+				[TradeODIN_CTCLID] varchar(100) null,
+				[TradeODIN_BOOKTYPE] varchar(100) null,
+				[TradeODIN_BUYSELLINDICATOR] varchar(100) null,
+				[TradeODIN_TradeQuantity] varchar(100) null,
+				[TradeODIN_TradePrice] varchar(100) null,
+				[TradeODIN_ProClient] varchar(100) null,
+				[TradeODIN_ClientAcc] varchar(100) null,
+				[TradeODIN_ParticipantCode] varchar(100) null, 
+				[TradeODIN_RESERVED4] varchar(100) null,
+				[TradeODIN_RESERVED5] varchar(100) null,
+				[TradeODIN_TradeEntryTime] varchar(100) null,
+				[TradeODIN_TRADEMODIFIEDTIME] varchar(100) null,
+				[TradeODIN_ORDERNUMBER] varchar(100) null,
+				[TradeODIN_CPID] varchar(100) null,
+				[TradeODIN_OrderModifIedTime] varchar(100) null
+				)
+
+				set @ReadFrom=1
+				
+				set @Q='BULK INSERT #tmpTrans_TradeODIN FROM '+ char(39) + @FilePath + char(39) + ' with (firstrow = ' + convert(varchar,@ReadFrom) + ' , FIELDTERMINATOR = ' + char(39) + ',' + char(39) + ' , ROWTERMINATOR = ' + char(39) + char(10)+ + char(39) +')'
+				print @Q
+				exec (@Q)
+				
+				set @FY=(select Top (1) Convert(datetime,[TradeODIN_TradeEntryTime],120) From #tmpTrans_TradeODIN)
+
+				If (@FY>=@LckTradeDate and @FY<=@ExpireDate)
+				Begin
+					SELECT COUNT([TradeODIN_OrderModifIedTime])
+					FROM #tmpTrans_TradeODIN WHERE [TradeODIN_OrderModifIedTime] LIKE '%,%' OR [TradeODIN_OrderModifIedTime] LIKE ',%' OR [TradeODIN_OrderModifIedTime] LIKE '%,' 
+					
+					set @LockMsg=''
+				End
+				Else
+				Begin
+					set @LockMsg='Data Is Locked'
+				End
+
+          END
+
+END
+
+--truncate table trans_exchangetrades
+
+--exec [SP_INSUP_Trade] 'InsertTradeDataCSV',373,16,'COR0000001'
+
+--exec [SP_INSUP_TradeODIN] 'InsertTradeData',235,1,'\\server\\CommonFolderInfluxCRM\\4652_29012010.TXT','COI0000001'
+--exec [SP_INSUP_FOTradeODINCHECK] 'InsertTradeData',235,2,'\\binay\\CommonFolderInfluxCRM\\0610TRD.TXT','COR0000001'
+
+
+
+--SELECT * from Trans_ExchangeTrades where ExchangeTrades_TradeDate='2010-01-29' AND ExchangeTrades_Segment=1 09:14:10.000'
+
+
+--Select * from master_Settlements where settlements_exchangesegmentID=1
+

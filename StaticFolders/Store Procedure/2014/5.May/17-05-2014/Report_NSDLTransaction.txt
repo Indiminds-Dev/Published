@@ -1,0 +1,598 @@
+
+CREATE Procedure [dbo].[Report_NSDLTransaction]
+	@FromDate varchar(30),
+	@ToDate varchar(30),
+	@BenAccNo varchar(8),
+	@ISIN varchar(30),
+	@SettlementID varchar(30),
+	@BenType varchar(30),
+	@CompanyID varchar(30),	
+	@BranchID nvarchar(max)
+	
+AS
+BEGIN
+		SET NOCOUNT ON;		
+				
+		Declare @openHoldingDate varchar(30),@closeHoldingDate varchar(30),@cmpname varchar(1000),
+				@Sql varchar(max),@SqlWhere varchar(max),@Sql1 varchar(max),@Sql2 varchar(max)
+				
+		Select  @openHoldingDate=Convert(varchar(10),Max(NsdlHolding_HoldingDateTime),110) 
+			from Trans_NsdlHolding
+			where NsdlHolding_HoldingDateTime < @FromDate
+
+		Select @closeHoldingDate=Convert(varchar(10),Max(NsdlHolding_HoldingDateTime),110) 
+			from Trans_NsdlHolding 
+			where NsdlHolding_HoldingDateTime <= @ToDate  
+				  and NsdlHolding_HoldingDateTime > @FromDate
+
+		if @openHoldingDate is null
+			begin
+				 set @openHoldingDate='01 July 1900 00:00:00'
+			end
+
+		if @closeHoldingDate is null
+			begin
+				 set @closeHoldingDate='31 July 1900 23:59:59'
+			end		
+------Select @openHoldingDate,@closeHoldingDate
+		
+		select @cmpname=cmp_Name +' [ ' +dp_dpid+' ]' +CHAR(13)+ isnull(add_address1,'')+CHAR(13)+isnull(add_address2,'')+CHAR(13)+isnull(add_address3,'')+', '+isnull(city_name,'')+'-'+ isnull(add_pin,'')  
+		from  tbl_master_address,tbl_master_company,tbl_master_companyDp, tbl_master_city
+		where dp_companyId=cmp_internalid 
+				and cmp_internalid=add_cntId 
+				and add_city=city_id 
+				and dp_companyId=@CompanyID 
+				and dp_depository='NSDL'
+
+	
+		Set @SqlWhere=''
+		if @isin <>'na'
+			begin
+				 Set @SqlWhere=@SqlWhere+ ' and NSDLISIN_Number='+char(39)+@ISIN +char(39)
+			end
+	
+		if @SettlementID <>'na'
+			begin
+				 Set @SqlWhere=@SqlWhere+ ' and NsdlTransaction_SettlementNumber='+char(39)+@SettlementID +char(39)
+			end
+
+		if @BenType <>'na'  
+			begin
+				if @BenType = 'other'
+					begin
+						set @SqlWhere=@SqlWhere+ ' and NsdlClients_BenType NOT IN (01,05,06,04) '
+					end
+				else
+					begin
+						set @SqlWhere=@SqlWhere+ ' and NsdlClients_BenType='+char(39)+@BenType +char(39)
+					end
+			end	
+			
+		IF OBJECT_ID('tempdb..#TmpTransDetail') is not null
+			Drop Table #TmpTransDetail
+		Create Table #TmpTransDetail(cmpname varchar(max),FromDate varchar(10),ToDate varchar(10)
+					,NsdlTransaction_DrCr Char(1),NsdlClients_BenAccountID int,NsdlClients_BenType int,TypeSubtype varchar(150),NsdlClients_BeneficiaryStatus varchar(50)
+					,names varchar(250),NSDLISIN_Number varchar(12),ISINName varchar(350),NsdlTransaction_Date varchar(15),NsdlTransaction_SettlementNumber varchar(15)
+					,credit numeric(28,3),debit numeric(28,3),NsdlTransaction_ID int,NsdlTransaction_DPMTransactionReference varchar(150),NsdlTransaction_Particulars varchar(500)
+					,OpeningBalance numeric(28,3),ClosingBalance numeric(28,3),AccountType varchar(15),NsdlTransaction_Quantity numeric(28,3),orderByTransaction_Date varchar(25))
+		------Nsdl Transaction Wise Details-----------------
+		
+		Set @Sql=''	
+		set @Sql=@Sql+'select * from (
+				Select '+char(39)+ @cmpname +char(39)+' as cmpname,'
+				+char(39)+ @FromDate +char(39)+' as FromDate,' 
+				+char(39)+  @ToDate   +char(39)+'as ToDate,  NsdlTransaction_DrCr,
+				NsdlClients_BenAccountID, NsdlClients_BenType,
+				(case when dbo.fn_BeneficiaryType(NsdlClients_BenType,NsdlClients_BenSubType)=''CM''
+					  then ''Clearing Member''
+					  else dbo.fn_BeneficiaryType(NsdlClients_BenType,NsdlClients_BenSubType)
+				  end 
+				 +
+				 case when dbo.fn_BeneficiarySubType(NsdlClients_BenType,NsdlClients_BenSubType) is null
+					  then ''''
+					  else '' [ ''+ dbo.fn_BeneficiarySubType(NsdlClients_BenType,NsdlClients_BenSubType)+'' ] ''
+				  end
+				)as TypeSubtype,
+				dbo.fn_BenStatus(NsdlClients_BeneficiaryStatus)as NsdlClients_BeneficiaryStatus,
+				ltrim(rtrim(NsdlClients_BenFirstHolderName))
+				+
+				case when len(ltrim(Rtrim(NsdlClients_BenSecondHolderName)))=0 
+						then ''''
+						else '', ''+ltrim(rtrim(NsdlClients_BenSecondHolderName)) end 
+				+
+				case when len(ltrim(Rtrim(NsdlClients_BenThirdHolderName)))=0 
+						then ''''
+						else '', ''+ltrim(rtrim(NsdlClients_BenThirdHolderName)) end 
+				as names,
+				NSDLISIN_Number,(ltrim(rtrim(NSDLISIN_CompanyName))+'' - ''+LTRIM(RTRIM(isnull(NSDLISIN_ShortName,''''))))as ISINName, 
+				CONVERT(VARCHAR(9), NsdlTransaction_Date , 6) as NsdlTransaction_Date, 
+				case when NsdlClients_BenType=6 
+						then NsdlTransaction_SettlementNumber
+						else '''' end as NsdlTransaction_SettlementNumber,							 
+				case when NsdlTransaction_DrCr ='+char(39)+'C'+char(39)+'
+						then NsdlTransaction_Quantity
+						else '+char(39)+'0.000'+char(39)+' end as credit,	
+				case when NsdlTransaction_DrCr ='+char(39)+'D'+char(39)+'
+						then NsdlTransaction_Quantity 
+						else '+char(39)+'0.000'+char(39)+' end as debit , '
+	
+	
+		set @Sql=@Sql+'NsdlTransaction_ID,
+					NsdlTransaction_DPMTransactionReference,
+					NsdlTransaction_Particulars,
+					case when NsdlClients_BenType <> 6 then 
+						case when NsdlTransaction_BenAccountType in (10,21) or NsdlTransaction_BenAccountType in (11,22)
+									or NsdlTransaction_BenAccountType in (20,40)
+									then 
+										isnull((select sum(NsdlHolding_Free)
+										from Trans_NsdlHolding 
+										where NsdlHolding_BenAccountNumber=NsdlTransaction_BenAccountNumber
+										and NsdlHolding_ISIN = NSDLISIN_Number 
+										and NsdlHolding_HoldingDateTime='''+@openHoldingDate+''''+
+										'),0)
+							 when NsdlTransaction_BenAccountType in (12,24)
+									then 
+										isnull((select sum(NsdlHolding_Demat)
+										from Trans_NsdlHolding 
+										where NsdlHolding_BenAccountNumber=NsdlTransaction_BenAccountNumber
+										and NsdlHolding_ISIN = NSDLISIN_Number
+										and NsdlHolding_HoldingDateTime='''+@openHoldingDate+''''+
+										'),0)
+							 when NsdlTransaction_BenAccountType in (13,23)
+									then 
+										isnull((select sum(NsdlHolding_Remat)
+										from Trans_NsdlHolding 
+										where NsdlHolding_BenAccountNumber=NsdlTransaction_BenAccountNumber
+										and NsdlHolding_ISIN = NSDLISIN_Number
+										and NsdlHolding_HoldingDateTime='''+@openHoldingDate+''''+
+										'),0)
+							 when NsdlTransaction_BenAccountType in (14,29) or NsdlTransaction_BenAccountType in (16,28)
+									then
+										isnull((select sum(NsdlHolding_Pledged)
+										from Trans_NsdlHolding 
+										where NsdlHolding_BenAccountNumber=NsdlTransaction_BenAccountNumber
+										and NsdlHolding_ISIN = NSDLISIN_Number
+										and NsdlHolding_HoldingDateTime='''+@openHoldingDate+''''+
+										'),0)
+									else 0 end
+					else
+						case when NsdlTransaction_BenAccountType in (10,21) or NsdlTransaction_BenAccountType in (11,22)
+						or NsdlTransaction_BenAccountType in (20,40)
+						then 
+							isnull((select sum(NsdlHolding_Free)
+							from Trans_NsdlHolding 
+							where NsdlHolding_BenAccountNumber=NsdlTransaction_BenAccountNumber
+							and NsdlHolding_ISIN = NSDLISIN_Number
+							and NsdlHolding_SettlementNumber=NsdlTransaction_SettlementNumber 
+							and NsdlHolding_HoldingDateTime='''+@openHoldingDate+''''+
+							'),0)
+						else 0 end
+					end as OpeningBalance,'			
+		
+		set @Sql1='case when NsdlClients_BenType <> 6 then 
+
+						case when NsdlTransaction_BenAccountType in (10,21) or NsdlTransaction_BenAccountType in (11,22)
+						or NsdlTransaction_BenAccountType in (20,40)
+						then 
+							isnull((select sum(NsdlHolding_Free)
+							from Trans_NsdlHolding 
+							where NsdlHolding_BenAccountNumber=NsdlTransaction_BenAccountNumber
+							and NsdlHolding_ISIN = NSDLISIN_Number		
+							and NsdlHolding_HoldingDateTime='''+@closeHoldingDate+''''+
+							'),0)
+						when NsdlTransaction_BenAccountType in (12,24)
+						then 
+							isnull((select sum(NsdlHolding_Demat)
+							from Trans_NsdlHolding 
+							where NsdlHolding_BenAccountNumber=NsdlTransaction_BenAccountNumber
+							and NsdlHolding_ISIN = NSDLISIN_Number 	
+							and NsdlHolding_HoldingDateTime='''+@closeHoldingDate+''''+
+							'),0)
+						when NsdlTransaction_BenAccountType in (13,23)
+						then 
+							isnull((select sum(NsdlHolding_Remat)
+							from Trans_NsdlHolding 
+							where NsdlHolding_BenAccountNumber=NsdlTransaction_BenAccountNumber
+							and NsdlHolding_ISIN = NSDLISIN_Number
+							and NsdlHolding_HoldingDateTime='''+@closeHoldingDate+''''+
+							'),0)
+						when NsdlTransaction_BenAccountType in (14,29) or NsdlTransaction_BenAccountType in (16,28)
+						then
+							isnull((select sum(NsdlHolding_Pledged)
+							from Trans_NsdlHolding 
+							where NsdlHolding_BenAccountNumber=NsdlTransaction_BenAccountNumber
+							and NsdlHolding_ISIN = NSDLISIN_Number
+							and NsdlHolding_HoldingDateTime='''+@closeHoldingDate+''''+
+							'),0)
+						else 0 end
+					else 
+						case when NsdlTransaction_BenAccountType in (10,21) or NsdlTransaction_BenAccountType in (11,22)
+						or NsdlTransaction_BenAccountType in (20,40)
+							then 
+								isnull((select sum(NsdlHolding_Free)
+								from Trans_NsdlHolding 
+								where NsdlHolding_BenAccountNumber=NsdlTransaction_BenAccountNumber
+								and NsdlHolding_ISIN = NSDLISIN_Number
+								and NsdlHolding_SettlementNumber=NsdlTransaction_SettlementNumber 
+								and NsdlHolding_HoldingDateTime='''+@closeHoldingDate+''''+
+								'),0)
+							else 0 end
+					end as ClosingBalance,
+					
+					
+					case when NsdlTransaction_BenAccountType in (10,21) or NsdlTransaction_BenAccountType in (11,22)
+					or NsdlTransaction_BenAccountType in (20,40)
+						then ''''
+							when NsdlTransaction_BenAccountType in (12,24)
+							then '' ( Demat )'' 
+							when NsdlTransaction_BenAccountType in (13,23)
+							then '' ( Remat/RePurchase/Redemption )''
+							when NsdlTransaction_BenAccountType in (14,29) or NsdlTransaction_BenAccountType in (16,28)
+							then '' ( Pledged )''
+							end as AccountType,
+					NsdlTransaction_Quantity,
+					
+					
+					convert(varchar,NsdlTransaction_Date,120) as orderByTransaction_Date
+			from
+					Master_NsdlClients cnt, Master_NSDLISIN isin, Trans_NsdlTransaction trans 
+			where
+					cnt.NsdlClients_BenAccountID = trans.NsdlTransaction_BenAccountNumber
+					and NsdlTransaction_ISIN = NSDLISIN_Number								
+					and ((NsdlClients_BenType <> 6 
+							and NsdlTransaction_BookingNarrationCode not in(41,51,10501,61,202,11110,11108,11109) 
+						 )
+						 or 
+						 (NsdlClients_BenType = 6 
+							and NsdlTransaction_BenCategory=3
+							and NsdlTransaction_BenAccountType in (20,40) 
+							and (NsdlTransaction_BookingType in (11,22)	or NsdlTransaction_BookingType in (14,29))
+						 )
+					    )
+					and (NsdlTransaction_Date between '+char(39)+@FromDate+char(39)+' and '+char(39)+@ToDate+char(39)+') 
+		'
+		Set @Sql2=' and NsdlClients_BenAccountID='+@benAccNo+
+					   ' and NsdlClients_branchid in ('+@branchid+')) foo 
+					 order by NsdlClients_BenAccountID, ISINName, NSDLISIN_Number,
+							  NsdlTransaction_SettlementNumber,AccountType,
+							  foo.orderByTransaction_Date,NsdlTransaction_DrCr '
+
+		
+--print (@Sql)
+--print (@Sql1)		
+--print (@Sql2)
+	
+		Insert Into #TmpTransDetail		
+		Exec (@Sql+@Sql1+@SqlWhere+@Sql2)		
+		
+		------Nsdl Holding Wise Opening and Closing Data ----------------
+		IF OBJECT_ID('tempdb..#TmpOpening') is not null
+			Drop Table #TmpOpening
+		Create Table #TmpOpening(IsinID varchar(12),Isin_Name varchar(350),Openingbalance numeric(28,3))
+		IF OBJECT_ID('tempdb..#TmpClosing') is not null
+			Drop Table #TmpClosing
+		Create Table #TmpClosing(IsinID varchar(12),Closingbalance numeric(28,3))
+		
+		Declare @BenAcType int
+		
+		Select Top 1 @BenAcType=NsdlTransaction_BenAccountType
+		from Master_NsdlClients cnt,Trans_NsdlTransaction trans 
+		where cnt.NsdlClients_BenAccountID = trans.NsdlTransaction_BenAccountNumber
+			and ((NsdlClients_BenType <> 6 
+					and NsdlTransaction_BookingNarrationCode not in(41,51,10501,61,202,11110,11108,11109))
+				  or ( NsdlClients_BenType = 6 
+						and NsdlTransaction_BenCategory=3
+						and NsdlTransaction_BenAccountType in (20,40) 
+						and (NsdlTransaction_BookingType in (11,22) 
+							or NsdlTransaction_BookingType in (14,29))
+					 )
+				)
+			and (NsdlTransaction_Date between @FromDate and @ToDate) 
+			and NsdlClients_BenAccountID =@BenAccNo
+			and NsdlClients_branchid in (Select Col From dbo.fnSplitReturnTable(@BranchID,','))
+		
+		if(@BenAcType is Null)
+			Select Top 1 @BenAcType=NsdlHolding_BenAccountType_New
+				from Master_NsdlClients,Trans_NsdlHolding 
+				where NsdlClients_BenAccountID = NsdlHolding_BenAccountNumber
+				and (NsdlHolding_HoldingDateTime =@openHoldingDate) 
+				and NsdlClients_BenAccountID =@BenAccNo
+			and NsdlClients_branchid in (Select Col From dbo.fnSplitReturnTable(@BranchID,','))
+		
+		---Opening Balance--------
+		Insert into #TmpOpening(IsinID,Openingbalance)
+		Select NsdlHolding_ISIN,				
+				case 
+					when NsdlClients_BenType <> 6 then 
+						case 
+							when @BenAcType in (10,21,11,22,20,40)
+							then isnull((select NsdlHolding_Free
+										from Trans_NsdlHolding 
+										where NsdlHolding_BenAccountNumber=@BenAccNo
+												and NsdlHolding_ISIN=RemainingISIN
+												and NsdlHolding_HoldingDateTime=@openHoldingDate),0)
+							when @BenAcType in (12,24)
+							then isnull((select NsdlHolding_Demat
+										from Trans_NsdlHolding 
+										where NsdlHolding_BenAccountNumber=@BenAccNo
+												and NsdlHolding_ISIN=RemainingISIN
+												and NsdlHolding_HoldingDateTime=@openHoldingDate),0)
+							 when @BenAcType in (13,23)
+							then isnull((select NsdlHolding_Remat
+										from Trans_NsdlHolding 
+										where NsdlHolding_BenAccountNumber=@BenAccNo
+												and NsdlHolding_ISIN=RemainingISIN
+												and NsdlHolding_HoldingDateTime=@openHoldingDate),0)
+							when @BenAcType in (14,29,16,28)
+							then isnull((select NsdlHolding_Pledged
+										from Trans_NsdlHolding 
+										where NsdlHolding_BenAccountNumber=@BenAccNo
+												and NsdlHolding_ISIN=RemainingISIN
+												and NsdlHolding_HoldingDateTime=@openHoldingDate),0)
+							else 0 
+						End
+					Else
+						case 
+							when @BenAcType in (10,21,11,22,20,40)
+							then isnull((select Sum(isnull(NsdlHolding_Free,0))
+										from Trans_NsdlHolding 
+										where NsdlHolding_BenAccountNumber=@BenAccNo
+												and NsdlHolding_ISIN=RemainingISIN
+												and NsdlHolding_SettlementNumber=Case When @SettlementID='NA' 
+																						Then ISNULL(NsdlHolding_SettlementNumber,'') 
+																						Else @SettlementID End
+												and NsdlHolding_HoldingDateTime=@openHoldingDate),0)
+							else 0 
+						end
+				end as OpeningBalance
+		from
+				(Select Nsdlholding_ISIN,NsdlHolding_Free,NsdlHolding_Demat,NsdlHolding_Remat,NsdlHolding_Pledged,NsdlClients_BenType
+				 from Trans_NsdlHolding,Master_NsdlClients
+				Where NsdlHolding_benAccountNumber=@BenAccNo
+				and NsdlHolding_BenAccountNumber=NsdlClients_BenAccountID
+				and NsdlHolding_HoldingDateTime=@openHoldingDate
+				and Nsdlholding_ISIN=Case When @ISIN='NA'
+											Then ISNULL(Nsdlholding_ISIN,'')
+											Else @ISIN End
+				 ) T1
+		Inner Join
+				(Select NsdlHolding_ISIN RemainingISIN from Trans_NsdlHolding Where 
+				NsdlHolding_ISIN not in
+				(
+				Select distinct NsdlTransaction_ISIN 
+				from
+				Master_NsdlClients cnt,Trans_NsdlTransaction trans 
+				where
+				cnt.NsdlClients_BenAccountID = trans.NsdlTransaction_BenAccountNumber
+				and 
+				(
+				(
+				NsdlClients_BenType <> 6 and NsdlTransaction_BookingNarrationCode 
+				not in(41,51,10501,61,202,11110,11108,11109) 
+				)
+				or 
+				(
+				NsdlClients_BenType = 6 and NsdlTransaction_BenCategory=3
+						and NsdlTransaction_BenAccountType in (20,40) 
+						and (NsdlTransaction_BookingType in (11,22) 
+						or NsdlTransaction_BookingType in (14,29))
+				)
+				)
+				and (NsdlTransaction_Date between @FromDate and @ToDate) 
+				and NsdlClients_BenAccountID =@BenAccNo
+				and NsdlClients_branchid in (Select col from dbo.fnSplitReturnTable(@BranchID,',')))
+				and NsdlHolding_BenAccountNumber=@BenAccNo
+				and NsdlHolding_HoldingDateTime=@openHoldingDate
+				and Nsdlholding_ISIN=Case When @ISIN='NA'
+											Then ISNULL(Nsdlholding_ISIN,'')
+											Else @ISIN End
+				) T2
+		On T1.NsdlHolding_ISIN=T2.RemainingISIN
+
+--select * from #TmpOpening		
+--select 'After Opening'
+
+		Update #TmpOpening Set Isin_Name=ltrim(rtrim(NSDLISIN_CompanyName))+' - '
+											+LTRIM(RTRIM(isnull(NSDLISIN_ShortName,''))) 
+		From master_NsdlISIN 
+		Where IsinID=NSDLISIN_Number		
+
+	
+		---Closing balance--------
+		Insert into #TmpClosing(IsinID,Closingbalance)
+		Select NsdlHolding_ISIN,
+				case 
+					when NsdlClients_BenType <> 6 then 
+						case 
+							when @BenAcType in (10,21,11,22,20,40)
+							then isnull((select NsdlHolding_Free
+										from Trans_NsdlHolding 
+										where NsdlHolding_BenAccountNumber=@BenAccNo
+												and NsdlHolding_ISIN=RemainingISIN
+												and NsdlHolding_HoldingDateTime=@closeHoldingDate),0)
+							when @BenAcType in (12,24)
+							then isnull((select NsdlHolding_Demat
+										from Trans_NsdlHolding 
+										where NsdlHolding_BenAccountNumber=@BenAccNo
+												and NsdlHolding_ISIN=RemainingISIN
+												and NsdlHolding_HoldingDateTime=@closeHoldingDate),0)
+							 when @BenAcType in (13,23)
+							then isnull((select NsdlHolding_Remat
+										from Trans_NsdlHolding 
+										where NsdlHolding_BenAccountNumber=@BenAccNo
+												and NsdlHolding_ISIN=RemainingISIN
+												and NsdlHolding_HoldingDateTime=@closeHoldingDate),0)
+							when @BenAcType in (14,29,16,28)
+							then isnull((select NsdlHolding_Pledged
+										from Trans_NsdlHolding 
+										where NsdlHolding_BenAccountNumber=@BenAccNo
+												and NsdlHolding_ISIN=RemainingISIN
+												and NsdlHolding_HoldingDateTime=@closeHoldingDate),0)
+							else 0 
+						End
+					Else
+						case 
+							when @BenAcType in (10,21,11,22,20,40)
+							then isnull((select Sum(isnull(NsdlHolding_Free,0))
+										from Trans_NsdlHolding 
+										where NsdlHolding_BenAccountNumber=@BenAccNo
+												and NsdlHolding_ISIN=RemainingISIN
+												and NsdlHolding_SettlementNumber=Case When @SettlementID='NA' 
+																						Then ISNULL(NsdlHolding_SettlementNumber,'') 
+																						Else @SettlementID End
+												and NsdlHolding_HoldingDateTime=@closeHoldingDate),0)
+							else 0 
+						end
+				end as ClosingBalance
+		from
+			(Select Nsdlholding_ISIN,NsdlHolding_Free,NsdlHolding_Demat,NsdlHolding_Remat,NsdlHolding_Pledged,NsdlClients_BenType
+				from Trans_NsdlHolding,Master_NsdlClients
+				Where NsdlHolding_benAccountNumber=@BenAccNo
+				and NsdlHolding_BenAccountNumber=NsdlClients_BenAccountID
+				and NsdlHolding_HoldingDateTime=@closeHoldingDate 
+				and Nsdlholding_ISIN=Case When @ISIN='NA'
+											Then ISNULL(Nsdlholding_ISIN,'')
+											Else @ISIN End
+			) T1
+		Inner Join
+			(Select NsdlHolding_ISIN RemainingISIN from Trans_NsdlHolding Where 
+				NsdlHolding_ISIN not in
+				(
+				Select distinct NsdlTransaction_ISIN 
+				from
+				Master_NsdlClients cnt,Trans_NsdlTransaction trans 
+				where
+				cnt.NsdlClients_BenAccountID = trans.NsdlTransaction_BenAccountNumber
+				and 
+				(
+				(
+				NsdlClients_BenType <> 6 and NsdlTransaction_BookingNarrationCode 
+				not in(41,51,10501,61,202,11110,11108,11109) 
+				)
+				or 
+				(
+				NsdlClients_BenType = 6 and NsdlTransaction_BenCategory=3
+						and NsdlTransaction_BenAccountType in (20,40) 
+						and (NsdlTransaction_BookingType in (11,22) 
+						or NsdlTransaction_BookingType in (14,29))
+				)
+				)
+				and (NsdlTransaction_Date between @FromDate and @ToDate) 
+				and NsdlClients_BenAccountID =@BenAccNo
+				and NsdlClients_branchid in (Select col from dbo.fnSplitReturnTable(@BranchID,',')))
+				and NsdlHolding_BenAccountNumber=@BenAccNo
+				and NsdlHolding_HoldingDateTime=@closeHoldingDate
+				and Nsdlholding_ISIN=Case When @ISIN='NA'
+											Then ISNULL(Nsdlholding_ISIN,'')
+											Else @ISIN End
+			) T2
+		On T1.NsdlHolding_ISIN=T2.RemainingISIN
+	
+--select * from #TmpOpening		
+--select 'After Closing'
+		
+		-------Data Add For Same Client-----------------
+		Declare @TypeSubtype varchar(150),@NsdlClients_BeneficiaryStatus varchar(50)
+					,@names varchar(250)
+				
+		Select @TypeSubtype=TypeSubtype,@NsdlClients_BeneficiaryStatus=NsdlClients_BeneficiaryStatus,@names=names
+		From 		
+		(Select top 1 @cmpname as cmpname, @FromDate  as stdate, @ToDate as eddate
+					, null as  NsdlTransaction_DrCr, @benAccNo as  NsdlClients_BenAccountID
+					,null as  NsdlClients_BenType,  
+					(case when dbo.fn_BeneficiaryType(NsdlClients_BenType,NsdlClients_BenSubType)='CM'
+						  then 'Clearing Member'
+						  else dbo.fn_BeneficiaryType(NsdlClients_BenType,NsdlClients_BenSubType)
+						end 
+						+
+						case when dbo.fn_BeneficiarySubType(NsdlClients_BenType,NsdlClients_BenSubType) is null
+							 then ''
+							 else ' [ '+ dbo.fn_BeneficiarySubType(NsdlClients_BenType,NsdlClients_BenSubType)+' ] '
+						end
+					)as TypeSubtype,
+					dbo.fn_BenStatus(NsdlClients_BeneficiaryStatus)as NsdlClients_BeneficiaryStatus,
+					ltrim(rtrim(NsdlClients_BenFirstHolderName))
+					+
+					case when len(ltrim(Rtrim(NsdlClients_BenSecondHolderName)))=0 then ''
+							else ', '+ltrim(rtrim(NsdlClients_BenSecondHolderName)) 
+					end 
+					+
+					case when len(ltrim(Rtrim(NsdlClients_BenThirdHolderName)))=0 
+						then ''	else ','+ltrim(rtrim(NsdlClients_BenThirdHolderName)) end as names, 
+					
+					null as NSDLISIN_Number,null as isinname,null as nsdltransaction_date
+					,nsdltransaction_settlementnumber,null as credit,null as debit,
+					null as nsdltransaction_id,null as NsdlTransaction_DPMTransactionReference
+					,null as NsdlTransaction_Particulars,null as openingbalance,null as closingbalance
+					,null as accounttype,null as NsdlTransaction_quantity,null as orderbytransaction_date
+		from Master_NsdlClients cnt, Master_NSDLISIN isin, Trans_NsdlTransaction trans 
+		where cnt.NsdlClients_BenAccountID = trans.NsdlTransaction_BenAccountNumber
+					and NsdlTransaction_ISIN = NSDLISIN_Number 
+					and cnt.NsdlClients_BenAccountID=@BenAccNo
+		) kk			
+
+--Select @TypeSubtype,@NsdlClients_BeneficiaryStatus,@names
+
+		-----Main table Insert------------
+		Insert Into #TmpTransDetail	(cmpname,FromDate,ToDate,NsdlClients_BenAccountID,names,TypeSubtype,NsdlClients_BeneficiaryStatus									 	
+										,NSDLISIN_Number,ISINName,NsdlTransaction_Particulars,OpeningBalance,NsdlTransaction_SettlementNumber)
+		Select @cmpname,@FromDate,@ToDate,@BenAccNo,@names,@TypeSubtype,@NsdlClients_BeneficiaryStatus
+				,IsinID,Isin_Name,'No Transaction Recorded For This ISIN Of This Period'
+				,Openingbalance,''
+		from #TmpOpening  
+		Order By Isin_Name
+		
+				
+		Update #TmpTransDetail set ClosingBalance= #TmpClosing.Closingbalance 
+		From #TmpClosing
+		Where NSDLISIN_Number=IsinID
+		
+
+		Select *,CONVERT(VARCHAR(9), cast(@FromDate as datetime), 6) as stdate
+				,CONVERT(VARCHAR(9), cast(@ToDate as datetime), 6) as eddate
+				,CONVERT(VARCHAR(9), cast(@FromDate as datetime), 6) as OpeningDate
+				,CONVERT(VARCHAR(9), cast(@closeHoldingDate as datetime), 6) as ClosingDate
+		From #TmpTransDetail
+
+		-----Delete temptables----------
+		Drop table #TmpClosing
+		Drop table #TmpOpening
+		Drop Table #TmpTransDetail
+						
+		--------Client Header Details For Rpt File Of PDF-------------------		
+		--set @Sql='Select top 1 '+char(39)+ @cmpname +char(39)+' as cmpname,'
+		--						 +char(39)+ @FromDate +char(39)+' as stdate,' 
+		--						 +char(39)+ @ToDate +char(39)+' as eddate, null as  NsdlTransaction_DrCr,'
+		--						 +char(39)+ @benAccNo +char(39)+' as  NsdlClients_BenAccountID,null as  NsdlClients_BenType,  
+		--						(
+		--							case when dbo.fn_BeneficiaryType(NsdlClients_BenType,NsdlClients_BenSubType)=''CM''
+		--																									then ''Clearing Member''
+		--							else dbo.fn_BeneficiaryType(NsdlClients_BenType,NsdlClients_BenSubType)
+		--							end 
+		--							+
+		--							case when dbo.fn_BeneficiarySubType(NsdlClients_BenType,NsdlClients_BenSubType) is null
+		--																									 then ''''
+		--									else '' [ ''+ dbo.fn_BeneficiarySubType(NsdlClients_BenType,NsdlClients_BenSubType)+'' ] ''
+		--							end
+		--						)as TypeSubtype,
+		--						dbo.fn_BenStatus(NsdlClients_BeneficiaryStatus)as NsdlClients_BeneficiaryStatus,
+		--						ltrim(rtrim(NsdlClients_BenFirstHolderName))
+		--						+
+		--						case when len(ltrim(Rtrim(NsdlClients_BenSecondHolderName)))=0 then ''''
+		--								else '', ''+ltrim(rtrim(NsdlClients_BenSecondHolderName)) 
+		--						end 
+		--						+
+		--						case when len(ltrim(Rtrim(NsdlClients_BenThirdHolderName)))=0 then ''''
+		--								else '', 
+		--						''+ltrim(rtrim(NsdlClients_BenThirdHolderName)) end as names, 
+		--						null as NSDLISIN_Number,null as isinname,null as nsdltransaction_date,nsdltransaction_settlementnumber,null as credit,null as debit,
+		--						null as nsdltransaction_id,null as NsdlTransaction_DPMTransactionReference,null as NsdlTransaction_Particulars,
+		--						null as openingbalance,null as closingbalance,null as accounttype,null as NsdlTransaction_quantity,null as orderbytransaction_date
+		--					from
+		--							Master_NsdlClients cnt, Master_NSDLISIN isin, Trans_NsdlTransaction trans 
+		--					where
+		--							cnt.NsdlClients_BenAccountID = trans.NsdlTransaction_BenAccountNumber
+		--							and NsdlTransaction_ISIN = NSDLISIN_Number '
+		
+		--exec (@Sql)	
+End

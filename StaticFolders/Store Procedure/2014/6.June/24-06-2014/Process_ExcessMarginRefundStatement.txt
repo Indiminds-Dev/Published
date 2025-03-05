@@ -1,0 +1,327 @@
+
+ALTER procedure [dbo].[Process_ExcessMarginRefundStatement]
+@fordate varchar(35),
+@ledgerbalndate varchar(35),
+@clients varchar(max),
+@segment varchar(50),
+@CompanyID varchar(15),
+@Finyear varchar(15),
+@WrkingDays int,
+@markupappmrgn numeric(28,2),
+@maintaincashcomp numeric(28,2),
+@checkpartialrelease varchar(10),
+@grptype varchar(30),
+@branch varchar(max),
+@grpval varchar(max),
+@stockreleaseorder varchar(10),
+@AmountCondition numeric(28,6),
+@PaymentMode varchar(1),
+@PostingbankId varchar(40),
+@PostingSegment varchar(30),
+@CreateUser int,
+@InterAcNarration varchar(500),
+@CaskBankNarration varchar(500),
+@DematTransNarration varchar(500),
+@GenerationType Char(1)
+
+AS
+BEGIN----Sp Begin
+
+--DECLARE @CLI VARCHAR(MAX)
+--SELECT @CLI='ALL'---'''CLD0000009'',''CLD0000009'',''CLA0000067'',''CLB0000012'',''CLF0000011'''
+--EXEC [Process_ExcessMarginRefundStatement] '2011-06-12','2011-06-12',@CLI,'24,25,30','COR0000002','2011-2011',1,175.00,50.00,'unCHK','BRANCH','135','ALL','0','10.00','C','B013','24','111','abc','abc','abc'
+
+set nocount on
+------------------------------------------------------------Note-----------------------------------------------------------------------
+---Change 1 : @GererationType: (D or G) e.i Generate Position or Delete Position of Specific Position Date.
+
+------------------------------------------------------------End Note-------------------------------------------------------------------
+					
+					
+					Declare @Quarter int
+					If(Month(Cast(@fordate as DateTime)) in (4,5,6))
+					Begin
+							select @Quarter=1
+					End
+					If(Month(Cast(@fordate as DateTime)) in (7,8,9))
+					Begin
+							select @Quarter=2
+					End
+					If(Month(Cast(@fordate as DateTime)) in (10,11,12))
+					Begin
+							select @Quarter=3
+					End
+					If(Month(Cast(@fordate as DateTime)) in (1,2,3))
+					Begin
+							select @Quarter=4
+					End
+					
+					if(@GenerationType='G')
+					Begin
+						------------Create Table For Calculation
+						create table #TabPostion (clientid varchar(15),ledgerbaln numeric(28,6),cashmrfndept numeric(28,6),
+						fdrsbgs numeric(28,6),totaldept numeric(28,6),pendpur numeric(28,6),
+						pendsale numeric(28,6),hldbkstocks numeric(28,6),mrgnstocks numeric(28,6),
+						appmargin numeric(28,6),avgmargin numeric(28,6),Branchid varchar(30),
+						refundcash numeric(28,6),refundstocks numeric(28,6),iaamount numeric(28,2),
+						FromAc varchar(15),ToAc varchar(15),CustomerBankId varchar(30),
+						TDayFoBill numeric(28,6),TDayCDBill numeric(28,6),OtherRetention numeric(28,6),
+						TDayCMBill numeric(28,6),TM1DayCMBill numeric(28,6),TDayFOMargin numeric(28,6),
+						TDayCDMargin numeric(28,6),TDayCMMargin numeric(28,6),TDayCMDeliveryIN numeric(28,6),
+						TDayCMDeliveryOut numeric(28,6),TM1DayCMDeliveryIN numeric(28,6),TM1DayCMDeliveryOut numeric(28,6),
+						TDayCMTurnover numeric(28,6),TDayFOExposure numeric(28,6),TDayCDExposure numeric(28,6))
+						
+						-------------Stocks Table
+						Create Table  #STOCKSRELEASE  (CUSTOMER varchar(15),Productid varchar(50),DpId varchar(40),
+						Quantity numeric(28,0),Closeprice  numeric(28,6),Varmargin numeric(28,6),RELEASE NUMERIC(28,6),
+						Stocksresult numeric(28,6),STKTYPE VARCHAR(50),Isin varchar(30),OwnDpId varchar(40),OwnClientId varchar(40),
+						CustomerAccount varchar(30),CustomerDPId varchar(30),CustomerClientId varchar(30),DpSegMentId varchar(50))
+				
+						
+						-------------Sp Call 
+						
+
+
+						exec [ExcessMarginRefundStatement] 
+						@fordate,@ledgerbalndate,@fordate,
+						@clients,@segment,@CompanyID,
+						@Finyear,@WrkingDays,
+						@markupappmrgn,@maintaincashcomp,
+						@checkpartialrelease,@grptype,
+						@branch,@grpval,@stockreleaseorder,
+						'Position'
+
+						
+						-------------ISIN Update
+						update #STOCKSRELEASE set Isin=substring(isin_number,1,12)
+						From master_isin where
+						Productid=ISIN_ProductSeriesID
+						and isin_isactive='Y'
+
+						-----------Refund Cash
+						update #TabPostion set refundcash=0 where isnull(refundcash,0)<=@AmountCondition
+						-----------IATransferAmount
+						---[A-C]
+						Update #TabPostion set iaamount=isnull(ledgerbaln,0)-isnull(refundcash,0)
+
+						---------IaAmount Cal
+						Update #TabPostion set iaamount=
+						Case When abs(isnull(iaamount,0))>abs(isnull(cashmrfndept,0)) Then isnull(cashmrfndept,0)
+						Else abs(isnull(iaamount,0)) End,
+						FromAc='SYSTM00002',ToAc='SYSTM00001'
+						Where isnull(iaamount,0)<0  and isnull(cashmrfndept,0)>0 
+						and FromAc is null
+
+						Update #TabPostion set iaamount=abs(isnull(iaamount,0)),
+						FromAc='SYSTM00001',ToAc='SYSTM00002'
+						Where isnull(iaamount,0)>0  
+						and FromAc is null
+
+
+						------------Update Branchid
+						update #TabPostion set Branchid=cnt_branchid From tbl_master_contact where cnt_internalid=clientid
+
+						-------------Update CustomerBankId
+						Update  #TabPostion set CustomerBankId=(select top 1 cbd_id 
+						From tbl_trans_contactbankdetails where 
+						cbd_accountcategory=(select top 1 cbd_accountcategory from 
+											(select cbd_accountcategory,
+											case when rtrim(ltrim(cbd_accountcategory)) in ('Primary','Default') then 1
+											when rtrim(ltrim(cbd_accountcategory))='Secondary' then 2
+											else 3 end as addreorder
+											from tbl_trans_contactbankdetails where 
+											cbd_cntid=clientid) tb
+											order by addreorder) 
+						and cbd_cntid = clientid)
+
+						----------Update CustomerRelated Ac
+						Update #STOCKSRELEASE set  CustomerAccount=dpd_id,
+												CustomerDPId=dpd_dpcode,
+												CustomerClientId=dpd_clientid
+						From tbl_master_contactDpDetails where dpd_accounttype='Default' and dpd_cntid=CUSTOMER
+						and isnull(RELEASE,0)<>0
+						
+						if exists(Select 'Y' From #TabPostion)
+						Begin
+						Select 1 as status
+						------------Delete Record
+						Delete From [Trans_ReleaseFunds]  
+						where ReleaseFunds_CustomerID in (select clientid From #TabPostion)
+						and ReleaseFunds_MainID in (Select Distinct Release_ID From [Trans_Release]  
+													where Release_CompanyID=@CompanyID
+													and Release_FinYear=@Finyear and Release_CustomerID in (select clientid From #TabPostion)
+													and Release_PositionDate=cast(convert(varchar(12),cast(@fordate as Datetime),101) as datetime)
+													and Release_FundReleaseSegment=@PostingSegment
+													and Release_IsLockedStocks is null)
+						and ReleaseFunds_TransactionDate=cast(convert(varchar(12),cast(@fordate as Datetime),101) as datetime)
+						and ReleaseFunds_SegmentID=@PostingSegment
+						and ReleaseFunds_IsLocked is null 
+
+						Delete From Trans_ReleaseStocks  
+						where ReleaseStocks_CustomerID in (select clientid From #TabPostion)
+						and ReleaseStocks_MainID in (Select Distinct Release_ID From [Trans_Release]  
+													where Release_CompanyID=@CompanyID
+													and Release_FinYear=@Finyear and Release_CustomerID in (select clientid From #TabPostion)
+													and Release_PositionDate=cast(convert(varchar(12),cast(@fordate as Datetime),101) as datetime)
+													and Release_FundReleaseSegment=@PostingSegment
+													and Release_IsLockedStocks is null)
+						and ReleaseStocks_TransactionDate=cast(convert(varchar(12),cast(@fordate as Datetime),101) as datetime)
+						and ReleaseStocks_SegmentID=@PostingSegment
+						and ReleaseStocks_IsLocked is null 
+
+						Delete From [Trans_Release]  
+						where Release_CompanyID=@CompanyID
+						and Release_FinYear=@Finyear and Release_CustomerID in (select clientid From #TabPostion)
+						and Release_PositionDate=cast(convert(varchar(12),cast(@fordate as Datetime),101) as datetime)
+						and Release_FundReleaseSegment=@PostingSegment
+						and Release_IsLockedFunds is null and Release_IsLockedStocks is null
+
+						-------------Insert Into Trans_Release Table
+						INSERT INTO [Trans_Release]
+					   (Release_CompanyID,Release_FinYear,Release_BranchID,Release_Quarter,Release_CustomerID,Release_Segments
+					   ,Release_PositionDate,Release_LedgerDate,Release_CashMarginDate,Release_MarginFor,Release_AverageMargin
+					   ,Release_MarginMarkup,Release_ApplicableMargin,Release_CashComponent,Release_LedgerBalance,Release_CashMarginBalance
+					   ,Release_FDRBalance,Release_PendingPurchase,Release_PendingSales,Release_HoldbackStocks,Release_MarginStocks
+					   ,Release_FundRelease,Release_FundReleaseSegment,Release_StockRelease,Release_IATransferAmount,Release_IAAccountFrom
+					   ,Release_IAAccountTo,Release_CreateUser,Release_CreateDateTime,Release_IANarration
+						,Release_TDayFOBill,Release_TDayCDBill
+					   ,Release_TDayCMBill,Release_TM1DayCMBill,Release_TDayFOMargin,Release_TDayCDMargin,Release_TDayCMMargin,Release_TDayCMDeliveryIN
+					   ,Release_TDayCMDeliveryOut,Release_TM1DayCMDeliveryIN,Release_T1DayCMDeliveryOut,Release_TDayCMTurnover,Release_TDayFOExposure
+					   ,Release_TDayCDExposure
+						)
+						Select 
+					   @CompanyID,@Finyear,Branchid,@Quarter,clientid,@segment,
+					   cast(convert(varchar(12),cast(@fordate as Datetime),101) as datetime), cast(@ledgerbalndate as Datetime),
+					   cast(convert(varchar(12),cast(@fordate as Datetime),101) as datetime),
+					   @WrkingDays,avgmargin,@markupappmrgn,appmargin,@maintaincashcomp,
+					   ledgerbaln,cashmrfndept,fdrsbgs,pendpur,pendsale,hldbkstocks,mrgnstocks,
+					   refundcash,@PostingSegment,refundstocks,iaamount,
+					   FromAc,ToAc
+					   ,@CreateUser,Getdate(),@InterAcNarration
+					   ,TDayFOBill,TDayCDBill
+					   ,TDayCMBill,TM1DayCMBill,TDayFOMargin,TDayCDMargin,TDayCMMargin,TDayCMDeliveryIN
+					   ,TDayCMDeliveryOut,TM1DayCMDeliveryIN,TM1DayCMDeliveryOut,TDayCMTurnover,TDayFOExposure
+					   ,TDayCDExposure
+					   From #TabPostion
+					   where clientid not in(
+					   Select 
+					   Case 
+							When(select 1 from [Trans_Release] where Release_Quarter=@Quarter and [Release_CustomerID]=clientid
+							and Release_FinYear=@Finyear
+							and Release_Quarter=@Quarter
+							AND Release_PositionDate=@fordate
+							)=1 
+							Then (select Release_CustomerID from [Trans_Release] where Release_Quarter=@Quarter and [Release_CustomerID]=clientid
+							and Release_FinYear=@Finyear
+							and Release_Quarter=@Quarter
+							AND Release_PositionDate=@fordate)
+							Else 'XXXXXXXXXXXXX'
+					   End
+						)
+					-----------Insert Into Trans_ReleaseStocks
+					INSERT INTO [Trans_ReleaseFunds]
+				   ([ReleaseFunds_MainID]
+				   ,[ReleaseFunds_CustomerID]
+				   ,[ReleaseFunds_BankAccount]
+				   ,[ReleaseFunds_SegmentID]
+				   ,[ReleaseFunds_BranchID]
+				   ,[ReleaseFunds_TransactionDate]
+				   ,[ReleaseFunds_InstrumentType]
+				   ,[ReleaseFunds_Amount]
+				   ,[ReleaseFunds_CustomerBankID]
+				   ,[ReleaseFunds_CreateUser]
+				   ,[ReleaseFunds_CreateDateTime]
+				   ,ReleaseFunds_Narration)
+
+				   Select Release_Id,Release_CustomerID,@PostingbankId,
+				   @PostingSegment,Release_BranchID,Release_PositionDate,
+				   @PaymentMode,Release_FundRelease,CustomerBankId,
+				   @CreateUser,Getdate(),@CaskBankNarration
+				   From Trans_Release,#TabPostion 
+				   where Release_CompanyID=@CompanyID
+				   and Release_FinYear=@Finyear and Release_CustomerID=clientid
+				   and Release_PositionDate=@fordate and Release_FundReleaseSegment=@PostingSegment
+				   and isnull(Release_FundRelease,0)<>0
+				   and not exists(select ReleaseFunds_CustomerID from [Trans_ReleaseFunds] 
+									where ReleaseFunds_TransactionDate=cast(convert(varchar(12),cast(@fordate as Datetime),101) as datetime)
+									and ReleaseFunds_CustomerID=clientid)
+				
+					-----------Insert Into [Trans_ReleaseStocks]
+					INSERT INTO [Trans_ReleaseStocks]
+				   ([ReleaseStocks_MainID]
+				   ,[ReleaseStocks_CustomerID]
+				   ,[ReleaseStocks_BranchID]
+				   ,[ReleaseStocks_AccountID]
+				   ,[ReleaseStocks_OwnDPID]
+				   ,[ReleaseStocks_OwnClientID]
+				   ,[ReleaseStocks_AccountType]
+				   ,[ReleaseStocks_SegmentID]
+				   ,[ReleaseStocks_TransactionDate]
+				   ,[ReleaseStocks_ProductSeriesID]
+				   ,[ReleaseStocks_ISIN]
+				   ,[ReleaseStocks_Quantity]
+				   ,[ReleaseStocks_Price]
+				   ,[ReleaseStocks_Haircut]
+				   ,[ReleaseStocks_Value]
+				   ,[ReleaseStocks_CustomerAccount]
+				   ,[ReleaseStocks_CustomerDPID]
+				   ,[ReleaseStocks_CustomerClientID]
+				   ,[ReleaseStocks_CreateUser]
+				   ,[ReleaseStocks_CreateDateTime]
+				   ,ReleaseStocks_Remarks)
+			
+				 Select Release_Id,Release_CustomerID,Release_BranchID,DpId,OwnDpId,OwnClientId,
+				   STKTYPE,DpSegMentId,Release_PositionDate,Productid ,
+				   Isin,Quantity,Closeprice,varmargin,Stocksresult,
+				   CustomerAccount,CustomerDPId,CustomerClientId,
+				   @CreateUser,Getdate(),@DematTransNarration
+				   From Trans_Release,#STOCKSRELEASE 
+				   where Release_CompanyID=@CompanyID
+				   and Release_FinYear=@Finyear and Release_CustomerID=CUSTOMER
+				   and Release_PositionDate=@fordate and Release_FundReleaseSegment=@PostingSegment
+				   and not exists(select ReleaseStocks_CustomerID from [Trans_ReleaseStocks] 
+									where ReleaseStocks_TransactionDate=cast(convert(varchar(12),cast(@fordate as Datetime),101) as datetime)
+									and ReleaseStocks_CustomerID=CUSTOMER)
+				End
+				Else 
+				Begin
+						select 2 as status
+				End
+				Drop Table #STOCKSRELEASE
+				Drop Table #tabPostion
+			End
+					Else
+					Begin
+						exec [ExcessMarginRefundStatement] 
+						@fordate,@ledgerbalndate,@fordate,
+						@clients,@segment,@CompanyID,
+						@Finyear,@WrkingDays,
+						@markupappmrgn,@maintaincashcomp,
+						@checkpartialrelease,@grptype,
+						@branch,@grpval,@stockreleaseorder,
+						'DeletePosition'
+					End
+
+End----Sp End
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,158 @@
+--DECLARE @CLIENT1 VARCHAR(MAX)
+--SELECT @CLIENT1='All'
+--exec [ExportPosition_NCDXCOMM] '2012-04-23 00:00:00.000','27','COR0000002',@CLIENT1,'9'
+
+
+ALTER procedure [dbo].[ExportPosition_NCDXCOMM]
+@date varchar(30),
+@segment varchar(50),
+@Companyid varchar(30),
+@ClientsID varchar(max),
+@MasterSegment varchar (50)
+As 
+Begin
+
+---------------------select row
+declare @record  varchar(50)
+set @record=null
+			set @record=(select max(ExportFiles_BatchNumber) from Trans_ExportFiles where 
+						[ExportFiles_Segment]=@segment and [ExportFiles_Type]='FO Position txt'
+						and cast(DATEADD(dd, 0, DATEDIFF(dd, 0,[ExportFiles_CreateDateTime])) as datetime)=
+						cast(DATEADD(dd, 0, DATEDIFF(dd, 0,getdate())) as datetime))
+
+				if(@record is null)
+						begin
+							set @record='1'
+						end
+				else 
+						begin
+							set @record=@record+1
+							if (@record<=9)
+								begin
+									set @record=@record
+								end
+							if(@record>9 and @record<=99)
+								begin
+									set @record=@record
+								end
+						end
+
+Declare @SqlSelect varchar(max),@SqlSelect1 varchar(max),@sqlselect2 varchar(max),@TM_Code varchar (50)
+
+select @TM_Code=ltrim(rtrim(exch_TMCode)) from tbl_Master_Companyexchange where exch_compid=@Companyid and exch_internalid=@segment
+
+select @TM_Code+'_'+REPLACE(CONVERT(VARCHAR(10), cast(@date as datetime), 103), '/', '') as filename1,@record as rowno
+
+create table #Table1 (ClientId varchar(50),FrontBranch varchar(10),ClientName varchar(150),
+					  TickerSymbol varchar (50),EffectUntil varchar (50), Identifier varchar (50), 
+					  CFQty numeric (28,0),SETTPRICE numeric (28,4),CFValue numeric (28,0),
+					  productid varchar(50))
+
+
+select @SqlSelect='',@sqlselect1='',@sqlselect2=''
+select @SqlSelect='select 
+				ltrim(rtrim(crg_Tcode)),ltrim(rtrim(isnull(crg_FrontOfficeBranchCode,''''))),isnull(cnt_Firstname,'''')+isnull(cnt_MiddleName,'''')+isnull(cnt_LastName,''''),
+				ltrim(rtrim(Commodity_TickerSymbol))as Commodity_TickerSymbol,
+				CONVERT(VARCHAR(10), cast(Commodity_ExpiryDate as datetime), 6),
+				ltrim(rtrim(Commodity_Identifier)),
+	    		QuantityRESULT,
+				ProductSeriesID				
+				from Master_Commodity,tbl_Master_Contact,tbl_Master_ContactExchange,'
+
+select @SqlSelect1='(select distinct case when Minus_ProductSeriesID is null then Positive_ProductSeriesID else Minus_ProductSeriesID end as ProductSeriesID,
+	case when Positive_CustomerID is null then Minus_CustomerID else Positive_CustomerID end as CustomerID,
+	 isnull(Positive_Quantity,0.0)-isnull(Minus_Quantity,0.0) as QuantityRESULT from 
+
+			(select 
+			sum(abs(isnull(ComCustomerTrades_QuantityLots,0.0))) as Minus_Quantity,
+			ComCustomerTrades_ProductSeriesID as Minus_ProductSeriesID,
+			ComCustomerTrades_CustomerID as  Minus_CustomerID
+			from Trans_ComCustomerTrades where ComCustomerTrades_CompanyID='''+@Companyid+'''
+			and ComCustomerTrades_ExchangeSegment='''+@segment+'''
+			and ComCustomerTrades_TradeDate<='''+@date+'''
+			and Isnull(ComCustomerTrades_TradeCategory,''XXX'') not in (''ARS'',''ART'')'
+			if @ClientsID<>'ALL'
+			BEGIN
+						SELECT @SqlSelect1=@SqlSelect1+' and ComCustomerTrades_CustomerID in('+@ClientsID+')'
+			END
+			SELECT @SqlSelect1=@SqlSelect1+'
+			and ComCustomerTrades_QuantityLots<0 
+			group by ComCustomerTrades_CustomerID,ComCustomerTrades_ProductSeriesID) as Tab_Minus
+
+	        full outer join
+
+			(select 
+			sum(abs(isnull(ComCustomerTrades_QuantityLots,0.0))) as Positive_Quantity,
+			ComCustomerTrades_ProductSeriesID as Positive_ProductSeriesID,
+			ComCustomerTrades_CustomerID as  Positive_CustomerID
+			from Trans_ComCustomerTrades where ComCustomerTrades_CompanyID='''+@Companyid+'''
+			and ComCustomerTrades_ExchangeSegment='''+@segment+'''
+			and ComCustomerTrades_TradeDate<='''+@date+'''
+			and Isnull(ComCustomerTrades_TradeCategory,''XXX'') not in (''ARS'',''ART'')'
+			If @ClientsID<>'ALL'
+			BEGIN
+						SELECT @SqlSelect1=@SqlSelect1+' and ComCustomerTrades_CustomerID in('+@ClientsID+')'
+			END
+			SELECT @SqlSelect1=@SqlSelect1+'
+			and ComCustomerTrades_QuantityLots>0 
+			group by ComCustomerTrades_CustomerID,ComCustomerTrades_ProductSeriesID) as Tab_Positive
+
+			on(Minus_ProductSeriesID=Positive_ProductSeriesID and Positive_CustomerID=Minus_CustomerID))as tb'
+
+select @sqlselect2=' where Commodity_ExchangeSegmentID='''+@MasterSegment+'''
+			and Commodity_ProductSeriesID=ProductSeriesID
+			and cnt_Internalid=CustomerID
+			and crg_Cntid=CustomerID
+			and crg_Exchange=''NCDEX - COMM''
+			and crg_company='''+@Companyid+'''
+			and QuantityRESULT<>0.0 
+			and Commodity_ExpiryDate>'''+@date+'''
+			order by crg_tcode,Commodity_TickerSymbol,Commodity_Identifier,QuantityRESULT'
+
+--print @SqlSelect+@SqlSelect1+@sqlselect2
+
+insert into #Table1(ClientId,FrontBranch,ClientName,TickerSymbol,EffectUntil, Identifier,CFQty,productid)
+exec(@SqlSelect+@SqlSelect1+@sqlselect2)
+
+
+--select * from #Table1
+	----------------------------------Update SettPrice------------------------
+	update #Table1 set SETTPRICE=ComDailyStat_SettlementPrice
+	from Trans_ComDailyStat
+	where ComDailyStat_ProductSeriesID=productid
+	and ComDailyStat_ExchangeSegmentID=@MasterSegment
+	and ComDailyStat_DateTime=@date
+------------------------------------Update CFValue-----------------------------------
+
+update #Table1 set CFValue=cast(CFQty as numeric (28,0))* cast(SETTPRICE as numeric (28,4))
+
+--------------RESULT FETCH
+
+
+SELECT '',64,'A',
+Case when FrontBranch='' then @TM_Code else FrontBranch End,
+ClientName,ClientId,Identifier,TickerSymbol,'',
+replace(EffectUntil,' ','-'),'','',
+CASE WHEN ISNULL(CFQty,0)<0 THEN abs(ISNULL(CFQty,0)) ELSE NULL END AS BUYQTY,
+CASE WHEN ISNULL(CFQty,0)<0 THEN abs(ISNULL(CFValue,0)) ELSE NULL END AS BUYVALUE,
+CASE WHEN ISNULL(CFQty,0)>0 THEN abs(ISNULL(CFQty,0)) ELSE NULL END AS SELLQTY,
+CASE WHEN ISNULL(CFQty,0)>0 THEN abs(ISNULL(CFValue,0)) ELSE NULL END AS SELLVALUE,
+'',
+'$'
+FROM #Table1
+
+drop table #Table1
+
+End
+
+
+----SELECT @CLIENT='''CLA0000058'',''CLA0000216'',''CLA0000234'''
+--------------------------------------------------------------------------
+
+
+
+
+
+
+GO
+

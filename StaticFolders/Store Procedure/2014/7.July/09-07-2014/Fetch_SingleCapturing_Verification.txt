@@ -1,0 +1,1344 @@
+
+
+--exec Fetch_SingleCapturing_Verification '2011-03-05','MatchedRecord','NSDL'
+--exec Sp_Fetch_Matched_UnMatchedRecord_Verification '2011-01-27','UnMatchedRecord','NSDL'
+--exec Sp_Fetch_Matched_UnMatchedRecord_Verification '2011-01-21','MatchedRecord','NSDL'
+--exec [Fetch_SingleCapturing_Verification] '2014-06-25','ReportRecord','NSDL'
+--exec [Fetch_SingleCapturing_Verification] '2011-03-15','MatchedRecord','CDSL' 
+--exec [Fetch_SingleCapturing_Verification] '2011-02-11','UnMatchedRecord','CDSL'
+--exec [Fetch_SingleCapturing_Verification] '2011-03-15','ReportRecord','CDSL'
+--exec [Fetch_SingleCapturing_Verification] '2011-02-11','NotVerifyRecord','CDSL' 
+--exec [Fetch_SingleCapturing_Verification] '2011-02-11','AcceptedRecord','CDSL' 
+--exec [Fetch_SingleCapturing_Verification] '2011-02-11','RejectedRecord','CDSL' 
+--exec [Fetch_SingleCapturing_Verification] '2011-02-11','AllRecord','CDSL' 
+ALTER proc [dbo].[Fetch_SingleCapturing_Verification] 
+@date datetime,@WhichRecord varchar(15),@WhichDp varchar(4)
+as
+begin
+if(@WhichDp='NSDL')---Start @whichdp=NSDL
+Begin
+	if(@WhichRecord='MatchedRecord')--MatchedRecord
+	Begin
+		select nsdloffline_id as id,
+		Case
+		When  isnull(ltrim(rtrim(NsdlOffline_Rejected)),'A')='A'
+		Then 'Accept'
+		Else 'Reject'
+		End	 as AcceptReject,NsdlOffline_RejectReason as AcceptRejectReason,
+		'' as CHID,NsdlOffline_IsHighValue as IsHighValue,
+		NsdlOffline_VerifyDateTime as VerifyDateTime,NsdlOffline_TransactionType,
+		Case 
+		when NsdlOffline_TransactionType=1 then 'Market'
+		when NsdlOffline_TransactionType=2 then 'Off-Market'
+		when NsdlOffline_TransactionType=31 then 'Inter-Depository(Mkt.)(N)'
+		when NsdlOffline_TransactionType=32 then 'Inter-Depository(Mkt.)(E)'
+		when NsdlOffline_TransactionType=4 then 'Inter-Depository(OffMkt.)'
+		when NsdlOffline_TransactionType=5 then 'Inter-Settlement'
+		when NsdlOffline_TransactionType=61 then 'Delivery Out(R)'
+		when NsdlOffline_TransactionType=62 then 'Delivery Out(IR)'
+		when NsdlOffline_TransactionType=7 then 'CM pool to pool'
+		End as TransactionType,NSdlOffline_SlipNumber as SlipNumber,
+		NsdlOffline_SlipType as SlipType,
+		NsdlOffline_ClientID as ClientID,
+		(Select nsdlbplist_bpid  from master_nsdlbplist where NsdlBPList_BPRole=2 and nsdlbplist_bpid=(Select nsdlbplist_associatedccid from master_nsdlbplist 
+		WHERE  (NsdlBPList_BPRole=3 or NsdlBPList_BPRole=40)  and nsdlbplist_bpid=(Select nsdlclients_correspondingbpid from master_nsdlclients 
+		WHERE nsdlclients_benaccountid=NsdlOffline_ClientID  and len(nsdlclients_correspondingbpid)>0 and NsdlClients_BenAccountCategory=3))) as SourceCCCMID,
+		(Select ltrim(rtrim(nsdlclients_BenFirstHolderName)) + ' [ '+ right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=NsdlOffline_ClientID) as BenIDName,NsdlOffline_MarketType,
+		(Select  NsdlMarketType_Description   from Master_NsdlMarketTypes WHERE NsdlMarketType_CCID = (Select nsdlbplist_bpid  from master_nsdlbplist where NsdlBPList_BPRole=1 and nsdlbplist_bpid=(Select nsdlbplist_associatedccid from master_nsdlbplist 
+		WHERE  (NsdlBPList_BPRole=3 or NsdlBPList_BPRole=40)  and nsdlbplist_bpid=(Select nsdlclients_correspondingbpid from master_nsdlclients 
+		WHERE nsdlclients_benaccountid=NsdlOffline_ClientID  and len(nsdlclients_correspondingbpid)>0 and NsdlClients_BenAccountCategory=3))) and NsdlMarketType_dpmcode=NsdlOffline_MarketType) as MarketType,
+		NsdlOffline_SettlementNumber as SettlementNumber,NsdlOffline_DPID,
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_DPID and NsdlBPList_BPRole=1) as DPID,
+		NsdlOffline_OtherClientID,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 or NsdlOffline_TransactionType=4 then
+		isnull(((Select right(ltrim(rtrim(cast(substring(Cdslclients_boid,9,8) as varchar(20)))),8) + ' [ '+ ltrim(rtrim(Cdslclients_FirstHolderName)) +' ]' 
+		from Master_CdslClients where substring(CdslClients_BOID,9,8)=NSDLOffline_OtherClientID)),NSDLOffline_OtherClientID)
+		Else
+		isnull((Select right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) + ' [ '+ ltrim(rtrim(nsdlclients_BenFirstHolderName)) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=NsdlOffline_OtherClientID),NsdlOffline_OtherClientID)
+		End as OtherBenIDName,NsdlOffline_OtherClientID as OtherClientID,NsdlOffline_OtherDPID,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 or NsdlOffline_TransactionType=4 then
+		Case 
+			When isnull((select 1 from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=NsdlOffline_OtherDPID and CdslBPLIst_DPType in (1,2,3,6)),' ')=' '
+			Then NsdlOffline_OtherDPID
+			Else (select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(CDSLBPList_FirstName))+' ]'  from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=NsdlOffline_OtherDPID and CdslBPLIst_DPType in (1,2,3,6)) 
+		End
+		Else
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_OtherDPID and NsdlBPList_BPRole=1) 
+		End as OtherDPID,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 Then
+		NsdlOffline_OtherDpID+NsdlOffline_OtherClientID
+		Else
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_OtherCMBPID and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4)) 
+		End as OtherCMBPID,
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_CCCMID and NsdlBPList_BPRole=2) as CCCMID,
+		NsdlOffline_CCCMID,
+		NsdlOffline_OtherMarketType,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = 
+			Case 
+				When NsdlOffline_CCCMID='IN001002' then '12'
+				When NsdlOffline_CCCMID='IN001019' then '11'
+				When NsdlOffline_CCCMID='IN001027' then '13'
+			End
+		and CDSLMarketTypes_TypeID=NsdlOffline_OtherMarketType)
+		Else (Select  NsdlMarketType_Description   from Master_NsdlMarketTypes WHERE NsdlMarketType_CCID = NsdlOffline_CCCMID and NsdlMarketType_dpmcode=NsdlOffline_OtherMarketType)  
+		End as OtherMarketType,
+		NsdlOffline_OtherSettlementNumber as OtherSettlementNumber,
+		(Select (nsdlisin_number+'[ '+ltrim(rtrim(nsdlisin_companyname+' ]'))) from master_nsdlisin WHERE NSDLISIN_SecurityStatus in(1,3,4) and nsdlisin_number=NsdlOffline_ISIN ) as ISIN,
+		NsdlOffline_Quantity as Quantity,Convert(varchar,NsdlOffline_TransactionDate,106) as TransactionDate,
+		Convert(varchar,NsdlOffline_ExecutionDate,106) as ExecutionDate,NsdlOffline_EntryUserRole,NsdlOffline_Enteredby,
+		(select user_name+' ['+user_entryprofile+']' from tbl_master_user where user_id=NsdlOffline_Enteredby) as EntryUserRole,
+		null as CdslOffline_NoOfCertificate,null as CdslOffline_DispatchDocumentId,null as CdslOffline_DispatchName,
+		null as CdslOffline_DispatchDate,null as CdslOffline_LockinStatus,null as CdslOffline_LockinCode,
+		null as CdslOffline_LockinRemark,null as CdslOffline_LockinExpiryDate
+		from Trans_NsdlOffline where NsdlOffline_EntryUserRole='f' and substring(convert(varchar(20),NSDLOffline_EntryDateTime,121),1,10)=substring(convert(varchar(20),@date,121),1,10)
+		and NsdlOffline_BatchNumber is null and NsdlOffline_EntryApplication=1 and NsdlOffline_EntryUserRole='F'
+		order by NSdlOffline_SlipNumber,NsdlOffline_ClientID,NsdlOffline_DPID,NsdlOffline_ISIN,NsdlOffline_Quantity,NsdlOffline_OtherDPID,NsdlOffline_OtherCMBPID,
+		NsdlOffline_OtherClientID,NsdlOffline_SettlementNumber,NsdlOffline_OtherMarketType,NsdlOffline_OtherSettlementNumber,NsdlOffline_TransactionType,
+		NsdlOffline_MarketType
+
+	End---End MatchedRecord
+
+	if(@WhichRecord='NotVerifyRecord')--NotVerifyRecord 
+	Begin
+		select nsdloffline_id as id,
+		Case
+		When  isnull(ltrim(rtrim(NsdlOffline_Rejected)),'A')='A'
+		Then 'Accept'
+		Else 'Reject'
+		End	 as AcceptReject,NsdlOffline_RejectReason as AcceptRejectReason,'' as CHID,NsdlOffline_IsHighValue as IsHighValue,
+		NsdlOffline_VerifyDateTime as VerifyDateTime,NsdlOffline_TransactionType,
+		Case 
+		when NsdlOffline_TransactionType=1 then 'Market'
+		when NsdlOffline_TransactionType=2 then 'Off-Market'
+		when NsdlOffline_TransactionType=31 then 'Inter-Depository(Mkt.)(N)'
+		when NsdlOffline_TransactionType=32 then 'Inter-Depository(Mkt.)(E)'
+		when NsdlOffline_TransactionType=4 then 'Inter-Depository(OffMkt.)'
+		when NsdlOffline_TransactionType=5 then 'Inter-Settlement'
+		when NsdlOffline_TransactionType=61 then 'Delivery Out(R)'
+		when NsdlOffline_TransactionType=62 then 'Delivery Out(IR)'
+		when NsdlOffline_TransactionType=7 then 'CM pool to pool'
+		End as TransactionType,NSdlOffline_SlipNumber as SlipNumber,
+		NsdlOffline_SlipType as SlipType,
+		NsdlOffline_ClientID as ClientID,
+		(Select nsdlbplist_bpid  from master_nsdlbplist where NsdlBPList_BPRole=2 and nsdlbplist_bpid=(Select nsdlbplist_associatedccid from master_nsdlbplist 
+		WHERE  (NsdlBPList_BPRole=3 or NsdlBPList_BPRole=40)  and nsdlbplist_bpid=(Select nsdlclients_correspondingbpid from master_nsdlclients 
+		WHERE nsdlclients_benaccountid=NsdlOffline_ClientID  and len(nsdlclients_correspondingbpid)>0 and NsdlClients_BenAccountCategory=3))) as SourceCCCMID,
+		(Select ltrim(rtrim(nsdlclients_BenFirstHolderName)) + ' [ '+ right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=NsdlOffline_ClientID) as BenIDName,NsdlOffline_MarketType,
+		(Select  NsdlMarketType_Description   from Master_NsdlMarketTypes WHERE NsdlMarketType_CCID = (Select nsdlbplist_bpid  from master_nsdlbplist where NsdlBPList_BPRole=1 and nsdlbplist_bpid=(Select nsdlbplist_associatedccid from master_nsdlbplist 
+		WHERE  (NsdlBPList_BPRole=3 or NsdlBPList_BPRole=40)  and nsdlbplist_bpid=(Select nsdlclients_correspondingbpid from master_nsdlclients 
+		WHERE nsdlclients_benaccountid=NsdlOffline_ClientID  and len(nsdlclients_correspondingbpid)>0 and NsdlClients_BenAccountCategory=3))) and NsdlMarketType_dpmcode=NsdlOffline_MarketType) as MarketType,
+		NsdlOffline_SettlementNumber as SettlementNumber,NsdlOffline_DPID,
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_DPID and NsdlBPList_BPRole=1) as DPID,
+		NsdlOffline_OtherClientID,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 or NsdlOffline_TransactionType=4 then
+		isnull(((Select right(ltrim(rtrim(cast(substring(Cdslclients_boid,9,8) as varchar(20)))),8) + ' [ '+ ltrim(rtrim(Cdslclients_FirstHolderName)) +' ]' 
+		from Master_CdslClients where substring(CdslClients_BOID,9,8)=NSDLOffline_OtherClientID)),NSDLOffline_OtherClientID)
+		Else
+		isnull((Select right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) + ' [ '+ ltrim(rtrim(nsdlclients_BenFirstHolderName)) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=NsdlOffline_OtherClientID),NsdlOffline_OtherClientID)
+		End as OtherBenIDName,NsdlOffline_OtherClientID as OtherClientID,NsdlOffline_OtherDPID,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 or NsdlOffline_TransactionType=4 then
+		Case 
+			When isnull((select 1 from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=NsdlOffline_OtherDPID and CdslBPLIst_DPType in (1,2,3,6)),' ')=' '
+			Then NsdlOffline_OtherDPID
+			Else (select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(CDSLBPList_FirstName))+' ]'  from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=NsdlOffline_OtherDPID and CdslBPLIst_DPType in (1,2,3,6)) 
+		End
+		Else
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_OtherDPID and NsdlBPList_BPRole=1) 
+		End as OtherDPID,
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_OtherCMBPID and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4)) as OtherCMBPID,
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_CCCMID and NsdlBPList_BPRole=2) as CCCMID,
+		NsdlOffline_CCCMID,
+		NsdlOffline_OtherMarketType,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = 
+			Case 
+				When NsdlOffline_CCCMID='IN001002' then '12'
+				When NsdlOffline_CCCMID='IN001019' then '11'
+				When NsdlOffline_CCCMID='IN001027' then '13'
+			End
+		and CDSLMarketTypes_TypeID=NsdlOffline_OtherMarketType)
+		Else (Select  NsdlMarketType_Description   from Master_NsdlMarketTypes WHERE NsdlMarketType_CCID = NsdlOffline_CCCMID and NsdlMarketType_dpmcode=NsdlOffline_OtherMarketType)  
+		End as OtherMarketType,
+		NsdlOffline_OtherSettlementNumber as OtherSettlementNumber,
+		(Select (nsdlisin_number+'[ '+ltrim(rtrim(nsdlisin_companyname+' ]'))) from master_nsdlisin WHERE NSDLISIN_SecurityStatus in(1,3,4) and nsdlisin_number=NsdlOffline_ISIN ) as ISIN,
+		NsdlOffline_Quantity as Quantity,Convert(varchar,NsdlOffline_TransactionDate,106) as TransactionDate,
+		Convert(varchar,NsdlOffline_ExecutionDate,106) as ExecutionDate,NsdlOffline_EntryUserRole,NsdlOffline_Enteredby,
+		(select user_name+' ['+user_entryprofile+']' from tbl_master_user where user_id=NsdlOffline_Enteredby) as EntryUserRole,
+		null as CdslOffline_NoOfCertificate,null as CdslOffline_DispatchDocumentId,null as CdslOffline_DispatchName,
+		null as CdslOffline_DispatchDate,null as CdslOffline_LockinStatus,null as CdslOffline_LockinCode,
+		null as CdslOffline_LockinRemark,null as CdslOffline_LockinExpiryDate
+		from Trans_NsdlOffline where NsdlOffline_EntryUserRole='f' and substring(convert(varchar(20),NSDLOffline_EntryDateTime,121),1,10)=substring(convert(varchar(20),@date,121),1,10)
+		and NsdlOffline_BatchNumber is null and NsdlOffline_VerifyDateTime is null and NsdlOffline_RejectDateTime is null and NsdlOffline_EntryApplication=1 and NsdlOffline_EntryUserRole='F'
+		order by NSdlOffline_SlipNumber,NsdlOffline_ClientID,NsdlOffline_DPID,NsdlOffline_ISIN,NsdlOffline_Quantity,NsdlOffline_OtherDPID,NsdlOffline_OtherCMBPID,
+		NsdlOffline_OtherClientID,NsdlOffline_SettlementNumber,NsdlOffline_OtherMarketType,NsdlOffline_OtherSettlementNumber,NsdlOffline_TransactionType,
+		NsdlOffline_MarketType
+	End
+	if(@WhichRecord='AcceptedRecord')--AcceptedRecord 
+	Begin
+		select nsdloffline_id as id,
+		Case
+		When  isnull(ltrim(rtrim(NsdlOffline_Rejected)),'A')='A'
+		Then 'Accept'
+		Else 'Reject'
+		End	 as AcceptReject,NsdlOffline_RejectReason as AcceptRejectReason,'' as CHID,NsdlOffline_IsHighValue as IsHighValue,
+		NsdlOffline_VerifyDateTime as VerifyDateTime,NsdlOffline_TransactionType,
+		Case 
+		when NsdlOffline_TransactionType=1 then 'Market'
+		when NsdlOffline_TransactionType=2 then 'Off-Market'
+		when NsdlOffline_TransactionType=31 then 'Inter-Depository(Mkt.)(N)'
+		when NsdlOffline_TransactionType=32 then 'Inter-Depository(Mkt.)(E)'
+		when NsdlOffline_TransactionType=4 then 'Inter-Depository(OffMkt.)'
+		when NsdlOffline_TransactionType=5 then 'Inter-Settlement'
+		when NsdlOffline_TransactionType=61 then 'Delivery Out(R)'
+		when NsdlOffline_TransactionType=62 then 'Delivery Out(IR)'
+		when NsdlOffline_TransactionType=7 then 'CM pool to pool'
+		End as TransactionType,NSdlOffline_SlipNumber as SlipNumber,
+		NsdlOffline_SlipType as SlipType,
+		NsdlOffline_ClientID as ClientID,
+		(Select nsdlbplist_bpid  from master_nsdlbplist where NsdlBPList_BPRole=2 and nsdlbplist_bpid=(Select nsdlbplist_associatedccid from master_nsdlbplist 
+		WHERE  (NsdlBPList_BPRole=3 or NsdlBPList_BPRole=40)  and nsdlbplist_bpid=(Select nsdlclients_correspondingbpid from master_nsdlclients 
+		WHERE nsdlclients_benaccountid=NsdlOffline_ClientID  and len(nsdlclients_correspondingbpid)>0 and NsdlClients_BenAccountCategory=3))) as SourceCCCMID,
+		(Select ltrim(rtrim(nsdlclients_BenFirstHolderName)) + ' [ '+ right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=NsdlOffline_ClientID) as BenIDName,NsdlOffline_MarketType,
+		(Select  NsdlMarketType_Description   from Master_NsdlMarketTypes WHERE NsdlMarketType_CCID = (Select nsdlbplist_bpid  from master_nsdlbplist where NsdlBPList_BPRole=1 and nsdlbplist_bpid=(Select nsdlbplist_associatedccid from master_nsdlbplist 
+		WHERE  (NsdlBPList_BPRole=3 or NsdlBPList_BPRole=40)  and nsdlbplist_bpid=(Select nsdlclients_correspondingbpid from master_nsdlclients 
+		WHERE nsdlclients_benaccountid=NsdlOffline_ClientID  and len(nsdlclients_correspondingbpid)>0 and NsdlClients_BenAccountCategory=3))) and NsdlMarketType_dpmcode=NsdlOffline_MarketType) as MarketType,
+		NsdlOffline_SettlementNumber as SettlementNumber,NsdlOffline_DPID,
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_DPID and NsdlBPList_BPRole=1) as DPID,
+		NsdlOffline_OtherClientID,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 or NsdlOffline_TransactionType=4 then
+		isnull(((Select right(ltrim(rtrim(cast(substring(Cdslclients_boid,9,8) as varchar(20)))),8) + ' [ '+ ltrim(rtrim(Cdslclients_FirstHolderName)) +' ]' 
+		from Master_CdslClients where substring(CdslClients_BOID,9,8)=NSDLOffline_OtherClientID)),NSDLOffline_OtherClientID)
+		Else
+		isnull((Select right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) + ' [ '+ ltrim(rtrim(nsdlclients_BenFirstHolderName)) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=NsdlOffline_OtherClientID),NsdlOffline_OtherClientID)
+		End as OtherBenIDName,NsdlOffline_OtherClientID as OtherClientID,NsdlOffline_OtherDPID,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 or NsdlOffline_TransactionType=4 then
+		Case 
+			When isnull((select 1 from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=NsdlOffline_OtherDPID and CdslBPLIst_DPType in (1,2,3,6)),' ')=' '
+			Then NsdlOffline_OtherDPID
+			Else (select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(CDSLBPList_FirstName))+' ]'  from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=NsdlOffline_OtherDPID and CdslBPLIst_DPType in (1,2,3,6)) 
+		End
+		Else
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_OtherDPID and NsdlBPList_BPRole=1) 
+		End as OtherDPID,
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_OtherCMBPID and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4)) as OtherCMBPID,
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_CCCMID and NsdlBPList_BPRole=2) as CCCMID,
+		NsdlOffline_CCCMID,
+		NsdlOffline_OtherMarketType,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = 
+			Case 
+				When NsdlOffline_CCCMID='IN001002' then '12'
+				When NsdlOffline_CCCMID='IN001019' then '11'
+				When NsdlOffline_CCCMID='IN001027' then '13'
+			End
+		and CDSLMarketTypes_TypeID=NsdlOffline_OtherMarketType)
+		Else (Select  NsdlMarketType_Description   from Master_NsdlMarketTypes WHERE NsdlMarketType_CCID = NsdlOffline_CCCMID and NsdlMarketType_dpmcode=NsdlOffline_OtherMarketType)  
+		End as OtherMarketType,
+		NsdlOffline_OtherSettlementNumber as OtherSettlementNumber,
+		(Select (nsdlisin_number+'[ '+ltrim(rtrim(nsdlisin_companyname+' ]'))) from master_nsdlisin WHERE NSDLISIN_SecurityStatus in(1,3,4) and nsdlisin_number=NsdlOffline_ISIN ) as ISIN,
+		NsdlOffline_Quantity as Quantity,Convert(varchar,NsdlOffline_TransactionDate,106) as TransactionDate,
+		Convert(varchar,NsdlOffline_ExecutionDate,106) as ExecutionDate,NsdlOffline_EntryUserRole,NsdlOffline_Enteredby,
+		(select user_name+' ['+user_entryprofile+']' from tbl_master_user where user_id=NsdlOffline_Enteredby) as EntryUserRole,
+		null as CdslOffline_NoOfCertificate,null as CdslOffline_DispatchDocumentId,null as CdslOffline_DispatchName,
+		null as CdslOffline_DispatchDate,null as CdslOffline_LockinStatus,null as CdslOffline_LockinCode,
+		null as CdslOffline_LockinRemark,null as CdslOffline_LockinExpiryDate
+		from Trans_NsdlOffline where NsdlOffline_EntryUserRole='f' and substring(convert(varchar(20),NSDLOffline_EntryDateTime,121),1,10)=substring(convert(varchar(20),@date,121),1,10)
+		and NsdlOffline_BatchNumber is null and NSDLOffline_RejectDateTime is null and NsdlOffline_VerifyDateTime is not null and NsdlOffline_EntryApplication=1 and NsdlOffline_EntryUserRole='F'
+		order by NSdlOffline_SlipNumber,NsdlOffline_ClientID,NsdlOffline_DPID,NsdlOffline_ISIN,NsdlOffline_Quantity,NsdlOffline_OtherDPID,NsdlOffline_OtherCMBPID,
+		NsdlOffline_OtherClientID,NsdlOffline_SettlementNumber,NsdlOffline_OtherMarketType,NsdlOffline_OtherSettlementNumber,NsdlOffline_TransactionType,
+		NsdlOffline_MarketType
+	End
+	if(@WhichRecord='RejectedRecord')--RejectedRecord 
+	Begin
+		select nsdloffline_id as id,
+		Case
+		When  isnull(ltrim(rtrim(NsdlOffline_Rejected)),'A')='A'
+		Then 'Accept'
+		Else 'Reject'
+		End	 as AcceptReject,NsdlOffline_RejectReason as AcceptRejectReason,'' as CHID,NsdlOffline_IsHighValue as IsHighValue,
+		NsdlOffline_VerifyDateTime as VerifyDateTime,NsdlOffline_TransactionType,
+		Case 
+		when NsdlOffline_TransactionType=1 then 'Market'
+		when NsdlOffline_TransactionType=2 then 'Off-Market'
+		when NsdlOffline_TransactionType=31 then 'Inter-Depository(Mkt.)(N)'
+		when NsdlOffline_TransactionType=32 then 'Inter-Depository(Mkt.)(E)'
+		when NsdlOffline_TransactionType=4 then 'Inter-Depository(OffMkt.)'
+		when NsdlOffline_TransactionType=5 then 'Inter-Settlement'
+		when NsdlOffline_TransactionType=61 then 'Delivery Out(R)'
+		when NsdlOffline_TransactionType=62 then 'Delivery Out(IR)'
+		when NsdlOffline_TransactionType=7 then 'CM pool to pool'
+		End as TransactionType,NSdlOffline_SlipNumber as SlipNumber,
+		NsdlOffline_SlipType as SlipType,
+		NsdlOffline_ClientID as ClientID,
+		(Select nsdlbplist_bpid  from master_nsdlbplist where NsdlBPList_BPRole=2 and nsdlbplist_bpid=(Select nsdlbplist_associatedccid from master_nsdlbplist 
+		WHERE  (NsdlBPList_BPRole=3 or NsdlBPList_BPRole=40)  and nsdlbplist_bpid=(Select nsdlclients_correspondingbpid from master_nsdlclients 
+		WHERE nsdlclients_benaccountid=NsdlOffline_ClientID  and len(nsdlclients_correspondingbpid)>0 and NsdlClients_BenAccountCategory=3))) as SourceCCCMID,
+		(Select ltrim(rtrim(nsdlclients_BenFirstHolderName)) + ' [ '+ right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=NsdlOffline_ClientID) as BenIDName,NsdlOffline_MarketType,
+		(Select  NsdlMarketType_Description   from Master_NsdlMarketTypes WHERE NsdlMarketType_CCID = (Select nsdlbplist_bpid  from master_nsdlbplist where NsdlBPList_BPRole=1 and nsdlbplist_bpid=(Select nsdlbplist_associatedccid from master_nsdlbplist 
+		WHERE  (NsdlBPList_BPRole=3 or NsdlBPList_BPRole=40)  and nsdlbplist_bpid=(Select nsdlclients_correspondingbpid from master_nsdlclients 
+		WHERE nsdlclients_benaccountid=NsdlOffline_ClientID  and len(nsdlclients_correspondingbpid)>0 and NsdlClients_BenAccountCategory=3))) and NsdlMarketType_dpmcode=NsdlOffline_MarketType) as MarketType,
+		NsdlOffline_SettlementNumber as SettlementNumber,NsdlOffline_DPID,
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_DPID and NsdlBPList_BPRole=1) as DPID,
+		NsdlOffline_OtherClientID,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 or NsdlOffline_TransactionType=4 then
+		isnull(((Select right(ltrim(rtrim(cast(substring(Cdslclients_boid,9,8) as varchar(20)))),8) + ' [ '+ ltrim(rtrim(Cdslclients_FirstHolderName)) +' ]' 
+		from Master_CdslClients where substring(CdslClients_BOID,9,8)=NSDLOffline_OtherClientID)),NSDLOffline_OtherClientID)
+		Else
+		isnull((Select right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) + ' [ '+ ltrim(rtrim(nsdlclients_BenFirstHolderName)) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=NsdlOffline_OtherClientID),NsdlOffline_OtherClientID)
+		End as OtherBenIDName,NsdlOffline_OtherClientID as OtherClientID,NsdlOffline_OtherDPID,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 or NsdlOffline_TransactionType=4 then
+		Case 
+			When isnull((select 1 from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=NsdlOffline_OtherDPID and CdslBPLIst_DPType in (1,2,3,6)),' ')=' '
+			Then NsdlOffline_OtherDPID
+			Else (select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(CDSLBPList_FirstName))+' ]'  from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=NsdlOffline_OtherDPID and CdslBPLIst_DPType in (1,2,3,6)) 
+		End
+		Else
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_OtherDPID and NsdlBPList_BPRole=1) 
+		End as OtherDPID,
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_OtherCMBPID and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4)) as OtherCMBPID,
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_CCCMID and NsdlBPList_BPRole=2) as CCCMID,
+		NsdlOffline_CCCMID,
+		NsdlOffline_OtherMarketType,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = 
+			Case 
+				When NsdlOffline_CCCMID='IN001002' then '12'
+				When NsdlOffline_CCCMID='IN001019' then '11'
+				When NsdlOffline_CCCMID='IN001027' then '13'
+			End
+		and CDSLMarketTypes_TypeID=NsdlOffline_OtherMarketType)
+		Else (Select  NsdlMarketType_Description   from Master_NsdlMarketTypes WHERE NsdlMarketType_CCID = NsdlOffline_CCCMID and NsdlMarketType_dpmcode=NsdlOffline_OtherMarketType)  
+		End as OtherMarketType,
+		NsdlOffline_OtherSettlementNumber as OtherSettlementNumber,
+		(Select (nsdlisin_number+'[ '+ltrim(rtrim(nsdlisin_companyname+' ]'))) from master_nsdlisin WHERE NSDLISIN_SecurityStatus in(1,3,4) and nsdlisin_number=NsdlOffline_ISIN ) as ISIN,
+		NsdlOffline_Quantity as Quantity,Convert(varchar,NsdlOffline_TransactionDate,106) as TransactionDate,
+		Convert(varchar,NsdlOffline_ExecutionDate,106) as ExecutionDate,NsdlOffline_EntryUserRole,NsdlOffline_Enteredby,
+		(select user_name+' ['+user_entryprofile+']' from tbl_master_user where user_id=NsdlOffline_Enteredby) as EntryUserRole,
+		null as CdslOffline_NoOfCertificate,null as CdslOffline_DispatchDocumentId,null as CdslOffline_DispatchName,
+		null as CdslOffline_DispatchDate,null as CdslOffline_LockinStatus,null as CdslOffline_LockinCode,
+		null as CdslOffline_LockinRemark,null as CdslOffline_LockinExpiryDate
+		from Trans_NsdlOffline where NsdlOffline_EntryUserRole='f' and substring(convert(varchar(20),NSDLOffline_EntryDateTime,121),1,10)=substring(convert(varchar(20),@date,121),1,10)
+		and NsdlOffline_BatchNumber is null and NsdlOffline_RejectDateTime is not null and NsdlOffline_EntryApplication=1 and NsdlOffline_EntryUserRole='F'
+		order by NSdlOffline_SlipNumber,NsdlOffline_ClientID,NsdlOffline_DPID,NsdlOffline_ISIN,NsdlOffline_Quantity,NsdlOffline_OtherDPID,NsdlOffline_OtherCMBPID,
+		NsdlOffline_OtherClientID,NsdlOffline_SettlementNumber,NsdlOffline_OtherMarketType,NsdlOffline_OtherSettlementNumber,NsdlOffline_TransactionType,
+		NsdlOffline_MarketType
+	End
+	if(@WhichRecord='AllRecord')--AllRecord
+	Begin
+		select nsdloffline_id as id,
+		Case
+		When  isnull(ltrim(rtrim(NsdlOffline_Rejected)),'A')='A'
+		Then 'Accept'
+		Else 'Reject'
+		End	 as AcceptReject,NsdlOffline_RejectReason as AcceptRejectReason,'' as CHID,NsdlOffline_IsHighValue as IsHighValue,
+		NsdlOffline_VerifyDateTime as VerifyDateTime,NsdlOffline_TransactionType,
+		Case 
+		when NsdlOffline_TransactionType=1 then 'Market'
+		when NsdlOffline_TransactionType=2 then 'Off-Market'
+		when NsdlOffline_TransactionType=31 then 'Inter-Depository(Mkt.)(N)'
+		when NsdlOffline_TransactionType=32 then 'Inter-Depository(Mkt.)(E)'
+		when NsdlOffline_TransactionType=4 then 'Inter-Depository(OffMkt.)'
+		when NsdlOffline_TransactionType=5 then 'Inter-Settlement'
+		when NsdlOffline_TransactionType=61 then 'Delivery Out(R)'
+		when NsdlOffline_TransactionType=62 then 'Delivery Out(IR)'
+		when NsdlOffline_TransactionType=7 then 'CM pool to pool'
+		End as TransactionType,NSdlOffline_SlipNumber as SlipNumber,
+		NsdlOffline_SlipType as SlipType,
+		NsdlOffline_ClientID as ClientID,
+		(Select nsdlbplist_bpid  from master_nsdlbplist where NsdlBPList_BPRole=2 and nsdlbplist_bpid=(Select nsdlbplist_associatedccid from master_nsdlbplist 
+		WHERE  (NsdlBPList_BPRole=3 or NsdlBPList_BPRole=40)  and nsdlbplist_bpid=(Select nsdlclients_correspondingbpid from master_nsdlclients 
+		WHERE nsdlclients_benaccountid=NsdlOffline_ClientID  and len(nsdlclients_correspondingbpid)>0 and NsdlClients_BenAccountCategory=3))) as SourceCCCMID,
+		(Select ltrim(rtrim(nsdlclients_BenFirstHolderName)) + ' [ '+ right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=NsdlOffline_ClientID) as BenIDName,NsdlOffline_MarketType,
+		(Select  NsdlMarketType_Description   from Master_NsdlMarketTypes WHERE NsdlMarketType_CCID = (Select nsdlbplist_bpid  from master_nsdlbplist where NsdlBPList_BPRole=1 and nsdlbplist_bpid=(Select nsdlbplist_associatedccid from master_nsdlbplist 
+		WHERE  (NsdlBPList_BPRole=3 or NsdlBPList_BPRole=40)  and nsdlbplist_bpid=(Select nsdlclients_correspondingbpid from master_nsdlclients 
+		WHERE nsdlclients_benaccountid=NsdlOffline_ClientID  and len(nsdlclients_correspondingbpid)>0 and NsdlClients_BenAccountCategory=3))) and NsdlMarketType_dpmcode=NsdlOffline_MarketType) as MarketType,
+		NsdlOffline_SettlementNumber as SettlementNumber,NsdlOffline_DPID,
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_DPID and NsdlBPList_BPRole=1) as DPID,
+		NsdlOffline_OtherClientID,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 or NsdlOffline_TransactionType=4 then
+		isnull(((Select right(ltrim(rtrim(cast(substring(Cdslclients_boid,9,8) as varchar(20)))),8) + ' [ '+ ltrim(rtrim(Cdslclients_FirstHolderName)) +' ]' 
+		from Master_CdslClients where substring(CdslClients_BOID,9,8)=NSDLOffline_OtherClientID)),NSDLOffline_OtherClientID)
+		Else
+		isnull((Select right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) + ' [ '+ ltrim(rtrim(nsdlclients_BenFirstHolderName)) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=NsdlOffline_OtherClientID),NsdlOffline_OtherClientID)
+		End as OtherBenIDName,NsdlOffline_OtherClientID as OtherClientID,NsdlOffline_OtherDPID,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 or NsdlOffline_TransactionType=4 then
+		Case 
+			When isnull((select 1 from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=NsdlOffline_OtherDPID and CdslBPLIst_DPType in (1,2,3,6)),' ')=' '
+			Then NsdlOffline_OtherDPID
+			Else (select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(CDSLBPList_FirstName))+' ]'  from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=NsdlOffline_OtherDPID and CdslBPLIst_DPType in (1,2,3,6)) 
+		End
+		Else
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_OtherDPID and NsdlBPList_BPRole=1) 
+		End as OtherDPID,
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_OtherCMBPID and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4)) as OtherCMBPID,
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_CCCMID and NsdlBPList_BPRole=2) as CCCMID,
+		NsdlOffline_CCCMID,
+		NsdlOffline_OtherMarketType,
+		Case 
+		When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = 
+			Case 
+				When NsdlOffline_CCCMID='IN001002' then '12'
+				When NsdlOffline_CCCMID='IN001019' then '11'
+				When NsdlOffline_CCCMID='IN001027' then '13'
+			End
+		and CDSLMarketTypes_TypeID=NsdlOffline_OtherMarketType)
+		Else (Select  NsdlMarketType_Description   from Master_NsdlMarketTypes WHERE NsdlMarketType_CCID = NsdlOffline_CCCMID and NsdlMarketType_dpmcode=NsdlOffline_OtherMarketType)  
+		End as OtherMarketType,
+		NsdlOffline_OtherSettlementNumber as OtherSettlementNumber,
+		(Select (nsdlisin_number+'[ '+ltrim(rtrim(nsdlisin_companyname+' ]'))) from master_nsdlisin WHERE NSDLISIN_SecurityStatus in(1,3,4) and nsdlisin_number=NsdlOffline_ISIN ) as ISIN,
+		NsdlOffline_Quantity as Quantity,Convert(varchar,NsdlOffline_TransactionDate,106) as TransactionDate,
+		Convert(varchar,NsdlOffline_ExecutionDate,106) as ExecutionDate,NsdlOffline_EntryUserRole,NsdlOffline_Enteredby,
+		(select user_name+' ['+user_entryprofile+']' from tbl_master_user where user_id=NsdlOffline_Enteredby) as EntryUserRole,
+		null as CdslOffline_NoOfCertificate,null as CdslOffline_DispatchDocumentId,null as CdslOffline_DispatchName,
+		null as CdslOffline_DispatchDate,null as CdslOffline_LockinStatus,null as CdslOffline_LockinCode,
+		null as CdslOffline_LockinRemark,null as CdslOffline_LockinExpiryDate
+		from Trans_NsdlOffline where NsdlOffline_EntryUserRole='f' and substring(convert(varchar(20),NSDLOffline_EntryDateTime,121),1,10)=substring(convert(varchar(20),@date,121),1,10)
+		and NsdlOffline_BatchNumber is null and NsdlOffline_EntryApplication=1 and NsdlOffline_EntryUserRole='F'
+		order by NSdlOffline_SlipNumber,NsdlOffline_ClientID,NsdlOffline_DPID,NsdlOffline_ISIN,NsdlOffline_Quantity,NsdlOffline_OtherDPID,NsdlOffline_OtherCMBPID,
+		NsdlOffline_OtherClientID,NsdlOffline_SettlementNumber,NsdlOffline_OtherMarketType,NsdlOffline_OtherSettlementNumber,NsdlOffline_TransactionType,
+		NsdlOffline_MarketType
+	End
+	
+	--Distinct Nsdl Slips Only Exist in Matched Record
+	Select distinct t1.NsdlOffline_SlipNumber,Cast(t1.NsdlOffline_SlipNumber as varchar)+'('+ 
+	cast(Case t1.SlipType
+	when 1 then 'Combined Instruction Slips' 
+	when 2 then 'Combined Instruction Slips (CM)'
+	when 3 then 'Inter-Settlement'
+	when 4 then 'Delivery out [CM-Payin]'
+	when 5 then	'Delivery Out [CM Payout]'
+	when 6 then	'Pool-To-Pool Transfers'
+	when 7 then	'On Market'
+	when 8 then	'Off Market'
+	when 9 then	'Inter-Depository'
+	when 10 then	'Pledge Hypothecation'
+	when 11 then	'SLB Instructions'
+	when 12 then 'Demat Request Forms'
+	when 13 then	'Remat Request Forms'
+	End as varchar)+')' as SlipText,Cast(t1.NsdlOffline_SlipNumber as varchar)+'+'+cast(t1.SlipType as varchar)+'+'+cast(t1.NsdlOffline_ClientID as varchar)+'+'+cast(t1.NsdlOffline_DPID as varchar) as SlipValue
+	from
+	(
+		(select distinct ltrim(rtrim(NsdlOffline_SlipNumber)) as NsdlOffline_SlipNumber,NsdlOffline_SlipType as SlipType,NsdlOffline_ClientID,NsdlOffline_DPID  from Trans_Nsdloffline where NsdlOffline_EntryUserRole='f' and substring(convert(varchar(20),NSDLOffline_EntryDateTime,121),1,10)=substring(convert(varchar(20),@date,121),1,10) and NsdlOffline_BatchGenerationDateTime is null and NsdlOffline_EntryApplication=1 and NsdlOffline_EntryUserRole='F')
+	) as t1
+			--End Distinct Nsdl Slips Only Exist in Matched Record
+			
+	
+End-------------IF(@WHICHDP='NSDL)
+
+-------------------------------------------------CDSL RECORD FETCH---------------------------------------------------------
+
+if(@WhichDp='CDSL')
+Begin
+	
+	----MatchedRecord
+
+	if(@WhichRecord='MatchedRecord')
+	Begin
+		select CDSLoffline_id as id,
+		Case
+		When  isnull(ltrim(rtrim(CDSLOffline_Rejected)),'A')='A'
+		Then 'Accept'
+		Else 'Reject'
+		End	 as AcceptReject,CDSLOffline_RejectReason as AcceptRejectReason,
+		CdslOffline_ClearingHouseID as CHID,CdslOffline_IsHighValue as IsHighValue,
+		CDSLOffline_VerifiyDateTime as VerifyDateTime,CDSLOffline_TransactionType as NsdlOffline_TransactionType,
+		Case 
+		when CDSLOffline_TransactionType=11 then 'Market(N)'
+		when CDSLOffline_TransactionType=12 then 'Market(E)'
+		when CDSLOffline_TransactionType=13 then 'On-Market'
+		when CDSLOffline_TransactionType=2 then 'Off-Market'
+		when CDSLOffline_TransactionType=3 then 'Inter-Depository(Mkt.)'
+		when CDSLOffline_TransactionType=4 then 'Inter-Depository(OffMkt.)'
+		when CDSLOffline_TransactionType=5 then 'Inter-Settlement'
+		when CDSLOffline_TransactionType=61 then 'Delivery Out(R)'
+		when CDSLOffline_TransactionType=62 then 'Delivery Out(IR)'
+		when CDSLOffline_TransactionType=71 then 'CM pool to pool(N)'
+		when CDSLOffline_TransactionType=72 then 'CM pool to pool(E)'
+		when CDSLOffline_TransactionType=1 then 'Demat'
+		End as TransactionType,CDSLOffline_SlipNumber as SlipNumber,
+		CDSLOffline_SlipType as SlipType,
+		CdslOffline_BenAccountNumber as ClientID,
+		(SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber) as SourceCCCMID,
+		(Select ltrim(rtrim(CDSLclients_FirstHolderName)) + ' [ '+ CdslClients_BOID +' ]' 
+		from Master_CDSLClients where Cast(Substring(CdslClients_BOID,9,8) as varchar)=CdslOffline_BenAccountNumber) as BenIDName,
+		substring(CDSLOffline_SettlementID,5,2) as NsdlOffline_MarketType,
+		Case
+		When CdslOffline_TransactionID=3 Then
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = (SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber)
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_NSDLSettlementID,5,2))
+		When (len(CDSLOffline_SettlementID)>0) Then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = (SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber)
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_SettlementID,5,2))
+		Else null
+		End as MarketType,
+		CDSLOffline_SettlementID as SettlementNumber,CDSLOffline_DPID as NsdlOffline_DPID,
+		(select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(cdslbplist_firstname))+' ]'  from Master_CDSLbplist 
+		where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=CdslOffline_DPID and cdslbplist_dptype in (2,3,6))
+		as DPID,
+		CdslOffline_CounterCDSLID as NsdlOffline_OtherClientID,
+		Case 
+		When CdslOffline_TransactionType=11 then
+		ltrim(rtrim(CdslOffline_CounterCDSLID))
+		When CdslOffline_TransactionType=3 then
+		Null
+		When CdslOffline_TransactionType=4 then
+		isnull((Select right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) + ' [ '+ ltrim(rtrim(nsdlclients_BenFirstHolderName)) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=CdslOffline_NsdlClientID),CDslOffline_NsdlClientID)
+		Else
+		isnull((Select right(ltrim(rtrim(cast(substring(Cdslclients_boid,9,8) as varchar(20)))),8) + ' [ '+ ltrim(rtrim(Cdslclients_FirstHolderName)) +' ]' 
+		from Master_CdslClients where CdslClients_BOID=CdslOffline_CounterCDSLID),SubString(CdslOffline_CounterCDSLID,9,8))
+		End as OtherBenIDName,Substring(CDSLOffline_CounterCDSLID,9,8) as OtherClientID,Substring(CDSLOffline_CounterCDSLID,0,9) as NsdlOffline_OtherDPID,
+		Case 
+		When CDSLOffline_TransactionType=4 then
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CDSLOffline_NSDLDPID and NsdlBPList_BPRole=1) 
+		Else
+		Case 
+			When isnull((select 1 from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=Substring(CDSLOffline_CounterCDSLID,0,9) and CdslBPLIst_DPType in (1,2,3,6)),' ')=' '
+			Then Substring(CDSLOffline_CounterCDSLID,0,9)
+			Else (select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(CDSLBPList_FirstName))+' ]'  from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=Substring(CDSLOffline_CounterCDSLID,0,9) and CdslBPLIst_DPType in (1,2,3,6)) 
+		End
+		End as OtherDPID,
+		Case
+		When CDSLOffline_TransactionType=3 Then
+			Case
+				When isnull((select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CdslOffline_NSDLCmbpid and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4)),'')='' 
+				Then CDSLOffline_NSDLCMBPID
+				Else (select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CdslOffline_NSDLCmbpid and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4))
+			End
+		When CDSLOffline_TransactionType=13 Then	
+		isnull((Select ltrim(rtrim(CdslClearingMember_CMID))+' ['+CdslClearingMember_Name1+']' from Master_CdslClearingMember
+		where CdslClearingMember_CMID=CdslOffline_CMID),CdslOffline_CMID)
+		Else
+		CDSLOffline_CounterCDSLID
+		End as OtherCMBPID,
+		(select ltrim(rtrim(CDSLExchange_ExchangeID)) + '   [ '+ ltrim(rtrim(CdslExchange_Name))+' ]'  from master_cdslexchange where CDSLExchange_ExchangeID=CdslOffline_ExchangeID) as CCCMID,
+		CDSLOffline_ExchangeID as NsdlOffline_CCCMID,
+		Case
+			When CdslOffline_TransactionType=3 Then
+			Substring(CdslOffline_NSDLSettlementID,5,2)
+			Else
+			Substring(CDSLOffline_CounterSettlementID,5,2)
+		End as NsdlOffline_OtherMarketType,
+		Case
+		When CdslOffline_TransactionType=3 Then
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = CdslOffline_ExchangeID
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_NSDLSettlementID,5,2))
+		When (len(CDSLOffline_CounterSettlementID)>0) Then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = CdslOffline_ExchangeID
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_CounterSettlementID,5,2))
+		Else null
+		End as OtherMarketType,
+		Case
+		When CdslOffline_TransactionType=3 Then
+		CDSLOffline_NSDLSettlementID
+		Else 
+		CDSLOffline_CounterSettlementID
+		End as OtherSettlementNumber,
+		(Select (cdslisin_number+'[ '+cdslisin_shortname+' ]') as cdslisin_number from master_cdslisin WHERE cdslisin_isinstatusdescription in ('Active','Inactive') and (cdslisin_number=CdslOffline_ISIN)) as ISIN,
+		CDSLOffline_Quantity as Quantity,Convert(varchar,CDSLOffline_TransactionDate,106) as TransactionDate,
+		Convert(varchar,CDSLOffline_ExecutionDate,106) as ExecutionDate,CDSLOffline_EntryUserRole as NsdlOffline_EntryUserRole,CDSLOffline_EntryUser as NsdlOffline_Enteredby,
+		(select user_name+' ['+user_entryprofile+']' from tbl_master_user where user_id=CDSLOffline_EntryUser) as EntryUserRole,
+		isnull(CdslOffline_NoOfCertificate,'') as CdslOffline_NoOfCertificate,isnull(CdslOffline_DispatchDocumentId,'') as CdslOffline_DispatchDocumentId,isnull(CdslOffline_DispatchName,'') as CdslOffline_DispatchName,Convert(varchar,CdslOffline_DispatchDate,106) as CdslOffline_DispatchDate,
+		isnull(CdslOffline_LockinStatus,'') as CdslOffline_LockinStatus,(select CdslStaticData_Description +' ['+rtrim(ltrim(CdslStaticData_TypeCode))+']' from master_cdslStaticDataCode where CdslStaticData_TypeCode=CdslOffline_LockinCode and cdslstaticData_FieldName like 'Lockin%') as CdslOffline_LockinCode,isnull(CdslOffline_LockinRemark,'') as CdslOffline_LockinRemark,Convert(varchar,CdslOffline_LockinExpiryDate,106) as CdslOffline_LockinExpiryDate
+		from Trans_CDSLOffline where CdslOffline_EntryUserRole='f' and substring(convert(varchar(20),CDSLOffline_EntryDateTime,121),1,10)=substring(convert(varchar(20),@date,121),1,10)
+		and CDSLOffline_BatchNumber is null and CdslOffline_EntryApplication=1 and CdslOffline_EntryUserRole='F'
+		order by CDSLOffline_SlipNumber,CDSLOffline_BenAccountNumber,CDSLOffline_DPID,CDSLOffline_ISIN,CDSLOffline_Quantity,CDSLOffline_CounterCDSLID,CDSLOffline_NSDLCMBPID,
+		CDSLOffline_NSDLClientID,CDSLOffline_SettlementID,CDSLOffline_NSDLSettlementID,CDSLOffline_TransactionType
+	End-----End MatchedRecord
+
+	if(@WhichRecord='AllRecord')----AllRecord
+	Begin
+		select CDSLoffline_id as id,
+		Case
+		When  isnull(ltrim(rtrim(CDSLOffline_Rejected)),'A')='A'
+		Then 'Accept'
+		Else 'Reject'
+		End	 as AcceptReject,CDSLOffline_RejectReason as AcceptRejectReason,
+		CdslOffline_ClearingHouseID as CHID,CdslOffline_IsHighValue as IsHighValue,
+		CDSLOffline_VerifiyDateTime as VerifyDateTime,CDSLOffline_TransactionType as NsdlOffline_TransactionType,
+		Case 
+		when CDSLOffline_TransactionType=11 then 'Market(N)'
+		when CDSLOffline_TransactionType=12 then 'Market(E)'
+		when CDSLOffline_TransactionType=13 then 'On-Market'
+		when CDSLOffline_TransactionType=2 then 'Off-Market'
+		when CDSLOffline_TransactionType=3 then 'Inter-Depository(Mkt.)'
+		when CDSLOffline_TransactionType=4 then 'Inter-Depository(OffMkt.)'
+		when CDSLOffline_TransactionType=5 then 'Inter-Settlement'
+		when CDSLOffline_TransactionType=61 then 'Delivery Out(R)'
+		when CDSLOffline_TransactionType=62 then 'Delivery Out(IR)'
+		when CDSLOffline_TransactionType=71 then 'CM pool to pool(N)'
+		when CDSLOffline_TransactionType=72 then 'CM pool to pool(E)'
+		when CDSLOffline_TransactionType=1 then 'Demat'
+		End as TransactionType,CDSLOffline_SlipNumber as SlipNumber,
+		CDSLOffline_SlipType as SlipType,
+		CdslOffline_BenAccountNumber as ClientID,
+		(SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber) as SourceCCCMID,
+		(Select ltrim(rtrim(CDSLclients_FirstHolderName)) + ' [ '+ CdslClients_BOID +' ]' 
+		from Master_CDSLClients where Cast(Substring(CdslClients_BOID,9,8) as varchar)=CdslOffline_BenAccountNumber) as BenIDName,
+		substring(CDSLOffline_SettlementID,5,2) as NsdlOffline_MarketType,
+		Case
+		When CdslOffline_TransactionID=3 Then
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = (SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber)
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_NSDLSettlementID,5,2))
+		When (len(CDSLOffline_SettlementID)>0) Then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = (SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber)
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_SettlementID,5,2))
+		Else null
+		End as MarketType,
+		CDSLOffline_SettlementID as SettlementNumber,CDSLOffline_DPID as NsdlOffline_DPID,
+		(select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(cdslbplist_firstname))+' ]'  from Master_CDSLbplist 
+		where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=CdslOffline_DPID and cdslbplist_dptype in (2,3,6))
+		as DPID,
+		CdslOffline_CounterCDSLID as NsdlOffline_OtherClientID,
+		Case 
+		When CdslOffline_TransactionType=11 then
+		ltrim(rtrim(CdslOffline_CounterCDSLID))
+		When CdslOffline_TransactionType=3 then
+		Null
+		When CdslOffline_TransactionType=4 then
+		isnull((Select right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) + ' [ '+ ltrim(rtrim(nsdlclients_BenFirstHolderName)) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=CdslOffline_NsdlClientID),CDslOffline_NsdlDPID+CdslOffline_CounterCDSLID)
+		Else
+		isnull((Select right(ltrim(rtrim(cast(substring(Cdslclients_boid,9,8) as varchar(20)))),8) + ' [ '+ ltrim(rtrim(Cdslclients_FirstHolderName)) +' ]' 
+		from Master_CdslClients where CdslClients_BOID=CdslOffline_CounterCDSLID),SubString(CdslOffline_CounterCDSLID,9,8))
+		End as OtherBenIDName,Substring(CDSLOffline_CounterCDSLID,9,8) as OtherClientID,Substring(CDSLOffline_CounterCDSLID,9,8) as NsdlOffline_OtherDPID,
+		Case 
+		When CDSLOffline_TransactionType=4 then
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CDSLOffline_NSDLDPID and NsdlBPList_BPRole=1) 
+		Else
+		Case 
+			When isnull((select 1 from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=Substring(CDSLOffline_CounterCDSLID,0,9) and CdslBPLIst_DPType in (1,2,3,6)),' ')=' '
+			Then Substring(CDSLOffline_CounterCDSLID,0,9)
+			Else (select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(CDSLBPList_FirstName))+' ]'  from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=Substring(CDSLOffline_CounterCDSLID,0,9) and CdslBPLIst_DPType in (1,2,3,6)) 
+		End
+		End as OtherDPID,
+		Case
+		When CDSLOffline_TransactionType=3 Then
+			Case
+				When isnull((select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CdslOffline_NSDLCmbpid and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4)),'')='' 
+				Then CDSLOffline_NSDLCMBPID
+				Else (select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CdslOffline_NSDLCmbpid and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4))
+			End
+		When CDSLOffline_TransactionType=13 Then	
+		isnull((Select ltrim(rtrim(CdslClearingMember_CMID))+' ['+CdslClearingMember_Name1+']' from Master_CdslClearingMember
+		where CdslClearingMember_CMID=CdslOffline_CMID),CdslOffline_CMID)	
+		Else
+		CDSLOffline_CounterCDSLID
+		End as OtherCMBPID,
+		(select ltrim(rtrim(CDSLExchange_ExchangeID)) + '   [ '+ ltrim(rtrim(CdslExchange_Name))+' ]'  from master_cdslexchange where CDSLExchange_ExchangeID=CdslOffline_ExchangeID) as CCCMID,
+		CDSLOffline_ExchangeID as NsdlOffline_CCCMID,
+		Case
+			When CdslOffline_TransactionType=3 Then
+			Substring(CdslOffline_NSDLSettlementID,5,2)
+			Else
+			Substring(CDSLOffline_CounterSettlementID,5,2)
+		End as NsdlOffline_OtherMarketType,
+		Case
+		When CdslOffline_TransactionType=3 Then
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = CdslOffline_ExchangeID
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_NSDLSettlementID,5,2))
+		When (len(CDSLOffline_CounterSettlementID)>0) Then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = CdslOffline_ExchangeID
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_CounterSettlementID,5,2))
+		Else null
+		End as OtherMarketType,
+		Case
+		When CdslOffline_TransactionType=3 Then
+		CDSLOffline_NSDLSettlementID
+		Else 
+		CDSLOffline_CounterSettlementID
+		End as OtherSettlementNumber,
+		(Select (cdslisin_number+'[ '+cdslisin_shortname+' ]') as cdslisin_number from master_cdslisin WHERE cdslisin_isinstatusdescription in ('Active','Inactive') and (cdslisin_number=CdslOffline_ISIN)) as ISIN,
+		CDSLOffline_Quantity as Quantity,Convert(varchar,CDSLOffline_TransactionDate,106) as TransactionDate,
+		Convert(varchar,CDSLOffline_ExecutionDate,106) as ExecutionDate,CDSLOffline_EntryUserRole as NsdlOffline_EntryUserRole,CDSLOffline_EntryUser as NsdlOffline_Enteredby,
+		(select user_name+' ['+user_entryprofile+']' from tbl_master_user where user_id=CDSLOffline_EntryUser) as EntryUserRole,
+		isnull(CdslOffline_NoOfCertificate,'') as CdslOffline_NoOfCertificate,isnull(CdslOffline_DispatchDocumentId,'') as CdslOffline_DispatchDocumentId,isnull(CdslOffline_DispatchName,'') as CdslOffline_DispatchName,Convert(varchar,CdslOffline_DispatchDate,106) as CdslOffline_DispatchDate,
+		isnull(CdslOffline_LockinStatus,'') as CdslOffline_LockinStatus,(select CdslStaticData_Description +' ['+rtrim(ltrim(CdslStaticData_TypeCode))+']' from master_cdslStaticDataCode where CdslStaticData_TypeCode=CdslOffline_LockinCode and cdslstaticData_FieldName like 'Lockin%') as CdslOffline_LockinCode,isnull(CdslOffline_LockinRemark,'') as CdslOffline_LockinRemark,Convert(varchar,CdslOffline_LockinExpiryDate,106) as CdslOffline_LockinExpiryDate
+
+		from Trans_CDSLOffline where CdslOffline_EntryUserRole='f' and substring(convert(varchar(20),CDSLOffline_EntryDateTime,121),1,10)=substring(convert(varchar(20),@date,121),1,10)
+		and CDSLOffline_BatchNumber is null and CdslOffline_EntryApplication=1 and CdslOffline_EntryUserRole='F'
+		order by CDSLOffline_SlipNumber,CDSLOffline_BenAccountNumber,CDSLOffline_DPID,CDSLOffline_ISIN,CDSLOffline_Quantity,CDSLOffline_CounterCDSLID,CDSLOffline_NSDLCMBPID,
+		CDSLOffline_NSDLClientID,CDSLOffline_SettlementID,CDSLOffline_NSDLSettlementID,CDSLOffline_TransactionType
+	End-----End AllRecord
+	
+	if(@WhichRecord='AcceptedRecord')----AcceptedRecord
+	Begin
+		select CDSLoffline_id as id,
+		Case
+		When  isnull(ltrim(rtrim(CDSLOffline_Rejected)),'A')='A'
+		Then 'Accept'
+		Else 'Reject'
+		End	 as AcceptReject,CDSLOffline_RejectReason as AcceptRejectReason,
+		CdslOffline_ClearingHouseID as CHID,CdslOffline_IsHighValue as IsHighValue,
+		CDSLOffline_VerifiyDateTime as VerifyDateTime,CDSLOffline_TransactionType as NsdlOffline_TransactionType,
+		Case 
+		when CDSLOffline_TransactionType=11 then 'Market(N)'
+		when CDSLOffline_TransactionType=12 then 'Market(E)'
+		when CDSLOffline_TransactionType=13 then 'On-Market'
+		when CDSLOffline_TransactionType=2 then 'Off-Market'
+		when CDSLOffline_TransactionType=3 then 'Inter-Depository(Mkt.)'
+		when CDSLOffline_TransactionType=4 then 'Inter-Depository(OffMkt.)'
+		when CDSLOffline_TransactionType=5 then 'Inter-Settlement'
+		when CDSLOffline_TransactionType=61 then 'Delivery Out(R)'
+		when CDSLOffline_TransactionType=62 then 'Delivery Out(IR)'
+		when CDSLOffline_TransactionType=71 then 'CM pool to pool(N)'
+		when CDSLOffline_TransactionType=72 then 'CM pool to pool(E)'
+		when CDSLOffline_TransactionType=1 then 'Demat'
+		End as TransactionType,CDSLOffline_SlipNumber as SlipNumber,
+		CDSLOffline_SlipType as SlipType,
+		CdslOffline_BenAccountNumber as ClientID,
+		(SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber) as SourceCCCMID,
+		(Select ltrim(rtrim(CDSLclients_FirstHolderName)) + ' [ '+ CdslClients_BOID +' ]' 
+		from Master_CDSLClients where Cast(Substring(CdslClients_BOID,9,8) as varchar)=CdslOffline_BenAccountNumber) as BenIDName,
+		substring(CDSLOffline_SettlementID,5,2) as NsdlOffline_MarketType,
+		Case
+		When CdslOffline_TransactionID=3 Then
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = (SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber)
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_NSDLSettlementID,5,2))
+		When (len(CDSLOffline_SettlementID)>0) Then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = (SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber)
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_SettlementID,5,2))
+		Else null
+		End as MarketType,
+		CDSLOffline_SettlementID as SettlementNumber,CDSLOffline_DPID as NsdlOffline_DPID,
+		(select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(cdslbplist_firstname))+' ]'  from Master_CDSLbplist 
+		where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=CdslOffline_DPID and cdslbplist_dptype in (2,3,6))
+		as DPID,
+		CdslOffline_CounterCDSLID as NsdlOffline_OtherClientID,
+		Case 
+		When CdslOffline_TransactionType=11 then
+		ltrim(rtrim(CdslOffline_CounterCDSLID))
+		When CdslOffline_TransactionType=3 then
+		Null
+		When CdslOffline_TransactionType=4 then
+		isnull((Select right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) + ' [ '+ ltrim(rtrim(nsdlclients_BenFirstHolderName)) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=CdslOffline_NsdlClientID),CDslOffline_NsdlDPID+CdslOffline_CounterCDSLID)
+		Else
+		isnull((Select right(ltrim(rtrim(cast(substring(Cdslclients_boid,9,8) as varchar(20)))),8) + ' [ '+ ltrim(rtrim(Cdslclients_FirstHolderName)) +' ]' 
+		from Master_CdslClients where CdslClients_BOID=CdslOffline_CounterCDSLID),SubString(CdslOffline_CounterCDSLID,9,8))
+		End as OtherBenIDName,Substring(CDSLOffline_CounterCDSLID,9,8) as OtherClientID,Substring(CDSLOffline_CounterCDSLID,9,8) as NsdlOffline_OtherDPID,
+		Case 
+		When CDSLOffline_TransactionType=4 then
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CDSLOffline_NSDLDPID and NsdlBPList_BPRole=1) 
+		Else
+		Case 
+			When isnull((select 1 from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=Substring(CDSLOffline_CounterCDSLID,0,9) and CdslBPLIst_DPType in (1,2,3,6)),' ')=' '
+			Then Substring(CDSLOffline_CounterCDSLID,0,9)
+			Else (select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(CDSLBPList_FirstName))+' ]'  from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=Substring(CDSLOffline_CounterCDSLID,0,9) and CdslBPLIst_DPType in (1,2,3,6)) 
+		End
+		End as OtherDPID,
+		Case
+		When CDSLOffline_TransactionType=3 Then
+			Case
+				When isnull((select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CdslOffline_NSDLCmbpid and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4)),'')='' 
+				Then CDSLOffline_NSDLCMBPID
+				Else (select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CdslOffline_NSDLCmbpid and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4))
+			End
+		When CDSLOffline_TransactionType=13 Then	
+		isnull((Select ltrim(rtrim(CdslClearingMember_CMID))+' ['+CdslClearingMember_Name1+']' from Master_CdslClearingMember
+		where CdslClearingMember_CMID=CdslOffline_CMID),CdslOffline_CMID)	
+		Else
+		CDSLOffline_CounterCDSLID
+		End as OtherCMBPID,
+		(select ltrim(rtrim(CDSLExchange_ExchangeID)) + '   [ '+ ltrim(rtrim(CdslExchange_Name))+' ]'  from master_cdslexchange where CDSLExchange_ExchangeID=CdslOffline_ExchangeID) as CCCMID,
+		CDSLOffline_ExchangeID as NsdlOffline_CCCMID,
+		Case
+			When CdslOffline_TransactionType=3 Then
+			Substring(CdslOffline_NSDLSettlementID,5,2)
+			Else
+			Substring(CDSLOffline_CounterSettlementID,5,2)
+		End as NsdlOffline_OtherMarketType,
+		Case
+		When CdslOffline_TransactionType=3 Then
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = CdslOffline_ExchangeID
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_NSDLSettlementID,5,2))
+		When (len(CDSLOffline_CounterSettlementID)>0) Then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = CdslOffline_ExchangeID
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_CounterSettlementID,5,2))
+		Else null
+		End as OtherMarketType,
+		Case
+		When CdslOffline_TransactionType=3 Then
+		CDSLOffline_NSDLSettlementID
+		Else 
+		CDSLOffline_CounterSettlementID
+		End as OtherSettlementNumber,
+		(Select (cdslisin_number+'[ '+cdslisin_shortname+' ]') as cdslisin_number from master_cdslisin WHERE cdslisin_isinstatusdescription in ('Active','Inactive') and (cdslisin_number=CdslOffline_ISIN)) as ISIN,
+		CDSLOffline_Quantity as Quantity,Convert(varchar,CDSLOffline_TransactionDate,106) as TransactionDate,
+		Convert(varchar,CDSLOffline_ExecutionDate,106) as ExecutionDate,CDSLOffline_EntryUserRole as NsdlOffline_EntryUserRole,CDSLOffline_EntryUser as NsdlOffline_Enteredby,
+		(select user_name+' ['+user_entryprofile+']' from tbl_master_user where user_id=CDSLOffline_EntryUser) as EntryUserRole,
+		isnull(CdslOffline_NoOfCertificate,'') as CdslOffline_NoOfCertificate,isnull(CdslOffline_DispatchDocumentId,'') as CdslOffline_DispatchDocumentId,isnull(CdslOffline_DispatchName,'') as CdslOffline_DispatchName,Convert(varchar,CdslOffline_DispatchDate,106) as CdslOffline_DispatchDate,
+		isnull(CdslOffline_LockinStatus,'') as CdslOffline_LockinStatus,(select CdslStaticData_Description +' ['+rtrim(ltrim(CdslStaticData_TypeCode))+']' from master_cdslStaticDataCode where CdslStaticData_TypeCode=CdslOffline_LockinCode and cdslstaticData_FieldName like 'Lockin%') as CdslOffline_LockinCode,isnull(CdslOffline_LockinRemark,'') as CdslOffline_LockinRemark,Convert(varchar,CdslOffline_LockinExpiryDate,106) as CdslOffline_LockinExpiryDate
+
+		from Trans_CDSLOffline where CdslOffline_EntryUserRole='f' and substring(convert(varchar(20),CDSLOffline_EntryDateTime,121),1,10)=substring(convert(varchar(20),@date,121),1,10)
+		and CDSLOffline_BatchNumber is null and CDSLOffline_Rejected is null and CDSLOffline_VerifiyDateTime is not null and CdslOffline_EntryApplication=1 and CdslOffline_EntryUserRole='F'
+		order by CDSLOffline_SlipNumber,CDSLOffline_BenAccountNumber,CDSLOffline_DPID,CDSLOffline_ISIN,CDSLOffline_Quantity,CDSLOffline_CounterCDSLID,CDSLOffline_NSDLCMBPID,
+		CDSLOffline_NSDLClientID,CDSLOffline_SettlementID,CDSLOffline_NSDLSettlementID,CDSLOffline_TransactionType
+	End-----End AcceptedRecord
+	
+	if(@WhichRecord='NotVerifyRecord')----ToBeVerifyRecord
+	Begin
+		select CDSLoffline_id as id,
+		Case
+		When  isnull(ltrim(rtrim(CDSLOffline_Rejected)),'A')='A'
+		Then 'Accept'
+		Else 'Reject'
+		End	 as AcceptReject,CDSLOffline_RejectReason as AcceptRejectReason,
+		CdslOffline_ClearingHouseID as CHID,CdslOffline_IsHighValue as IsHighValue,
+		CDSLOffline_VerifiyDateTime as VerifyDateTime,CDSLOffline_TransactionType as NsdlOffline_TransactionType,
+		Case 
+		when CDSLOffline_TransactionType=11 then 'Market(N)'
+		when CDSLOffline_TransactionType=12 then 'Market(E)'
+		when CDSLOffline_TransactionType=13 then 'On-Market'
+		when CDSLOffline_TransactionType=2 then 'Off-Market'
+		when CDSLOffline_TransactionType=3 then 'Inter-Depository(Mkt.)'
+		when CDSLOffline_TransactionType=4 then 'Inter-Depository(OffMkt.)'
+		when CDSLOffline_TransactionType=5 then 'Inter-Settlement'
+		when CDSLOffline_TransactionType=61 then 'Delivery Out(R)'
+		when CDSLOffline_TransactionType=62 then 'Delivery Out(IR)'
+		when CDSLOffline_TransactionType=71 then 'CM pool to pool(N)'
+		when CDSLOffline_TransactionType=72 then 'CM pool to pool(E)'
+		when CDSLOffline_TransactionType=1 then 'Demat'
+		End as TransactionType,CDSLOffline_SlipNumber as SlipNumber,
+		CDSLOffline_SlipType as SlipType,
+		CdslOffline_BenAccountNumber as ClientID,
+		(SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber) as SourceCCCMID,
+		(Select ltrim(rtrim(CDSLclients_FirstHolderName)) + ' [ '+ CdslClients_BOID +' ]' 
+		from Master_CDSLClients where Cast(Substring(CdslClients_BOID,9,8) as varchar)=CdslOffline_BenAccountNumber) as BenIDName,
+		substring(CDSLOffline_SettlementID,5,2) as NsdlOffline_MarketType,
+		Case
+		When CdslOffline_TransactionID=3 Then
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = (SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber)
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_NSDLSettlementID,5,2))
+		When (len(CDSLOffline_SettlementID)>0) Then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = (SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber)
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_SettlementID,5,2))
+		Else null
+		End as MarketType,
+		CDSLOffline_SettlementID as SettlementNumber,CDSLOffline_DPID as NsdlOffline_DPID,
+		(select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(cdslbplist_firstname))+' ]'  from Master_CDSLbplist 
+		where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=CdslOffline_DPID and cdslbplist_dptype in (2,3,6))
+		as DPID,
+		CdslOffline_CounterCDSLID as NsdlOffline_OtherClientID,
+		Case 
+		When CdslOffline_TransactionType=11 then
+		ltrim(rtrim(CdslOffline_CounterCDSLID))
+		When CdslOffline_TransactionType=3 then
+		Null
+		When CdslOffline_TransactionType=4 then
+		isnull((Select right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) + ' [ '+ ltrim(rtrim(nsdlclients_BenFirstHolderName)) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=CdslOffline_NsdlClientID),CDslOffline_NsdlDPID+CdslOffline_CounterCDSLID)
+		Else
+		isnull((Select right(ltrim(rtrim(cast(substring(Cdslclients_boid,9,8) as varchar(20)))),8) + ' [ '+ ltrim(rtrim(Cdslclients_FirstHolderName)) +' ]' 
+		from Master_CdslClients where CdslClients_BOID=CdslOffline_CounterCDSLID),SubString(CdslOffline_CounterCDSLID,9,8))
+		End as OtherBenIDName,Substring(CDSLOffline_CounterCDSLID,9,8) as OtherClientID,Substring(CDSLOffline_CounterCDSLID,9,8) as NsdlOffline_OtherDPID,
+		Case 
+		When CDSLOffline_TransactionType=4 then
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CDSLOffline_NSDLDPID and NsdlBPList_BPRole=1) 
+		Else
+		Case 
+			When isnull((select 1 from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=Substring(CDSLOffline_CounterCDSLID,0,9) and CdslBPLIst_DPType in (1,2,3,6)),' ')=' '
+			Then Substring(CDSLOffline_CounterCDSLID,0,9)
+			Else (select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(CDSLBPList_FirstName))+' ]'  from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=Substring(CDSLOffline_CounterCDSLID,0,9) and CdslBPLIst_DPType in (1,2,3,6)) 
+		End
+		End as OtherDPID,
+		Case
+		When CDSLOffline_TransactionType=3 Then
+			Case
+				When isnull((select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CdslOffline_NSDLCmbpid and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4)),'')='' 
+				Then CDSLOffline_NSDLCMBPID
+				Else (select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CdslOffline_NSDLCmbpid and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4))
+			End
+		When CDSLOffline_TransactionType=13 Then	
+		isnull((Select ltrim(rtrim(CdslClearingMember_CMID))+' ['+CdslClearingMember_Name1+']' from Master_CdslClearingMember
+		where CdslClearingMember_CMID=CdslOffline_CMID),CdslOffline_CMID)	
+		Else
+		CDSLOffline_CounterCDSLID
+		End as OtherCMBPID,
+		(select ltrim(rtrim(CDSLExchange_ExchangeID)) + '   [ '+ ltrim(rtrim(CdslExchange_Name))+' ]'  from master_cdslexchange where CDSLExchange_ExchangeID=CdslOffline_ExchangeID) as CCCMID,
+		CDSLOffline_ExchangeID as NsdlOffline_CCCMID,
+		Case
+			When CdslOffline_TransactionType=3 Then
+			Substring(CdslOffline_NSDLSettlementID,5,2)
+			Else
+			Substring(CDSLOffline_CounterSettlementID,5,2)
+		End as NsdlOffline_OtherMarketType,
+		Case
+		When CdslOffline_TransactionType=3 Then
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = CdslOffline_ExchangeID
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_NSDLSettlementID,5,2))
+		When (len(CDSLOffline_CounterSettlementID)>0) Then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = CdslOffline_ExchangeID
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_CounterSettlementID,5,2))
+		Else null
+		End as OtherMarketType,
+		Case
+		When CdslOffline_TransactionType=3 Then
+		CDSLOffline_NSDLSettlementID
+		Else 
+		CDSLOffline_CounterSettlementID
+		End as OtherSettlementNumber,
+		(Select (cdslisin_number+'[ '+cdslisin_shortname+' ]') as cdslisin_number from master_cdslisin WHERE cdslisin_isinstatusdescription in ('Active','Inactive') and (cdslisin_number=CdslOffline_ISIN)) as ISIN,
+		CDSLOffline_Quantity as Quantity,Convert(varchar,CDSLOffline_TransactionDate,106) as TransactionDate,
+		Convert(varchar,CDSLOffline_ExecutionDate,106) as ExecutionDate,CDSLOffline_EntryUserRole as NsdlOffline_EntryUserRole,CDSLOffline_EntryUser as NsdlOffline_Enteredby,
+		(select user_name+' ['+user_entryprofile+']' from tbl_master_user where user_id=CDSLOffline_EntryUser) as EntryUserRole,
+		isnull(CdslOffline_NoOfCertificate,'') as CdslOffline_NoOfCertificate,isnull(CdslOffline_DispatchDocumentId,'') as CdslOffline_DispatchDocumentId,isnull(CdslOffline_DispatchName,'') as CdslOffline_DispatchName,Convert(varchar,CdslOffline_DispatchDate,106) as CdslOffline_DispatchDate,
+		isnull(CdslOffline_LockinStatus,'') as CdslOffline_LockinStatus,(select CdslStaticData_Description +' ['+rtrim(ltrim(CdslStaticData_TypeCode))+']' from master_cdslStaticDataCode where CdslStaticData_TypeCode=CdslOffline_LockinCode and cdslstaticData_FieldName like 'Lockin%') as CdslOffline_LockinCode,isnull(CdslOffline_LockinRemark,'') as CdslOffline_LockinRemark,Convert(varchar,CdslOffline_LockinExpiryDate,106) as CdslOffline_LockinExpiryDate
+
+		from Trans_CDSLOffline where CdslOffline_EntryUserRole='f' and substring(convert(varchar(20),CDSLOffline_EntryDateTime,121),1,10)=substring(convert(varchar(20),@date,121),1,10)
+		and CDSLOffline_BatchNumber is null and CdslOffline_VerifiyDateTime is null and CDSLOffline_Rejected is null and CdslOffline_EntryApplication=1 and CdslOffline_EntryUserRole='F'
+		order by CDSLOffline_SlipNumber,CDSLOffline_BenAccountNumber,CDSLOffline_DPID,CDSLOffline_ISIN,CDSLOffline_Quantity,CDSLOffline_CounterCDSLID,CDSLOffline_NSDLCMBPID,
+		CDSLOffline_NSDLClientID,CDSLOffline_SettlementID,CDSLOffline_NSDLSettlementID,CDSLOffline_TransactionType
+	End-----End ToBeVerifyRecord
+	
+	if(@WhichRecord='RejectedRecord')----RejectedRecord
+	Begin
+		select CDSLoffline_id as id,
+		Case
+		When  isnull(ltrim(rtrim(CDSLOffline_Rejected)),'A')='A'
+		Then 'Accept'
+		Else 'Reject'
+		End	 as AcceptReject,CDSLOffline_RejectReason as AcceptRejectReason,
+		CdslOffline_ClearingHouseID as CHID,CdslOffline_IsHighValue as IsHighValue,
+		CDSLOffline_VerifiyDateTime as VerifyDateTime,CDSLOffline_TransactionType as NsdlOffline_TransactionType,
+		Case 
+		when CDSLOffline_TransactionType=11 then 'Market(N)'
+		when CDSLOffline_TransactionType=12 then 'Market(E)'
+		when CDSLOffline_TransactionType=13 then 'On-Market'
+		when CDSLOffline_TransactionType=2 then 'Off-Market'
+		when CDSLOffline_TransactionType=3 then 'Inter-Depository(Mkt.)'
+		when CDSLOffline_TransactionType=4 then 'Inter-Depository(OffMkt.)'
+		when CDSLOffline_TransactionType=5 then 'Inter-Settlement'
+		when CDSLOffline_TransactionType=61 then 'Delivery Out(R)'
+		when CDSLOffline_TransactionType=62 then 'Delivery Out(IR)'
+		when CDSLOffline_TransactionType=71 then 'CM pool to pool(N)'
+		when CDSLOffline_TransactionType=72 then 'CM pool to pool(E)'
+		when CDSLOffline_TransactionType=1 then 'Demat'
+		End as TransactionType,CDSLOffline_SlipNumber as SlipNumber,
+		CDSLOffline_SlipType as SlipType,
+		CdslOffline_BenAccountNumber as ClientID,
+		(SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber) as SourceCCCMID,
+		(Select ltrim(rtrim(CDSLclients_FirstHolderName)) + ' [ '+ CdslClients_BOID +' ]' 
+		from Master_CDSLClients where Cast(Substring(CdslClients_BOID,9,8) as varchar)=CdslOffline_BenAccountNumber) as BenIDName,
+		substring(CDSLOffline_SettlementID,5,2) as NsdlOffline_MarketType,
+		Case
+		When CdslOffline_TransactionID=3 Then
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = (SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber)
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_NSDLSettlementID,5,2))
+		When (len(CDSLOffline_SettlementID)>0) Then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = (SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber)
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_SettlementID,5,2))
+		Else null
+		End as MarketType,
+		CDSLOffline_SettlementID as SettlementNumber,CDSLOffline_DPID as NsdlOffline_DPID,
+		(select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(cdslbplist_firstname))+' ]'  from Master_CDSLbplist 
+		where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=CdslOffline_DPID and cdslbplist_dptype in (2,3,6))
+		as DPID,
+		CdslOffline_CounterCDSLID as NsdlOffline_OtherClientID,
+		Case 
+		When CdslOffline_TransactionType=11 then
+		ltrim(rtrim(CdslOffline_CounterCDSLID))
+		When CdslOffline_TransactionType=3 then
+		Null
+		When CdslOffline_TransactionType=4 then
+		isnull((Select right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) + ' [ '+ ltrim(rtrim(nsdlclients_BenFirstHolderName)) +' ]' 
+		from Master_NsdlClients where NsdlClients_BenAccountID=CdslOffline_NsdlClientID),CDslOffline_NsdlDPID+CdslOffline_CounterCDSLID)
+		Else
+		isnull((Select right(ltrim(rtrim(cast(substring(Cdslclients_boid,9,8) as varchar(20)))),8) + ' [ '+ ltrim(rtrim(Cdslclients_FirstHolderName)) +' ]' 
+		from Master_CdslClients where CdslClients_BOID=CdslOffline_CounterCDSLID),SubString(CdslOffline_CounterCDSLID,9,8))
+		End as OtherBenIDName,Substring(CDSLOffline_CounterCDSLID,9,8) as OtherClientID,Substring(CDSLOffline_CounterCDSLID,9,8) as NsdlOffline_OtherDPID,
+		Case 
+		When CDSLOffline_TransactionType=4 then
+		(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CDSLOffline_NSDLDPID and NsdlBPList_BPRole=1) 
+		Else
+		Case 
+			When isnull((select 1 from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=Substring(CDSLOffline_CounterCDSLID,0,9) and CdslBPLIst_DPType in (1,2,3,6)),' ')=' '
+			Then Substring(CDSLOffline_CounterCDSLID,0,9)
+			Else (select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(CDSLBPList_FirstName))+' ]'  from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=Substring(CDSLOffline_CounterCDSLID,0,9) and CdslBPLIst_DPType in (1,2,3,6)) 
+		End
+		End as OtherDPID,
+		Case
+		When CDSLOffline_TransactionType=3 Then
+			Case
+				When isnull((select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CdslOffline_NSDLCmbpid and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4)),'')='' 
+				Then CDSLOffline_NSDLCMBPID
+				Else (select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CdslOffline_NSDLCmbpid and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4))
+			End
+		When CDSLOffline_TransactionType=13 Then	
+		isnull((Select ltrim(rtrim(CdslClearingMember_CMID))+' ['+CdslClearingMember_Name1+']' from Master_CdslClearingMember
+		where CdslClearingMember_CMID=CdslOffline_CMID),CdslOffline_CMID)	
+		Else
+		CDSLOffline_CounterCDSLID
+		End as OtherCMBPID,
+		(select ltrim(rtrim(CDSLExchange_ExchangeID)) + '   [ '+ ltrim(rtrim(CdslExchange_Name))+' ]'  from master_cdslexchange where CDSLExchange_ExchangeID=CdslOffline_ExchangeID) as CCCMID,
+		CDSLOffline_ExchangeID as NsdlOffline_CCCMID,
+		Case
+			When CdslOffline_TransactionType=3 Then
+			Substring(CdslOffline_NSDLSettlementID,5,2)
+			Else
+			Substring(CDSLOffline_CounterSettlementID,5,2)
+		End as NsdlOffline_OtherMarketType,
+		Case
+		When CdslOffline_TransactionType=3 Then
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = CdslOffline_ExchangeID
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_NSDLSettlementID,5,2))
+		When (len(CDSLOffline_CounterSettlementID)>0) Then 
+		(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+		WHERE CDSLMarketTypes_ExchangeID = CdslOffline_ExchangeID
+		and CDSLMarketTypes_TypeID=Substring(CDSLOffline_CounterSettlementID,5,2))
+		Else null
+		End as OtherMarketType,
+		Case
+		When CdslOffline_TransactionType=3 Then
+		CDSLOffline_NSDLSettlementID
+		Else 
+		CDSLOffline_CounterSettlementID
+		End as OtherSettlementNumber,
+		(Select (cdslisin_number+'[ '+cdslisin_shortname+' ]') as cdslisin_number from master_cdslisin WHERE cdslisin_isinstatusdescription in ('Active','Inactive') and (cdslisin_number=CdslOffline_ISIN)) as ISIN,
+		CDSLOffline_Quantity as Quantity,Convert(varchar,CDSLOffline_TransactionDate,106) as TransactionDate,
+		Convert(varchar,CDSLOffline_ExecutionDate,106) as ExecutionDate,CDSLOffline_EntryUserRole as NsdlOffline_EntryUserRole,CDSLOffline_EntryUser as NsdlOffline_Enteredby,
+		(select user_name+' ['+user_entryprofile+']' from tbl_master_user where user_id=CDSLOffline_EntryUser) as EntryUserRole,
+		isnull(CdslOffline_NoOfCertificate,'') as CdslOffline_NoOfCertificate,isnull(CdslOffline_DispatchDocumentId,'') as CdslOffline_DispatchDocumentId,isnull(CdslOffline_DispatchName,'') as CdslOffline_DispatchName,Convert(varchar,CdslOffline_DispatchDate,106) as CdslOffline_DispatchDate,
+		isnull(CdslOffline_LockinStatus,'') as CdslOffline_LockinStatus,(select CdslStaticData_Description +' ['+rtrim(ltrim(CdslStaticData_TypeCode))+']' from master_cdslStaticDataCode where CdslStaticData_TypeCode=CdslOffline_LockinCode and cdslstaticData_FieldName like 'Lockin%') as CdslOffline_LockinCode,isnull(CdslOffline_LockinRemark,'') as CdslOffline_LockinRemark,Convert(varchar,CdslOffline_LockinExpiryDate,106) as CdslOffline_LockinExpiryDate
+
+		from Trans_CDSLOffline where CdslOffline_EntryUserRole='f' and substring(convert(varchar(20),CDSLOffline_EntryDateTime,121),1,10)=substring(convert(varchar(20),@date,121),1,10)
+		and CDSLOffline_BatchNumber is null and CDSLOffline_Rejected is not null and CdslOffline_EntryApplication=1 and CdslOffline_EntryUserRole='F'
+		order by CDSLOffline_SlipNumber,CDSLOffline_BenAccountNumber,CDSLOffline_DPID,CDSLOffline_ISIN,CDSLOffline_Quantity,CDSLOffline_CounterCDSLID,CDSLOffline_NSDLCMBPID,
+		CDSLOffline_NSDLClientID,CDSLOffline_SettlementID,CDSLOffline_NSDLSettlementID,CDSLOffline_TransactionType
+	End-----End RejectedRecord
+
+	--Distinct CDSL Slips Only Exist in Matched Record
+		Select distinct t1.CDSLOffline_SlipNumber,Cast(t1.CDSLOffline_SlipNumber as varchar)+'('+ 
+		cast(Case t1.SlipType
+		when 1 then 'Combined Instruction Slips' 
+		when 2 then 'Combined Instruction Slips (CM)'
+		when 3 then 'Inter-Settlement'
+		when 4 then 'Delivery out [CM-Payin]'
+		when 5 then	'Delivery Out [CM Payout]'
+		when 6 then	'Pool-To-Pool Transfers'
+		when 7 then	'On Market'
+		when 8 then	'Off Market'
+		when 9 then	'Inter-Depository'
+		when 10 then	'Pledge Hypothecation'
+		when 11 then	'SLB Instructions'
+		when 12 then 'Demat Request Forms'
+		when 13 then	'Remat Request Forms'
+		End as varchar)+')' as SlipText,Cast(t1.CDSLOffline_SlipNumber as varchar)+'+'+cast(t1.SlipType as varchar)+'+'+cast(t1.CDSLOffline_BenAccountNumber as varchar)+'+'+cast(t1.CDSLOffline_DPID as varchar) as SlipValue
+		from
+		(
+			(Select ltrim(rtrim(CDSLOffline_SlipNumber)) as CDSLOffline_SlipNumber,CDSLOffline_SlipType as SlipType,CDSLOffline_BenAccountNumber,CDSLOffline_DPID
+			from trans_CDSLoffline where CdslOffline_EntryUserRole='f' and substring(convert(varchar(20),CDSLOffline_EntryDateTime,121),1,10)=substring(convert(varchar(20),@date,121),1,10) and CdslOffline_BatchDateTime is null and CdslOffline_EntryApplication=1 ) 
+		) as t1
+		--Distinct CDSL Slips Only Exist in Matched Record
+
+	
+	
+	
+	
+
+	
+End---End CDSL
+-----------------------------------------------End CDSL--------------------------------------------------------
+
+-----------------------------------------------NSDL Report Section--------------------------------------------------------
+if(@WhichDp='NSDL')---Start @whichdp=NSDL
+Begin
+	if(@WhichRecord='ReportRecord')--ReportRecord
+		Begin
+			select nsdloffline_id as id,
+			Case
+			When  isnull(ltrim(rtrim(NsdlOffline_Rejected)),'A')='A'
+			Then 'Accept'
+			Else 'Reject'
+			End	 as AcceptReject,NsdlOffline_RejectReason as AcceptRejectReason,
+			Case
+			When  isnull(ltrim(rtrim(NsdlOffline_VerifyDateTime)),'V')<>'V' and isnull(ltrim(rtrim(NsdlOffline_Rejected)),'A')='A'
+			Then 'Verified'
+			When  isnull(ltrim(rtrim(NsdlOffline_VerifyDateTime)),'V')='V' and isnull(ltrim(rtrim(NsdlOffline_Rejected)),'A')='A'
+			Then 'To Be Verified'
+			When  (isnull(ltrim(rtrim(NsdlOffline_VerifyDateTime)),'V')='V' and isnull(ltrim(rtrim(NsdlOffline_Rejected)),'A')<>'A') or
+				(isnull(ltrim(rtrim(NsdlOffline_VerifyDateTime)),'V')<>'V' and isnull(ltrim(rtrim(NsdlOffline_Rejected)),'A')<>'A')
+			Then 'Rejected'
+			End	 as CheckVerifyStatus,
+			cast(NsdlOffline_Value as numeric(28,2)) as CheckHighValueStatus,
+			'' as CHID,NsdlOffline_IsHighValue as IsHighValue,
+			NsdlOffline_VerifyDateTime as VerifyDateTime,NsdlOffline_TransactionType,
+			Case 
+			when NsdlOffline_TransactionType=1 then 'Market'
+			when NsdlOffline_TransactionType=2 then 'Off-Market'
+			when NsdlOffline_TransactionType=31 then 'Inter-Depository(Mkt.)(N)'
+			when NsdlOffline_TransactionType=32 then 'Inter-Depository(Mkt.)(E)'
+			when NsdlOffline_TransactionType=4 then 'Inter-Depository(OffMkt.)'
+			when NsdlOffline_TransactionType=5 then 'Inter-Settlement'
+			when NsdlOffline_TransactionType=61 then 'Delivery Out(R)'
+			when NsdlOffline_TransactionType=62 then 'Delivery Out(IR)'
+			when NsdlOffline_TransactionType=7 then 'CM pool to pool'
+			End as TransactionType,NSdlOffline_SlipNumber as SlipNumber,
+			NsdlOffline_SlipType as SlipType,
+			NsdlOffline_ClientID as ClientID,
+			(Select nsdlbplist_bpid  from master_nsdlbplist where NsdlBPList_BPRole=1 and nsdlbplist_bpid=(Select nsdlbplist_associatedccid from master_nsdlbplist 
+			WHERE  (NsdlBPList_BPRole=3 or NsdlBPList_BPRole=40)  and nsdlbplist_bpid=(Select nsdlclients_correspondingbpid from master_nsdlclients 
+			WHERE nsdlclients_benaccountid=NsdlOffline_ClientID  and len(nsdlclients_correspondingbpid)>0 and NsdlClients_BenAccountCategory=3))) as SourceCCCMID,
+			(Select ltrim(rtrim(nsdlclients_BenFirstHolderName)) + ' [ '+ right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) +' ]' 
+			from Master_NsdlClients where NsdlClients_BenAccountID=NsdlOffline_ClientID) as BenIDName,NsdlOffline_MarketType,
+			(Select  NsdlMarketType_Description   from Master_NsdlMarketTypes WHERE NsdlMarketType_CCID = (Select nsdlbplist_bpid  from master_nsdlbplist where NsdlBPList_BPRole=1 and nsdlbplist_bpid=(Select nsdlbplist_associatedccid from master_nsdlbplist 
+			WHERE  (NsdlBPList_BPRole=3 or NsdlBPList_BPRole=40)  and nsdlbplist_bpid=(Select nsdlclients_correspondingbpid from master_nsdlclients 
+			WHERE nsdlclients_benaccountid=NsdlOffline_ClientID  and len(nsdlclients_correspondingbpid)>0 and NsdlClients_BenAccountCategory=3))) and NsdlMarketType_dpmcode=NsdlOffline_MarketType) as MarketType,
+			NsdlOffline_SettlementNumber as SettlementNumber,NsdlOffline_DPID,
+			(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_DPID and NsdlBPList_BPRole=1) as DPID,
+			NsdlOffline_OtherClientID,
+			Case 
+			When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 or NsdlOffline_TransactionType=4 then
+			isnull(((Select right(ltrim(rtrim(cast(substring(Cdslclients_boid,9,8) as varchar(20)))),8) + ' [ '+ ltrim(rtrim(Cdslclients_FirstHolderName)) +' ]' 
+			from Master_CdslClients where substring(CdslClients_BOID,9,8)=NSDLOffline_OtherClientID)),NSDLOffline_OtherClientID)
+			Else
+			isnull((Select right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) + ' [ '+ ltrim(rtrim(nsdlclients_BenFirstHolderName)) +' ]' 
+			from Master_NsdlClients where NsdlClients_BenAccountID=NsdlOffline_OtherClientID),NsdlOffline_OtherClientID)
+			End as OtherBenIDName,NsdlOffline_OtherClientID as OtherClientID,NsdlOffline_OtherDPID,
+			Case 
+			When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 or NsdlOffline_TransactionType=4 then
+			Case 
+				When isnull((select 1 from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=NsdlOffline_OtherDPID and CdslBPLIst_DPType in (1,2,3,6)),' ')=' '
+				Then NsdlOffline_OtherDPID
+				Else (select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(CDSLBPList_FirstName))+' ]'  from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=NsdlOffline_OtherDPID and CdslBPLIst_DPType in (1,2,3,6)) 
+			End
+			Else
+			(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_OtherDPID and NsdlBPList_BPRole=1) 
+			End as OtherDPID,
+			Case 
+			When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 Then
+			NsdlOffline_OtherDpID+NsdlOffline_OtherClientID
+			Else
+			(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_OtherCMBPID and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4)) 
+			End as OtherCMBPID,
+			(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=NsdlOffline_CCCMID and NsdlBPList_BPRole=2) as CCCMID,
+			NsdlOffline_CCCMID,
+			NsdlOffline_OtherMarketType,
+			Case 
+			When NsdlOffline_TransactionType=31 or NsdlOffline_TransactionType=32 then 
+			(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+			WHERE CDSLMarketTypes_ExchangeID = 
+				Case 
+					When NsdlOffline_CCCMID='IN001002' then '12' 
+					When NsdlOffline_CCCMID='IN001019' then '11'
+					When NsdlOffline_CCCMID='IN001027' then '13'
+				End
+			and CDSLMarketTypes_TypeID=NsdlOffline_OtherMarketType)
+			Else (Select  NsdlMarketType_Description   from Master_NsdlMarketTypes WHERE NsdlMarketType_CCID = NsdlOffline_CCCMID and NsdlMarketType_dpmcode=NsdlOffline_OtherMarketType)  
+			End as OtherMarketType,
+			NsdlOffline_OtherSettlementNumber as OtherSettlementNumber,
+			(Select (nsdlisin_number+'[ '+ltrim(rtrim(nsdlisin_companyname))+' ]') from master_nsdlisin WHERE NSDLISIN_SecurityStatus in(1,3,4) and nsdlisin_number=NsdlOffline_ISIN ) as ISIN,
+			NsdlOffline_Quantity as Quantity,Convert(varchar,NsdlOffline_TransactionDate,106) as TransactionDate,
+			Convert(varchar,NsdlOffline_ExecutionDate,106) as ExecutionDate,NsdlOffline_EntryUserRole,NsdlOffline_Enteredby,
+			(select user_name+' ['+user_entryprofile+']' from tbl_master_user where user_id=NsdlOffline_Enteredby) as EntryUserRole,
+			SubString(Convert(Varchar,NsdlOffline_EntryDateTime,120),1,16) EntryDateTime
+			from Trans_NsdlOffline where NsdlOffline_EntryUserRole='f' and substring(convert(varchar(20),NSDLOffline_EntryDateTime,121),1,10)=substring(convert(varchar(20),@date,121),1,10)
+			and NsdlOffline_BatchNumber is null and NsdlOffline_EntryApplication=1 
+			order by NSdlOffline_ID
+
+		End---End ReportRecord
+End
+--exec [Fetch_SingleCapturing_Verification] '2014-06-25','ReportRecord','NSDL'
+
+
+-----------------------------------------------End NSDL Report Section--------------------------------------------------------
+
+
+-----------------------------------------------CDSL Report Section--------------------------------------------------------
+
+if(@WhichDp='CDSL')---Start @whichdp=NSDL
+Begin
+	if(@WhichRecord='ReportRecord')----ReportRecord
+		Begin
+			select CDSLoffline_id as id,
+			Case
+			When  isnull(ltrim(rtrim(CDSLOffline_Rejected)),'A')='A'
+			Then 'Accept'
+			Else 'Reject'
+			End	 as AcceptReject,CDSLOffline_RejectReason as AcceptRejectReason,
+			Case
+			When  isnull(ltrim(rtrim(CDSLOffline_VerifiyDateTime)),'V')<>'V' and isnull(ltrim(rtrim(CDSLOffline_Rejected)),'A')='A'
+			Then 'Verified'
+			When  isnull(ltrim(rtrim(CDSLOffline_VerifiyDateTime)),'V')='V' and isnull(ltrim(rtrim(CDSLOffline_Rejected)),'A')='A'
+			Then 'To Be Verified'
+			When  (isnull(ltrim(rtrim(CDSLOffline_VerifiyDateTime)),'V')='V' and isnull(ltrim(rtrim(CDSLOffline_Rejected)),'A')<>'A') or
+				(isnull(ltrim(rtrim(CDSLOffline_VerifiyDateTime)),'V')<>'V' and isnull(ltrim(rtrim(CDSLOffline_Rejected)),'A')<>'A')
+			Then 'Rejected'
+			End	 as CheckVerifyStatus,
+			cast(CdslOFfline_Value as numeric(28,2)) as CheckHighValueStatus,
+			CdslOffline_ClearingHouseID as CHID,CdslOffline_IsHighValue as IsHighValue,
+			CDSLOffline_VerifiyDateTime as VerifyDateTime,CDSLOffline_TransactionType as NsdlOffline_TransactionType,
+			Case 
+			when CDSLOffline_TransactionType=11 then 'Market(N)'
+			when CDSLOffline_TransactionType=12 then 'Market(E)'
+			when CDSLOffline_TransactionType=13 then 'On-Market'
+			when CDSLOffline_TransactionType=2 then 'Off-Market'
+			when CDSLOffline_TransactionType=3 then 'Inter-Depository(Mkt.)'
+			when CDSLOffline_TransactionType=4 then 'Inter-Depository(OffMkt.)'
+			when CDSLOffline_TransactionType=5 then 'Inter-Settlement'
+			when CDSLOffline_TransactionType=61 then 'Delivery Out(R)'
+			when CDSLOffline_TransactionType=62 then 'Delivery Out(IR)'
+			when CDSLOffline_TransactionType=71 then 'CM pool to pool(N)'
+			when CDSLOffline_TransactionType=72 then 'CM pool to pool(E)'
+			when CDSLOffline_TransactionType=1 then 'Demat'
+			End as TransactionType,CDSLOffline_SlipNumber as SlipNumber,
+			CDSLOffline_SlipType as SlipType,
+			CdslOffline_BenAccountNumber as ClientID,
+			(SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber) as SourceCCCMID,
+			(Select ltrim(rtrim(CDSLclients_FirstHolderName)) + ' [ '+ CdslClients_BOID +' ]' 
+			from Master_CDSLClients where Cast(Substring(CdslClients_BOID,9,8) as varchar)=CdslOffline_BenAccountNumber) as BenIDName,
+			substring(CDSLOffline_SettlementID,5,2) as NsdlOffline_MarketType,
+			Case
+			When CdslOffline_TransactionID=3 Then
+			(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+			WHERE CDSLMarketTypes_ExchangeID = (SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber)
+			and CDSLMarketTypes_TypeID=Substring(CDSLOffline_NSDLSettlementID,5,2))
+			When (len(CDSLOffline_SettlementID)>0) Then 
+			(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+			WHERE CDSLMarketTypes_ExchangeID = (SELECT CDSLCLIENTS_EXCHANGEID FROM MASTER_CDSLCLIENTS WHERE SUBSTRING(CDSLCLIENTS_BOID,9,8)=CdslOffline_BenAccountNumber)
+			and CDSLMarketTypes_TypeID=Substring(CDSLOffline_SettlementID,5,2))
+			Else null
+			End as MarketType,
+			CDSLOffline_SettlementID as SettlementNumber,CDSLOffline_DPID as NsdlOffline_DPID,
+			(select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(cdslbplist_firstname))+' ]'  from Master_CDSLbplist 
+			where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=CdslOffline_DPID and cdslbplist_dptype in (2,3,6))
+			as DPID,
+			CdslOffline_CounterCDSLID as NsdlOffline_OtherClientID,
+			Case 
+			When CdslOffline_TransactionType=11 then
+			ltrim(rtrim(CdslOffline_CounterCDSLID))
+			When CdslOffline_TransactionType=3 then
+			Null
+			When CdslOffline_TransactionType=4 then
+			isnull((Select right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) + ' [ '+ ltrim(rtrim(nsdlclients_BenFirstHolderName)) +' ]' 
+			from Master_NsdlClients where NsdlClients_BenAccountID=CdslOffline_NsdlClientID),CDslOffline_NsdlClientID)
+			Else
+			isnull((Select right(ltrim(rtrim(cast(substring(Cdslclients_boid,9,8) as varchar(20)))),8) + ' [ '+ ltrim(rtrim(Cdslclients_FirstHolderName)) +' ]' 
+			from Master_CdslClients where CdslClients_BOID=CdslOffline_CounterCDSLID),SubString(CdslOffline_CounterCDSLID,9,8))
+			End as OtherBenIDName,Substring(CDSLOffline_CounterCDSLID,9,8) as OtherClientID,Substring(CDSLOffline_CounterCDSLID,1,8) as NsdlOffline_OtherDPID,
+			Case 
+			When CDSLOffline_TransactionType=4 then
+			(select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CDSLOffline_NSDLDPID and NsdlBPList_BPRole=1) 
+			Else
+			Case 
+				When isnull((select 1 from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=Substring(CDSLOffline_CounterCDSLID,0,9) and CdslBPLIst_DPType in (1,2,3,6)),' ')=' '
+				Then Substring(CDSLOffline_CounterCDSLID,0,9)
+				Else (select ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5)) + '   [ '+ ltrim(rtrim(CDSLBPList_FirstName))+' ]'  from Master_CdslBPList where ('1'+ltrim(rtrim(cdslbplist_dptype))+'0'+right(replicate(0,5)+isnull(convert(varchar,cdslbplist_dpId),0),5))=Substring(CDSLOffline_CounterCDSLID,0,9) and CdslBPLIst_DPType in (1,2,3,6)) 
+			End
+			End as OtherDPID,
+			Case
+			When CDSLOffline_TransactionType=3 Then
+				Case
+					When isnull((select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CdslOffline_NSDLCmbpid and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4)),'')='' 
+					Then CDSLOffline_NSDLCMBPID
+					Else (select ltrim(rtrim(NsdlBPList_BPID)) + '   [ '+ ltrim(rtrim(NSDLBPList_BPName))+' ]'  from Master_Nsdlbplist where Nsdlbplist_BPID=CdslOffline_NSDLCmbpid and NsdlBPList_BPRole=3 and nsdlbplist_bpcategory in (1,2,8,4))
+				End
+			When CDSLOffline_TransactionType=13 Then	
+			isnull((Select ltrim(rtrim(CdslClearingMember_CMID))+' ['+CdslClearingMember_Name1+']' from Master_CdslClearingMember
+			where CdslClearingMember_CMID=CdslOffline_CMID),CdslOffline_CMID)	
+			Else
+			CDSLOffline_CounterCDSLID
+			End as OtherCMBPID,
+			(select ltrim(rtrim(CDSLExchange_ExchangeID)) + '   [ '+ ltrim(rtrim(CdslExchange_Name))+' ]'  from master_cdslexchange where CDSLExchange_ExchangeID=CdslOffline_ExchangeID) as CCCMID,
+			CDSLOffline_ExchangeID as NsdlOffline_CCCMID,
+			Case
+				When CdslOffline_TransactionType=3 Then
+				Substring(CdslOffline_NSDLSettlementID,5,2)
+				Else
+				Substring(CDSLOffline_CounterSettlementID,5,2)
+			End as NsdlOffline_OtherMarketType,
+			Case
+			When CdslOffline_TransactionType=3 Then
+			(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+			WHERE CDSLMarketTypes_ExchangeID = CdslOffline_ExchangeID
+			and CDSLMarketTypes_TypeID=Substring(CDSLOffline_NSDLSettlementID,5,2))
+			When (len(CDSLOffline_CounterSettlementID)>0) Then 
+			(Select  CDSLMarketTypes_Description   from Master_CDSLMarketTypes 
+			WHERE CDSLMarketTypes_ExchangeID = CdslOffline_ExchangeID
+			and CDSLMarketTypes_TypeID=Substring(CDSLOffline_CounterSettlementID,5,2))
+			Else null
+			End as OtherMarketType,
+			Case
+			When CdslOffline_TransactionType=3 Then
+			CDSLOffline_NSDLSettlementID
+			Else 
+			CDSLOffline_CounterSettlementID
+			End as OtherSettlementNumber,
+			(Select (cdslisin_number+'[ '+Ltrim(Rtrim(cdslisin_shortname))+' ]') as cdslisin_number from master_cdslisin WHERE cdslisin_isinstatusdescription in ('Active','Inactive') and (cdslisin_number=CdslOffline_ISIN)) as ISIN,
+			CDSLOffline_Quantity as Quantity,Convert(varchar,CDSLOffline_TransactionDate,106) as TransactionDate,
+			Convert(varchar,CDSLOffline_ExecutionDate,106) as ExecutionDate,CDSLOffline_EntryUserRole as NsdlOffline_EntryUserRole,CDSLOffline_EntryUser as NsdlOffline_Enteredby,
+			(select user_name+' ['+user_entryprofile+']' from tbl_master_user where user_id=CDSLOffline_EntryUser) as EntryUserRole,
+			SubString(Convert(Varchar,CdslOffline_EntryDateTime,120),1,16) EntryDateTime
+			from Trans_CDSLOffline where CdslOffline_EntryUserRole='f' and substring(convert(varchar(20),CDSLOffline_EntryDateTime,121),1,10)=substring(convert(varchar(20),@date,121),1,10)
+			and CDSLOffline_BatchNumber is null and CdslOffline_EntryApplication=1 
+			order by CDSLOffline_ID
+		End-----End AllRecord
+End
+
+
+-----------------------------------------------End CDSL Report Section--------------------------------------------------------
+
+
+
+
+End----End Procedure
+
+--Select * from Trans_NsdlOffline where NsdlOffline_SlipNumber='27655'
+
+--Select * from Trans_DpSlipsUsage where DpSlipsUsage_SlipNumber='27655'
+
+--Select * from Master_NsdlClients where NsdlClients_BenAccountID='10000527'
+
+--Select ltrim(rtrim(nsdlclients_BenFirstHolderName)) + '   [ '+ right(ltrim(rtrim(nsdlclients_dpid+cast(nsdlclients_benaccountid as varchar(20)))),8) +' ]' as AccName from Master_NsdlClients where NsdlClients_BenAccountID='10000527'
+

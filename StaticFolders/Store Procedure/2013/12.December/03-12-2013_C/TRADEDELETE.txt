@@ -1,0 +1,430 @@
+
+
+ALTER PROCEDURE [dbo].[TRADEDELETE]
+@SEGMENT VARCHAR(50),
+@FROMDATE VARCHAR(50),
+@TODATE VARCHAR(50),
+@COMPANYID VARCHAR(50),
+@SETTNO VARCHAR(50),
+@SETTTYPE VARCHAR(20),
+@TRADETYPE VARCHAR(50),
+@EXCHANGESEGMENT VARCHAR(50),
+@BRANCHID VARCHAR(MAX),
+@TERMINALID VARCHAR(MAX),
+@CLIENTID VARCHAR(MAX),
+@SCRIPID VARCHAR(MAX)
+AS
+BEGIN
+		DECLARE @SQL VARCHAR(MAX)
+		CREATE TABLE #CUSTOMERTRADES(CUSTID_ID VARCHAR(50),ORIGINALID VARCHAR(50))
+		CREATE TABLE #COMCUSTOMERTRADES(CUSTID_ID VARCHAR(50),ORIGINALID VARCHAR(50))
+		
+
+		BEGIN TRANSACTION
+		IF (@EXCHANGESEGMENT IN(1,2,4,5,15,19,20))
+		BEGIN
+		   
+		   IF @TRADETYPE='ONLYSPLIT' ------IF SPLIT TRADES DELETE BEGIN
+		   BEGIN
+				
+			   SELECT @SQL='SELECT DISTINCT CustomerTrades_ID ,CustomerTrades_OriginalTransactionID
+							 FROM Trans_CustomerTrades
+							 WHERE CustomerTrades_CompanyID='''+@COMPANYID+'''
+							 AND CustomerTrades_ExchangeSegment='''+@SEGMENT+'''
+							 AND CustomerTrades_BranchID IN ('+@BRANCHID+')
+							 And isnull(CustomerTrades_TradeCategory,''R'') not in (''CFS'',''CFT'',''AUC'',''ARS'',''ART'')
+							 AND CustomerTrades_SettlementNumber='''+@SETTNO+'''
+							 AND CustomerTrades_SettlementType='''+@SETTTYPE+'''
+							 AND CustomerTrades_TradeDate BETWEEN '''+@FROMDATE+''' AND '''+@TODATE+'''
+							 AND CustomerTrades_TransactionType=''SPLIT'''
+							 
+							 IF @TERMINALID<>'ALL'
+							 BEGIN
+								SELECT @SQL=@SQL+' AND CustomerTrades_ID=(Select EXCHANGETRADES_CUSTTRANSACTIONID  FROM TRANS_EXCHANGETRADES where  exchangetrades_terminalid ='''+@TERMINALID+''')'
+
+							 END
+							 IF @CLIENTID<>'ALL'
+							 BEGIN
+									SELECT @SQL=@SQL+' AND CustomerTrades_CUSTOMERID IN ('+@CLIENTID+')'
+							 END
+							 IF @SCRIPID<>'ALL'
+							 BEGIN
+									SELECT @SQL=@SQL+' AND CustomerTrades_PRODUCTSERIESID IN ('+@SCRIPID+')'
+							 END
+							 SELECT @SQL=@SQL+'
+							 
+							 AND CustomerTrades_CONTRACTNOTENUMBER IS NULL'
+							 print @SQL
+				INSERT INTO #CUSTOMERTRADES(CUSTID_ID,ORIGINALID)EXEC(@SQL)
+
+				
+				----------DELETE FROM CUSTOMERTRADES
+				
+				SELECT @SQL=''
+				SELECT @SQL='Delete
+							 FROM Trans_CustomerTrades
+							 WHERE CustomerTrades_CompanyID='''+@COMPANYID+'''
+							 AND CustomerTrades_ExchangeSegment='''+@SEGMENT+'''
+							 AND CustomerTrades_BranchID IN ('+@BRANCHID+')
+							 And isnull(CustomerTrades_TradeCategory,''R'') not in (''CFS'',''CFT'',''AUC'',''ARS'',''ART'')
+							 AND CustomerTrades_SettlementNumber='''+@SETTNO+'''
+							 AND CustomerTrades_SettlementType='''+@SETTTYPE+'''
+							 AND CustomerTrades_TradeDate BETWEEN '''+@FROMDATE+''' AND '''+@TODATE+'''
+							 AND CustomerTrades_TransactionType=''SPLIT'''
+							 
+							 IF @TERMINALID<>'ALL'
+							 BEGIN
+								SELECT @SQL=@SQL+' AND CustomerTrades_ID=(Select EXCHANGETRADES_CUSTTRANSACTIONID  FROM TRANS_EXCHANGETRADES where  exchangetrades_terminalid ='''+@TERMINALID+''')'
+
+							 END
+							 IF @CLIENTID<>'ALL'
+							 BEGIN
+									SELECT @SQL=@SQL+' AND CustomerTrades_CUSTOMERID IN ('+@CLIENTID+')'
+							 END
+							 IF @SCRIPID<>'ALL'
+							 BEGIN
+									SELECT @SQL=@SQL+' AND CustomerTrades_PRODUCTSERIESID IN ('+@SCRIPID+')'
+							 END
+							 SELECT @SQL=@SQL+'
+							 
+							 AND CustomerTrades_CONTRACTNOTENUMBER IS NULL
+							 --AND CustomerTrades_ID in(select EXCHANGETRADES_CUSTTRANSACTIONID from TRANS_EXCHANGETRADES where ExchangeTrades_IsLocked <>''Y'')'
+						     print @SQL
+							 EXEC(@SQL)
+							 select @@ROWCOUNT ROW					
+							 
+				IF @@ERROR != 0 
+				BEGIN
+					ROLLBACK TRANSACTION 
+					RETURN
+				END
+				ELSE
+				BEGIN----1
+				----------Delete FROM EXCHANGETRADES
+	
+				SELECT @SQL=''
+				SELECT @SQL='
+								--UPDATE TRANS_EXCHANGETRADES SET EXCHANGETRADES_CUSTTRANSACTIONID=NULL
+								Delete from TRANS_EXCHANGETRADES 
+								where 
+								ExchangeTrades_CompanyID='''+@COMPANYID+'''
+								AND ExchangeTrades_Segment='''+@SEGMENT+'''
+								AND ExchangeTrades_BranchID IN ('+@BRANCHID+')
+								And isnull(ExchangeTrades_TradeCategory,''R'') not in (''CFS'',''CFT'',''AUC'',''ARS'',''ART'')
+								AND ExchangeTrades_SettlementNumber='''+@SETTNO+'''
+								AND ExchangeTrades_SettlementType='''+@SETTTYPE+'''
+								AND ExchangeTrades_TradeDate BETWEEN '''+@FROMDATE+''' AND '''+@TODATE+'''
+								AND (Select CustomerTrades_CONTRACTNOTENUMBER FROM Trans_CustomerTrades where EXCHANGETRADES_CUSTTRANSACTIONID = CustomerTrades_ID )is null'
+								
+								IF @SCRIPID<>'ALL'
+								BEGIN
+									SELECT @SQL=@SQL+' AND ExchangeTrades_PRODUCTSERIESID IN ('+@SCRIPID+')'
+								END
+								IF @TERMINALID<>'ALL'
+								BEGIN
+									SELECT @SQL=@SQL+' AND exchangetrades_terminalid ='''+@TERMINALID+''''
+								END
+								SELECT @SQL=@SQL+
+								' AND ((EXCHANGETRADES_CUSTTRANSACTIONID IN (SELECT DISTINCT CUSTID_ID FROM #CUSTOMERTRADES WHERE ORIGINALID IS NULL))
+																			OR
+								(EXCHANGETRADES_CUSTTRANSACTIONID IN (SELECT DISTINCT ORIGINALID FROM #CUSTOMERTRADES WHERE ORIGINALID IS NOT NULL)))'
+								print @SQL
+								EXEC(@SQL)
+								select @@ROWCOUNT ROW							
+				END
+
+		   END------IF SPLIT TRADES DELETE END
+		   ELSE 
+		   BEGIN
+		   
+		  --      -----------To Delete All Unidentified Trades
+		  --      Delete from Trans_CustomerTrades where CustomerTrades_ID 
+		  --      not in(select ExchangeTrades_CustTransactionID from Trans_ExchangeTrades)
+		        
+			 --   -----------To Delete All Unidentified Trades
+			    
+				--Delete from Trans_CustomerTrades where CustomerTrades_CompanyID=@COMPANYID
+				--and CustomerTrades_ExchangeSegment=@SEGMENT 
+				--and CustomerTrades_SettlementNumber=@SETTNO and CustomerTrades_SettlementType=@SETTTYPE 
+				--and CustomerTrades_TradeDate between @FROMDATE and @TODATE
+				--and (CustomerTrades_ProductSeriesID is NULL or CustomerTrades_CustomerID is NULL)
+						
+				
+				Delete from Trans_ExchangeTrades where ExchangeTrades_CompanyID=@COMPANYID
+				and ExchangeTrades_Segment=@SEGMENT 
+				and ExchangeTrades_SettlementNumber=@SETTNO and ExchangeTrades_SettlementType=@SETTTYPE 
+				and ExchangeTrades_TradeDate between @FROMDATE and @TODATE and ExchangeTrades_CustTransactionID is NULL
+				and (ExchangeTrades_ProductSeriesID is NULL or ExchangeTrades_CustomerID is NULL)
+			    IF @@ERROR != 0 
+			    BEGIN
+					ROLLBACK TRANSACTION 
+					RETURN
+			    END		
+		 		ELSE
+				BEGIN----2	
+				----------DELETE FROM CUSTOMERTRADES
+				
+				SELECT @SQL=''
+				SELECT @SQL='Delete FROM Trans_CustomerTrades
+				WHERE CustomerTrades_CompanyID='''+@COMPANYID+''' 
+				AND CustomerTrades_ExchangeSegment='''+@SEGMENT+'''
+				AND CustomerTrades_BranchID IN ('+@BRANCHID+')
+				AND CustomerTrades_SettlementNumber='''+@SETTNO+'''
+				AND CustomerTrades_SettlementType='''+@SETTTYPE+'''
+				AND CustomerTrades_TradeDate BETWEEN '''+@FROMDATE+''' AND '''+@TODATE+'''
+				And isnull(CustomerTrades_TradeCategory,''R'') not in (''CFS'',''CFT'',''AUC'',''ARS'',''ART'')
+				AND CustomerTrades_CONTRACTNOTENUMBER IS NULL
+				--AND CustomerTrades_ID in(select EXCHANGETRADES_CUSTTRANSACTIONID from TRANS_EXCHANGETRADES where ExchangeTrades_IsLocked <>''Y'')'
+				IF @TERMINALID<>'ALL'
+				BEGIN
+						SELECT @SQL=@SQL+' AND CustomerTrades_ID=(Select EXCHANGETRADES_CUSTTRANSACTIONID  FROM TRANS_EXCHANGETRADES where  exchangetrades_terminalid ='''+@TERMINALID+''')'
+
+				END
+				IF @TRADETYPE='Manual Trades'
+				BEGIN
+				   SELECT @SQL=@SQL+' AND CustomerTrades_TransactionType = ''ENTRD'''
+				END
+				IF @TRADETYPE='Imported Trades'
+				BEGIN
+				   SELECT @SQL=@SQL+' AND CustomerTrades_TransactionType<>''ENTRD'''
+				END
+				EXEC(@SQL)
+				select @@ROWCOUNT ROW							
+				
+				----------DELETE FROM EXCHANGETRADES
+				
+				SELECT @SQL=''
+				SELECT @SQL='
+				Delete FROM TRANS_EXCHANGETRADES 
+				WHERE  ExchangeTrades_CompanyID='''+@COMPANYID+'''
+				AND ExchangeTrades_Segment='''+@SEGMENT+'''
+				AND ExchangeTrades_BranchID IN ('+@BRANCHID+')
+				AND ExchangeTrades_SettlementNumber='''+@SETTNO+'''
+				AND ExchangeTrades_SettlementType='''+@SETTTYPE+'''
+				AND ExchangeTrades_TradeDate BETWEEN '''+@FROMDATE+''' AND '''+@TODATE+'''
+				And isnull(ExchangeTrades_TradeCategory,''R'') not in (''CFS'',''CFT'',''AUC'',''ARS'',''ART'')
+				AND (Select CustomerTrades_CONTRACTNOTENUMBER FROM Trans_CustomerTrades where EXCHANGETRADES_CUSTTRANSACTIONID = CustomerTrades_ID )is null
+				--AND ExchangeTrades_IsLocked <>''Y'''
+				
+				IF @TERMINALID<>'ALL'
+				BEGIN
+						SELECT @SQL=@SQL+' AND exchangetrades_terminalid ='''+@TERMINALID+''''
+				END
+				IF @TRADETYPE='Manual Trades'
+				BEGIN
+				   SELECT @SQL=@SQL+' AND ExchangeTrades_TransactionType = ''ENTRD'''
+				END
+				IF @TRADETYPE='Imported Trades'
+				BEGIN
+				   SELECT @SQL=@SQL+' AND ExchangeTrades_TransactionType<>''ENTRD'''
+				END
+			    EXEC(@SQL)
+			    select @@ROWCOUNT ROW							
+		   END
+		 
+		   END----2
+		END
+		ELSE
+		BEGIN 
+		   
+		   IF @TRADETYPE='ONLYSPLIT' ------IF SPLIT TRADES DELETE BEGIN
+		   BEGIN
+				
+				SELECT @SQL='SELECT DISTINCT ComCustomerTrades_ID ,ComCustomerTrades_OriginalTransactionID
+							 FROM Trans_ComCustomerTrades
+							 WHERE ComCustomerTrades_CompanyID='''+@COMPANYID+'''
+							 AND ComCustomerTrades_ExchangeSegment='''+@SEGMENT+'''
+							 AND ComCustomerTrades_BranchID IN ('+@BRANCHID+')
+							 And isnull(ComCustomerTrades_TradeCategory,''R'') not in (''CFS'',''CFT'',''AUC'',''ARS'',''ART'')
+							 AND ComCustomerTrades_SettlementNumber='''+@SETTNO+'''
+							 AND ComCustomerTrades_SettlementType='''+@SETTTYPE+'''
+							 AND ComCustomerTrades_TradeDate BETWEEN '''+@FROMDATE+''' AND '''+@TODATE+'''
+							 AND ComCustomerTrades_TransactionType=''SPLIT'''
+							 
+							 IF @TERMINALID<>'ALL'
+							 BEGIN
+								SELECT @SQL=@SQL+' AND ComCustomerTrades_ID=(Select COMEXCHANGETRADES_CUSTTRANSACTIONID  FROM TRANS_COMEXCHANGETRADES where  COMEXCHANGETRADES_terminalid ='''+@TERMINALID+''')'
+
+							 END
+							 IF @CLIENTID<>'ALL'
+							 BEGIN
+									SELECT @SQL=@SQL+' AND ComCustomerTrades_CUSTOMERID IN ('+@CLIENTID+')'
+							 END
+							 IF @SCRIPID<>'ALL'
+							 BEGIN
+									SELECT @SQL=@SQL+' AND ComCustomerTrades_PRODUCTSERIESID IN ('+@SCRIPID+')'
+							 END
+							 SELECT @SQL=@SQL+'
+							 
+							 AND ComCustomerTrades_CONTRACTNOTENUMBER IS NULL'
+							 
+
+				INSERT INTO #COMCUSTOMERTRADES(CUSTID_ID,ORIGINALID)EXEC(@SQL)
+
+				----------DELETE FROM COMCUSTOMERTRADES
+							
+				SELECT @SQL='Delete FROM Trans_COMCustomerTrades
+							 WHERE COMCustomerTrades_CompanyID='''+@COMPANYID+'''
+							 AND COMCustomerTrades_ExchangeSegment='''+@SEGMENT+'''
+							 AND COMCustomerTrades_BranchID IN ('+@BRANCHID+')
+							 And isnull(COMCustomerTrades_TradeCategory,''R'') not in (''CFS'',''CFT'',''AUC'',''ARS'',''ART'')
+							 AND COMCustomerTrades_SettlementNumber='''+@SETTNO+'''
+							 AND COMCustomerTrades_SettlementType='''+@SETTTYPE+'''
+							 AND COMCustomerTrades_TradeDate BETWEEN '''+@FROMDATE+''' AND '''+@TODATE+'''
+							 AND COMCustomerTrades_TransactionType=''SPLIT'''
+							 
+							 
+							 IF @TERMINALID<>'ALL'
+							 BEGIN
+									SELECT @SQL=@SQL+' AND COMCustomerTrades_ID=(Select COMEXCHANGETRADES_CUSTTRANSACTIONID from TRANS_COMExchangeTrades where  COMexchangetrades_terminalid ='''+@TERMINALID+''')'
+
+						     END
+							 IF @CLIENTID<>'ALL'
+							 BEGIN
+									SELECT @SQL=@SQL+' AND COMCustomerTrades_CUSTOMERID IN ('+@CLIENTID+')'
+							 END
+							 IF @SCRIPID<>'ALL'
+							 BEGIN
+									SELECT @SQL=@SQL+' AND COMCustomerTrades_PRODUCTSERIESID IN ('+@SCRIPID+')'
+							 END
+							 SELECT @SQL=@SQL+' AND COMCustomerTrades_CONTRACTNOTENUMBER IS NULL'
+							 
+							 EXEC(@SQL)
+							 select @@ROWCOUNT ROW							
+				
+				IF @@ERROR != 0 
+			    BEGIN
+					ROLLBACK TRANSACTION 
+					RETURN
+			    END		
+		 		ELSE
+				BEGIN----3
+				----------Delete FROM COMEXCHANGETRADES
+	
+				SELECT @SQL=''
+				SELECT @SQL='
+								UPDATE TRANS_COMEXCHANGETRADES SET COMEXCHANGETRADES_CUSTTRANSACTIONID=NULL
+								--Delete from TRANS_COMExchangeTrades
+								where 
+								COMExchangeTrades_CompanyID='''+@COMPANYID+'''
+								AND COMExchangeTrades_Segment='''+@SEGMENT+'''
+								AND COMExchangeTrades_BranchID IN ('+@BRANCHID+')
+								And isnull(COMExchangeTrades_TradeCategory,''R'') not in (''CFS'',''CFT'',''AUC'',''ARS'',''ART'')
+								AND COMExchangeTrades_SettlementNumber='''+@SETTNO+'''
+								AND COMExchangeTrades_SettlementType='''+@SETTTYPE+'''
+								AND COMExchangeTrades_TradeDate BETWEEN '''+@FROMDATE+''' AND '''+@TODATE+'''
+								AND (Select COMCustomerTrades_CONTRACTNOTENUMBER FROM Trans_COMCustomerTrades where COMExchangeTrades_CUSTTRANSACTIONID = COMCustomerTrades_ID )is null'
+																
+								IF @SCRIPID<>'ALL'
+								BEGIN
+									SELECT @SQL=@SQL+' AND COMExchangeTrades_PRODUCTSERIESID IN ('+@SCRIPID+')'
+								END
+								IF @TERMINALID<>'ALL'
+								BEGIN
+									SELECT @SQL=@SQL+' AND COMExchangeTrades_terminalid ='''+@TERMINALID+''''
+								END
+								SELECT @SQL=@SQL+
+								' AND ((COMEXCHANGETRADES_CUSTTRANSACTIONID IN (SELECT DISTINCT CUSTID_ID FROM #COMCUSTOMERTRADES WHERE ORIGINALID IS NULL))
+																			OR
+								(COMEXCHANGETRADES_CUSTTRANSACTIONID IN (SELECT DISTINCT ORIGINALID FROM #COMCUSTOMERTRADES WHERE ORIGINALID IS NOT NULL)))'
+								
+								EXEC(@SQL)
+								select @@ROWCOUNT ROW							
+				END----3
+
+		   END
+		   ELSE 
+		   BEGIN
+		       
+		  --      -----------To Delete All Unexpected Trades
+		  --      Delete from Trans_ComCustomerTrades where ComCustomerTrades_ID not in(select ComExchangeTrades_CustTransactionID from Trans_ComExchangeTrades)
+			    
+			 --   -----------To Delete All Unidentified Trades
+			    
+				--Delete from Trans_COMCustomerTrades where COMCustomerTrades_CompanyID=@COMPANYID
+				--and COMCustomerTrades_ExchangeSegment=@SEGMENT 
+				--and COMCustomerTrades_SettlementNumber=@SETTNO and COMCustomerTrades_SettlementType=@SETTTYPE 
+				--and COMCustomerTrades_TradeDate between @FROMDATE and @TODATE
+				--and (COMCustomerTrades_ProductSeriesID is NULL or COMCustomerTrades_CustomerID is NULL)
+						
+				
+				Delete from Trans_COMExchangeTrades where COMExchangeTrades_CompanyID=@COMPANYID
+				and COMExchangeTrades_Segment=@SEGMENT 
+				and COMExchangeTrades_SettlementNumber=@SETTNO and COMExchangeTrades_SettlementType=@SETTTYPE 
+				and COMExchangeTrades_TradeDate between @FROMDATE and @TODATE and COMExchangeTrades_CustTransactionID is NULL
+				and (COMExchangeTrades_ProductSeriesID is NULL or COMExchangeTrades_CustomerID is NULL)
+				
+				IF @@ERROR != 0 
+			    BEGIN
+					ROLLBACK TRANSACTION 
+					RETURN
+			    END		
+		 		ELSE
+				BEGIN----4	
+	 			
+				----------DELETE FROM COMCustomerTrades
+				
+				SELECT @SQL=''
+				SELECT @SQL='Delete FROM Trans_COMCustomerTrades
+				WHERE COMCustomerTrades_CompanyID='''+@COMPANYID+''' 
+				AND COMCustomerTrades_ExchangeSegment='''+@SEGMENT+'''
+				AND COMCustomerTrades_BranchID IN ('+@BRANCHID+')
+				AND COMCustomerTrades_SettlementNumber='''+@SETTNO+'''
+				AND COMCustomerTrades_SettlementType='''+@SETTTYPE+'''
+				AND COMCustomerTrades_TradeDate BETWEEN '''+@FROMDATE+''' AND '''+@TODATE+'''
+				And isnull(COMCustomerTrades_TradeCategory,''R'') not in (''CFS'',''CFT'',''AUC'',''ARS'',''ART'')
+				AND COMCustomerTrades_CONTRACTNOTENUMBER IS NULL
+				--AND COMCustomerTrades_ID in(select COMEXCHANGETRADES_CUSTTRANSACTIONID from TRANS_COMEXCHANGETRADES where COMExchangeTrades_IsLocked <>''Y'')'
+				IF @TERMINALID<>'ALL'
+				BEGIN
+						SELECT @SQL=@SQL+' AND COMCustomerTrades_ID=(Select COMEXCHANGETRADES_CUSTTRANSACTIONID from TRANS_COMExchangeTrades where  COMexchangetrades_terminalid ='''+@TERMINALID+''')'
+
+				END
+				IF @TRADETYPE='Manual Trades'
+				BEGIN
+				   SELECT @SQL=@SQL+' AND COMCustomerTrades_TransactionType = ''ENTRD'''
+				END
+				IF @TRADETYPE='Imported Trades'
+				BEGIN
+				   SELECT @SQL=@SQL+' AND COMCustomerTrades_TransactionType<>''ENTRD'''
+				END
+				EXEC(@SQL)
+				select @@ROWCOUNT ROW							
+				
+				----------DELETE FROM COMExchangeTrades
+				
+				SELECT @SQL=''
+				SELECT @SQL='
+				Delete FROM TRANS_COMExchangeTrades 
+				WHERE COMExchangeTrades_CompanyID='''+@COMPANYID+'''
+				AND COMExchangeTrades_Segment='''+@SEGMENT+'''
+				AND COMExchangeTrades_BranchID IN ('+@BRANCHID+')
+				AND COMExchangeTrades_SettlementNumber='''+@SETTNO+'''
+				AND COMExchangeTrades_SettlementType='''+@SETTTYPE+'''
+				AND COMExchangeTrades_TradeDate BETWEEN '''+@FROMDATE+''' AND '''+@TODATE+'''
+				And isnull(COMExchangeTrades_TradeCategory,''R'') not in (''CFS'',''CFT'',''AUC'',''ARS'',''ART'')
+				AND (Select COMCustomerTrades_CONTRACTNOTENUMBER FROM Trans_COMCustomerTrades where COMExchangeTrades_CUSTTRANSACTIONID = COMCustomerTrades_ID )is null'
+				
+				IF @TERMINALID<>'ALL'
+				BEGIN
+						SELECT @SQL=@SQL+' AND COMExchangeTrades_terminalid ='''+@TERMINALID+''''
+				END
+				IF @TRADETYPE='Manual Trades'
+				BEGIN
+				   SELECT @SQL=@SQL+' AND COMExchangeTrades_TransactionType = ''ENTRD'''
+				END
+				IF @TRADETYPE='Imported Trades'
+				BEGIN
+				   SELECT @SQL=@SQL+' AND COMExchangeTrades_TransactionType<>''ENTRD'''
+				END
+			    EXEC(@SQL)
+			    select @@ROWCOUNT ROW							
+		   END
+		 
+		  END
+		  
+		END 
+		COMMIT TRANSACTION --finally, Commit the transaction if Success..				
+END
+GO
+

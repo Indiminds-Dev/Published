@@ -1,0 +1,67 @@
+﻿body 
+{
+	background-image:url(../images/Paper.jpg);
+}
+/* Classes  and IDs*/
+/* Div */
+.DivCommonAttrb
+{
+	
+}
+#DivLeftPane
+{
+	padding:10px,10px,10px,10px;
+	width:15%;
+	height:70%;
+	float:left;
+	border-right-color:#eeeeee;
+	border-right-width:1px;
+	border-right-style:solid;
+	border-bottom-color:#eeeeee;
+	border-bottom-width:1px;
+	border-bottom-style:solid;
+	
+}
+#DivCenterPane
+{
+	padding:10px,10px,10px,10px;
+	float:left;
+	width:67%;
+	height:70%;
+	border-bottom-color:#eeeeee;
+	border-bottom-width:1px;
+	border-bottom-style:solid;
+}
+#DivRightPane
+{
+	padding:10px,10px,10px,10px;
+	width:15%;
+	height:70%;
+	border-left-color:#eeeeee;
+	border-left-width:1px;
+	border-left-style:solid;
+	border-bottom-color:#eeeeee;
+	border-bottom-width:1px;
+	border-bottom-style:solid;
+}
+#DivMainHeader
+{
+	border-bottom-color:#eeeeee;
+	border-bottom-width:1px;
+	border-bottom-style:solid;
+}
+#DivMainFooter
+{
+	border-bottom-color:#eeeeee;
+	border-bottom-width:1px;
+	border-bottom-style:solid;
+	height:30%;
+}
+#DivLeftPaneUpper
+{
+	background-image:url(../images/Gray.jpg);
+	background-repeat:repeat;
+}
+
+
+

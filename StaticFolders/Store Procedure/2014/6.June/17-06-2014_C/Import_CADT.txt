@@ -1,0 +1,420 @@
+
+
+ALTER Procedure [dbo].[Import_CADT]
+@file_path varchar(200),
+@file_name varchar(50),
+@compid varchar(20),
+@segid varchar(10),
+@FinYear Varchar(12),
+@userid varchar(10)
+As
+Begin----------------Sp Begin
+declare @ReadFrom as int
+declare @Q as varchar(250)
+
+
+CREATE TABLE #tbl_Temp(tempCol1 varchar(max),tempCol2 varchar(max),tempCol3 varchar(max),
+tempCol4 varchar(max),tempCol5 varchar(max),tempCol6 varchar(max),tempCol7 varchar(max),tempCol8 varchar(max),
+tempCol9 varchar(max),tempCol10 varchar(max),tempCol11 varchar(max),tempCol12 varchar(max))
+
+
+set @ReadFrom=1
+set @Q='BULK INSERT #tbl_Temp FROM '+ char(39) + @file_path + char(39) + ' with (firstrow = ' + convert(varchar,@ReadFrom) + ' , FIELDTERMINATOR = ' + char(39) + ',' + char(39) + ' , ROWTERMINATOR = ' + char(39) + char(10) + char(39) +')'
+exec (@Q)
+	
+--select * from #tbl_Temp
+Declare @FileType varchar(30),@GivenDate varchar(10),@TMCode varchar(10)
+Select @FileType = tempCol2,
+	   @TMCode = tempCol4,
+	   @GivenDate= tempCol5
+from #tbl_Temp where tempCol1='01'
+
+
+Declare @Day varchar(4)
+Declare @Month varchar(4)
+Declare @Year varchar(10)
+Declare @Date varchar(20)
+
+set @Day= day(@GivenDate)
+set @Month=Month(@GivenDate)
+set @Year=Year(@GivenDate)
+
+if(len(@Month)<2)
+BEGIN
+	set @Month='0'+@Month
+END
+if(len(@Day)<2)
+BEGIN
+	set @Day='0'+@Day
+END
+Set @Date=@Year+'-'+@Month+'-'+@Day
+
+
+
+if(@FileType='CADT')
+Begin
+	
+	CREATE TABLE [#CADTFile](
+	[CADTFile_ID] [bigint] IDENTITY(1,1) NOT NULL,
+	[CADTFile_Date] [datetime],
+	[CADTFile_ISIN] [char](12) ,
+	[CADTFile_SettlementNumberS] [char](7) ,
+	[CADTFile_SettlementTypeS] [char](2) ,
+	[CADTFile_Quantity] [numeric](18, 4) ,
+	[CADTFile_QuantityReceived] [numeric](18, 4) ,
+	[CADTFile_TargetDPID] [char](8) ,
+	[CADTFile_TargetClientID] [char](8) ,
+	[CADTFile_DPTransactionDate] [datetime] 
+	)
+	
+	CREATE TABLE [#DematTransactionsCPD](
+	[DematTransactionsCPD_ID] [bigint] ,
+	[DematTransactionsCPD_Date] [datetime],
+	[DematTransactionsCPD_ISIN] [char](12) ,
+	[DematTransactionsCPD_SettlementNumberS] [char](7) ,
+	[DematTransactionsCPD_SettlementTypeS] [char](2) ,
+	[DematTransactionsCPD_Quantity] [numeric](18, 4) ,
+	[DematTransactionsCPD_QuantityReceived] [numeric](18, 4) ,
+	[DematTransactionsCPD_TargetDPID] [char](8) ,
+	[DematTransactionsCPD_TargetClientID] [char](8) ,
+	[DematTransactionsCPD_DPTransactionDate] [datetime] 
+	)
+	
+	CREATE TABLE [#DematTransactionsCPDUnique](
+	[DematTransactionsCPDUnique_AutoID] [bigint] ,
+	[DematTransactionsCPDUnique_ID] [bigint] ,
+	[DematTransactionsCPDUnique_Date] [datetime],
+	[DematTransactionsCPDUnique_ISIN] [char](12) ,
+	[DematTransactionsCPDUnique_SettlementNumberS] [char](7) ,
+	[DematTransactionsCPDUnique_SettlementTypeS] [char](2) ,
+	[DematTransactionsCPDUnique_Quantity] [numeric](18, 4) ,
+	[DematTransactionsCPDUnique_QuantityReceived] [numeric](18, 4) ,
+	[DematTransactionsCPDUnique_TargetDPID] [char](8) ,
+	[DematTransactionsCPDUnique_TargetClientID] [char](8) ,
+	[DematTransactionsCPDUnique_DPTransactionDate] [datetime] 
+	)
+	
+	---------------Inserting Temporary data Recieved From File--------------------------------------------------
+	Insert into #CADTFile ([CADTFile_Date] ,[CADTFile_ISIN],[CADTFile_SettlementNumberS]  ,[CADTFile_SettlementTypeS] ,
+	[CADTFile_Quantity] ,[CADTFile_QuantityReceived] ,[CADTFile_TargetDPID] ,[CADTFile_TargetClientID] ,[CADTFile_DPTransactionDate] )
+	
+	Select @Date,tempCol7,tempCol3,tempCol2,sum(cast(tempCol10 as [numeric](18, 4))),sum(cast(tempCol11 as [numeric](18, 4))),SubString(tempCol9,0,9),SubString(tempCol9,9,8),@Date  
+	from #tbl_Temp where tempCol1='20' group by tempCol7,tempCol3,tempCol2,tempCol9
+	
+	--select * from #CADTFile
+		
+	declare @ExistingSettlementTable table
+	(
+		Id int identity,
+		ExistingSettlementNumber varchar(30),
+		ExistingSettlementType varchar(10)
+	)
+	insert into @ExistingSettlementTable (ExistingSettlementNumber,ExistingSettlementType)
+	select distinct DematTransactions_SettlementNumberS,DematTransactions_SettlementTypeS 
+	from Trans_DematTransactions where DematTransactions_SourceFile=@file_name	
+	and DematTransactions_SettlementNumberS is not null
+	and DematTransactions_SettlementTypeS is not null
+		
+	Delete from #CADTFile where ltrim(rtrim(CADTFile_SettlementNumberS))+ltrim(rtrim(CADTFile_SettlementTypeS)) 
+	in(select ltrim(rtrim(ExistingSettlementNumber))+ltrim(rtrim(ExistingSettlementType)) from @ExistingSettlementTable)
+			
+	Declare @RowExists int
+	select @RowExists=COUNT(*) from #CADTFile
+	
+	if(@RowExists <>0)
+	Begin
+				
+		---Distinct TargetDpID,TargetClientID,SettlementNumberS,SettlementTypeS,ISIN,Qty (Fetch From Trans_DematTransactionsCPD)
+		--#Phsical Table Data
+		Insert into #DematTransactionsCPD (DematTransactionsCPD_ID,DematTransactionsCPD_ISIN,
+		DematTransactionsCPD_Date ,DematTransactionsCPD_SettlementNumberS  ,DematTransactionsCPD_SettlementTypeS ,
+		DematTransactionsCPD_Quantity ,DematTransactionsCPD_QuantityReceived ,DematTransactionsCPD_TargetDPID ,
+		DematTransactionsCPD_TargetClientID ,DematTransactionsCPD_DPTransactionDate )
+		Select DematTransactions_ID,DematTransactions_ISIN,
+		DematTransactions_Date ,DematTransactions_SettlementNumberS,DematTransactions_SettlementTypeS ,
+		DematTransactions_Quantity ,DematTransactions_QuantityReceived ,DematTransactions_TargetDPID ,
+		DematTransactions_TargetClientID ,DematTransactions_DPTransactionDate  
+		from Trans_DematTransactionsCPD,#CADTFile
+		Where DematTransactions_CompanyID=@compid
+		and DematTransactions_FinYear=@FinYear
+		and CADTFile_SettlementNumberS=DematTransactions_SettlementNumberS
+		and CADTFile_SettlementTypeS=DematTransactions_SettlementTypeS
+		and CADTFile_TargetDPID in(DematTransactions_TargetDPID)
+		and CADTFile_TargetClientID  in(DematTransactions_TargetClientID)
+		and CADTFile_ISIN in(DematTransactions_ISIN)
+		and ltrim(rtrim(CADTFile_SettlementNumberS))+ltrim(rtrim(CADTFile_SettlementTypeS)) 
+		not in(select ltrim(rtrim(ExistingSettlementNumber))+ltrim(rtrim(ExistingSettlementType)) from @ExistingSettlementTable)
+		
+		--select * from #DematTransactionsCPD
+		Declare 
+		@CADTFile_MaxCount int,@CADTFile_MinCount int,
+		@SettlementNumberS Varchar(7),@SettlementTypeS Char(1),
+		@TargetDPID Varchar(8),@TargetClientID Varchar(8),@ISIN Varchar(12),
+		@QuantityCADTFile Numeric(18,4) 
+		
+		Set @CADTFile_MinCount=1
+		Select @CADTFile_MaxCount=COUNT(CADTFile_ID) From #CADTFile
+		
+		While(@CADTFile_MinCount<=@CADTFile_MaxCount)
+		Begin
+			
+			Select @QuantityCADTFile=CADTFile_Quantity,@SettlementNumberS=CADTFile_SettlementNumberS,
+			@SettlementTypeS=CADTFile_SettlementTypeS,@TargetClientID=CADTFile_TargetClientID,
+			@TargetDPID=CADTFile_TargetDPID,@ISIN=CADTFile_ISIN 
+			From #CADTFile where CADTFile_ID=@CADTFile_MinCount
+						
+			Insert into #DematTransactionsCPDUnique (DematTransactionsCPDUnique_AutoID,DematTransactionsCPDUnique_ID,DematTransactionsCPDUnique_ISIN,
+			DematTransactionsCPDUnique_Date ,DematTransactionsCPDUnique_SettlementNumberS  ,DematTransactionsCPDUnique_SettlementTypeS ,
+			DematTransactionsCPDUnique_Quantity ,DematTransactionsCPDUnique_QuantityReceived ,DematTransactionsCPDUnique_TargetDPID ,
+			DematTransactionsCPDUnique_TargetClientID ,DematTransactionsCPDUnique_DPTransactionDate )
+			Select ROW_NUMBER() OVER (ORDER BY DematTransactionsCPD_Quantity) as RowID,
+			DematTransactionsCPD_ID,DematTransactionsCPD_ISIN,
+			DematTransactionsCPD_Date ,DematTransactionsCPD_SettlementNumberS,DematTransactionsCPD_SettlementTypeS ,
+			DematTransactionsCPD_Quantity ,DematTransactionsCPD_QuantityReceived ,DematTransactionsCPD_TargetDPID ,
+			DematTransactionsCPD_TargetClientID ,DematTransactionsCPD_DPTransactionDate  
+			from #DematTransactionsCPD
+			where DematTransactionsCPD_SettlementNumberS=@SettlementNumberS
+			and DematTransactionsCPD_SettlementTypeS=@SettlementTypeS
+			and DematTransactionsCPD_TargetClientID=@TargetClientID
+			and DematTransactionsCPD_TargetDPID=@TargetDPID
+			and DematTransactionsCPD_ISIN=@ISIN
+			
+			
+			--select * from #DematTransactionsCPDUnique
+			
+			Declare @DematTransactionsCPDUnique_MaxCount int,@DematTransactionsCPDUnique_MinCount int,
+			@QuantityDematTransactionsCPD Numeric(18,4),@QuantityRcvd Numeric(18,4) 
+			
+			set @DematTransactionsCPDUnique_MinCount=1
+			select @DematTransactionsCPDUnique_MaxCount=COUNT(DematTransactionsCPDUnique_AutoID) from #DematTransactionsCPDUnique
+			
+			While(@DematTransactionsCPDUnique_MinCount<=@DematTransactionsCPDUnique_MaxCount)
+			Begin
+				
+				select @QuantityDematTransactionsCPD=DematTransactionsCPDUnique_Quantity from #DematTransactionsCPDUnique
+													 where DematTransactionsCPDUnique_AutoID=@DematTransactionsCPDUnique_MinCount
+				select @QuantityRcvd =
+				case when (@QuantityCADTFile-@QuantityDematTransactionsCPD)>0 then
+					   case when @QuantityCADTFile>@QuantityDematTransactionsCPD then @QuantityDematTransactionsCPD
+							when @QuantityCADTFile<@QuantityDematTransactionsCPD then @QuantityCADTFile
+					   end
+					  when (@QuantityCADTFile-@QuantityDematTransactionsCPD)=0 then @QuantityDematTransactionsCPD
+					  when (@QuantityCADTFile-@QuantityDematTransactionsCPD)<0 then @QuantityCADTFile
+				end
+				
+				
+				Update #DematTransactionsCPDUnique set DematTransactionsCPDUnique_QuantityReceived=@QuantityRcvd
+				where DematTransactionsCPDUnique_AutoID=@DematTransactionsCPDUnique_MinCount
+				
+				Update #DematTransactionsCPD set DematTransactionsCPD_QuantityReceived=DematTransactionsCPDUnique_QuantityReceived
+				from #DematTransactionsCPDUnique where DematTransactionsCPD_ID=DematTransactionsCPDUnique_ID
+			
+				if(@QuantityCADTFile-@QuantityDematTransactionsCPD)	>0
+				Begin
+					select @QuantityCADTFile=(@QuantityCADTFile-@QuantityDematTransactionsCPD)	
+				End
+				else if(@QuantityCADTFile-@QuantityDematTransactionsCPD)<0
+				Begin
+					---------------Reset Variables before Break----------------
+					select @QuantityDematTransactionsCPD=null,@QuantityRcvd=null
+					break
+				End
+					
+					
+				set @DematTransactionsCPDUnique_MinCount=@DematTransactionsCPDUnique_MinCount+1
+				
+			End
+			delete from #DematTransactionsCPDUnique
+			Set @CADTFile_MinCount=@CADTFile_MinCount+1
+			
+		End
+		
+				
+		declare @rows_inserted int,@CustomerID varchar(30)
+		
+		update Trans_DematTransactionsCPD set DematTransactions_QuantityReceived=DematTransactionsCPD_QuantityReceived 
+		from #DematTransactionsCPD where DematTransactions_ID=DematTransactionsCPD_ID
+		
+		--select * from #DematTransactionsCPD
+		declare @TblCustomerID table
+			(
+				Id int identity,
+				CustomerID varchar(30)
+			 )
+		
+		insert into @TblCustomerID (CustomerID)
+	    select distinct DematTransactions_CustomerID  from Trans_DematTransactionsCPD
+	    			
+		if((select top 1 CustomerID from @TblCustomerID) <>'NSE-CM')
+		Begin
+			
+			Insert Into Trans_DematTransactions(
+				DematTransactions_FinYear,DematTransactions_Date,DematTransactions_CompanyID,DematTransactions_SegmentID,DematTransactions_BranchID,
+				DematTransactions_CustomerID,DematTransactions_ProductSeriesID,DematTransactions_ISIN,DematTransactions_Type,
+				DematTransactions_TransferType,DematTransactions_Nature,DematTransactions_SettlementNumberS,
+				DematTransactions_SettlementTypeS,DematTransactions_Quantity,DematTransactions_OwnAccountS,
+				DematTransactions_OwnAccountT,DematTransactions_CustomerAccountS,DematTransactions_CustomerAccountT,
+				DematTransactions_SourceDPID,DematTransactions_SourceClientID,DematTransactions_SourceCMBPID,
+				DematTransactions_TargetDPID,DematTransactions_TargetClientID,DematTransactions_TargetCMBPID,
+				DematTransactions_CreateUser,DematTransactions_CreateDateTime,DematTransactions_GenerationType,
+				DematTransactions_SettlementNumberT,DematTransactions_SettlementTypeT,
+				DematTransactions_Remarks,DematTransactions_SourceFile,DematTransactions_BatchNumber)
+				
+			Select DematTransactions_FinYear,@Date,DematTransactions_CompanyID,DematTransactions_SegmentID,DematTransactions_BranchID,
+				DematTransactions_CustomerID,DematTransactions_ProductSeriesID,DematTransactions_ISIN,DematTransactions_Type,
+				DematTransactions_TransferType,DematTransactions_Nature,DematTransactions_SettlementNumberS,
+				DematTransactions_SettlementTypeS,DematTransactions_QuantityReceived,DematTransactions_OwnAccountS,
+				DematTransactions_OwnAccountT,DematTransactions_CustomerAccountS,DematTransactions_CustomerAccountT,
+				DematTransactions_SourceDPID,DematTransactions_SourceClientID,DematTransactions_SourceCMBPID,
+				DematTransactions_TargetDPID,DematTransactions_TargetClientID,DematTransactions_TargetCMBPID,
+				@userid,GETDATE(),DematTransactions_GenerationType,
+				DematTransactions_SettlementNumberT,DematTransactions_SettlementTypeT,
+				DematTransactions_ID,@file_name,DematTransactions_BatchNumber
+				from Trans_DematTransactionsCPD 
+				where DematTransactions_ID in(select DematTransactionsCPD_ID from #DematTransactionsCPD) 
+				and DematTransactions_QuantityReceived is not null
+				
+				
+		End
+			
+		Insert Into Trans_DematTransactions(
+			DematTransactions_FinYear,DematTransactions_Date,DematTransactions_CompanyID,
+			DematTransactions_SegmentID,DematTransactions_BranchID,DematTransactions_CustomerID,
+			DematTransactions_ProductSeriesID,DematTransactions_ISIN,DematTransactions_Type,
+			DematTransactions_TransferType,DematTransactions_Nature,
+			DematTransactions_SettlementNumberS,DematTransactions_SettlementTypeS,
+			DematTransactions_Quantity,DematTransactions_OwnAccountS,DematTransactions_OwnAccountT,
+			DematTransactions_CustomerAccountS,DematTransactions_CustomerAccountT,
+			DematTransactions_SourceDPID,DematTransactions_SourceClientID,DematTransactions_SourceCMBPID,
+			DematTransactions_TargetDPID,DematTransactions_TargetClientID,DematTransactions_TargetCMBPID,
+			DematTransactions_CreateUser,DematTransactions_CreateDateTime,DematTransactions_GenerationType,
+			DematTransactions_SettlementNumberT,DematTransactions_SettlementTypeT,
+			DematTransactions_Remarks,DematTransactions_SourceFile,DematTransactions_BatchNumber)
+			
+		Select DematTransactions_FinYear,@Date,DematTransactions_CompanyID,
+			DematTransactions_SegmentID,1,'NSE-CM',DematTransactions_ProductSeriesID,DematTransactions_ISIN,'MO',
+			DematTransactions_TransferType,DematTransactions_Nature,null,null,DematTransactions_QuantityReceived,null,
+			DematTransactions_OwnAccountS,null,DematTransactions_CustomerAccountS,
+			null,null,null,DematTransactions_SourceDPID,DematTransactions_SourceClientID,DematTransactions_SourceCMBPID,
+			@userid,GETDATE(),DematTransactions_GenerationType,
+			DematTransactions_SettlementNumberS,DematTransactions_SettlementTypeS,
+			DematTransactions_ID,@file_name,DematTransactions_BatchNumber
+			from Trans_DematTransactionsCPD 
+			where DematTransactions_ID in(select DematTransactionsCPD_ID from #DematTransactionsCPD) 
+			and DematTransactions_QuantityReceived is not null
+	   
+	    select @rows_inserted = @@rowcount	
+				
+			declare @SettlementTable table
+			(
+				Id int identity,
+				SettlementNumber varchar(30),
+				SettlementType varchar(10)
+			)
+		
+			insert into @SettlementTable (SettlementNumber,SettlementType)
+			select distinct CADTFile_SettlementNumberS,CADTFile_SettlementTypeS from #CADTFile	
+			where ltrim(rtrim(CADTFile_SettlementNumberS))+ltrim(rtrim(CADTFile_SettlementTypeS)) 
+			not in(select ltrim(rtrim(ExistingSettlementNumber))+ltrim(rtrim(ExistingSettlementType)) from @ExistingSettlementTable)
+			
+		delete from #CADTFile where (ltrim(rtrim(CADTFile_TargetClientID))+ltrim(rtrim(CADTFile_TargetDPID))
+			+ltrim(rtrim(CADTFile_ISIN))+ltrim(rtrim(CADTFile_SettlementNumberS))+ltrim(rtrim(CADTFile_SettlementTypeS))) in  
+			(select ltrim(rtrim(DematTransactionsCPD_TargetClientID))+ltrim(rtrim(DematTransactionsCPD_TargetDPID))
+			+ltrim(rtrim(DematTransactionsCPD_ISIN))+ltrim(rtrim(DematTransactionsCPD_SettlementNumberS))
+			+ltrim(rtrim(DematTransactionsCPD_SettlementTypeS)) 
+			 from #DematTransactionsCPD)
+		 			
+		--select * from #CADTFile	
+		
+		if((select top 1 CustomerID from @TblCustomerID) <>'NSE-CM')
+		Begin
+			Insert Into Trans_DematTransactions(
+				DematTransactions_FinYear,DematTransactions_Date,DematTransactions_CompanyID,
+				DematTransactions_SegmentID,DematTransactions_BranchID,DematTransactions_CustomerID,
+				DematTransactions_ProductSeriesID,DematTransactions_ISIN,DematTransactions_Type,
+				DematTransactions_TransferType,DematTransactions_Nature,
+				DematTransactions_SettlementNumberS,DematTransactions_SettlementTypeS,
+				DematTransactions_Quantity,DematTransactions_OwnAccountS,DematTransactions_OwnAccountT,
+				DematTransactions_CustomerAccountS,DematTransactions_CustomerAccountT,
+				DematTransactions_SourceDPID,DematTransactions_SourceClientID,DematTransactions_SourceCMBPID,
+				DematTransactions_TargetDPID,DematTransactions_TargetClientID,DematTransactions_TargetCMBPID,
+				DematTransactions_CreateUser,DematTransactions_CreateDateTime,DematTransactions_GenerationType,
+				DematTransactions_SettlementNumberT,DematTransactions_SettlementTypeT,
+				DematTransactions_Remarks,DematTransactions_SourceFile,DematTransactions_BatchNumber)
+			
+			select @FinYear,@Date,@compid,@segid,1,'NSE-CM',
+				case when(select count(Equity_SeriesID) from Master_Equity where Equity_ExchSegmentID=1 and Equity_SeriesID 
+					 in (select ISIN_ProductSeriesID from Master_ISIN where ISIN_Number=CADTFile_ISIN))>1 then null
+				else
+					case when (select Equity_SeriesID from Master_Equity where Equity_ExchSegmentID=1 and Equity_SeriesID 
+						 in (select ISIN_ProductSeriesID from Master_ISIN where ISIN_Number=CADTFile_ISIN)) is null then null
+					else
+					     (select Equity_SeriesID from Master_Equity where Equity_ExchSegmentID=1 and Equity_SeriesID 
+						 in (select ISIN_ProductSeriesID from Master_ISIN where ISIN_Number=CADTFile_ISIN)) 
+					End
+			    End as ProductSeriesID,
+				CADTFile_ISIN,'MO','NR','F',null,null,CADTFile_QuantityReceived,null,
+				case when CADTFile_TargetDPID like 'IN%' then (SELECT DPAccounts_ID FROM Master_DPAccounts 
+					 WHERE DPAccounts_ExchangeSegmentID=24 AND DPAccounts_AccountType IN ('[POOL]')AND DpAccounts_IsClosed IS null)
+			    else (SELECT DPAccounts_ID FROM Master_DPAccounts WHERE DPAccounts_ExchangeSegmentID=24
+					 AND DPAccounts_AccountType IN ('[PLPAYIN]') AND DpAccounts_IsClosed IS null) end as OwnAccountT,
+				null,null,null,null,null,CADTFile_TargetDPID,CADTFile_TargetClientID,
+				case when CADTFile_TargetDPID like 'IN%' then (SELECT DPAccounts_CMBPID FROM Master_DPAccounts 
+					 WHERE DPAccounts_ExchangeSegmentID=24 AND DPAccounts_AccountType IN ('[POOL]')AND DpAccounts_IsClosed IS null)
+			    else (SELECT DPAccounts_CMBPID FROM Master_DPAccounts WHERE DPAccounts_ExchangeSegmentID=24
+					 AND DPAccounts_AccountType IN ('[PLPAYIN]') AND DpAccounts_IsClosed IS null) end as TargetCMBPID,
+				@userid,GETDATE(),'A',CADTFile_SettlementNumberS,CADTFile_SettlementTypeS,null,@file_name,null
+				from #CADTFile
+				
+				select @rows_inserted = @rows_inserted+@@rowcount	
+			
+		End
+		
+			--------------------------Demat Positions----------------------------------------------		
+			declare @i int
+			declare @sett_num varchar(30), @sett_type varchar(10)
+			set @i=1
+			while (@i <= (select max(Id) from @SettlementTable))
+			begin
+				select @sett_num = SettlementNumber from @SettlementTable where Id = @i
+
+				select @sett_type = SettlementType from @SettlementTable where Id = @i
+				
+				----'MU' is for Update Stocks Also
+				exec sp_Update_DematPositions @userid,'NA',@compid,@segid,'NA',@sett_num,@sett_type,'N','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA'
+				
+				set @i = @i + 1
+
+			end
+			
+			---------Stocks Update
+			exec sp_Update_DematStocks 'NA','NA','NA','N','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA','NA'
+
+			
+			update Trans_DematTransactions set DematTransactions_IsStockUpdated = 1 
+			Where DematTransactions_IsStockUpdated is null and DematTransactions_CreateUser=@userid and
+			ltrim(rtrim(DematTransactions_SettlementNumberS))+ltrim(rtrim(DematTransactions_SettlementTypeS)) 
+			not in(select ltrim(rtrim(ExistingSettlementNumber))+ltrim(rtrim(ExistingSettlementType)) from @ExistingSettlementTable)
+			and DematTransactions_ProductSeriesID is not null			
+			
+			select 'Imported','CADT' as TrnType,@rows_inserted  as rows_inserted
+			
+	End
+	else
+	Begin
+		select 'Imported','CADTExist' as TrnType,'' as rows_inserted
+	End
+End
+else
+Begin
+	select 'Invalid. You selected'
+End
+
+
+End
+
+
+--exec [Import_CADT] @file_path='C:\KB CAP\directPayoutToClients\C_CADT_07765_18-MAR-2014.csv'
+
+--exec [Import_CADT] @file_path='C:\KB CAP\directPayoutToClients\C_CADT_08565_21-MAR-2013.csv',@compid='COR0000002',@finyear='2012-2013' 
+--select * from Trans_DematTransactionsCPD

@@ -1,0 +1,360 @@
+
+
+ALTER procedure [dbo].[CDSL_Registration_Fetch]
+@FetchType varchar(10),--ADD,EDIT
+@User varchar(10),
+@Company varchar(10),
+@Fname varchar(30),
+@Mname varchar(30),
+@Lname varchar(30),
+@AplicatnNo varchar(16),
+@FormNo varchar(16),
+@AplicatnDt datetime,
+@PanNo varchar(20),
+@DOB datetime,
+@EmlID varchar(100),
+@ClntType char(1),
+@CreatedateTime datetime,
+@PageSize int,
+@PageNumber int,
+@FromDate datetime,
+@ToDate datetime
+As
+Begin
+
+		  if(@FetchType = 'ADD')
+		  Begin
+		     
+		      create Table #ClientData( RowID int, FormNo varchar(16), KRAAplicatnNo varchar(16),ApplicationDate datetime
+		       , ClientType char(1),ClientTypeText varchar(18), ClntUCC varchar(10),BranchID int, CompanyID varchar(15), FName varchar(50), MName varchar(50), LName varchar(50)
+			   , Name varchar(100), FatherName varchar(100), GenderValue varchar(1), GenderText varchar(10)
+			   , MrgStatusValue varchar(1),MrgStatusText varchar(10), DOB varchar(20),DOBDate datetime,NationalityValue varchar(1), NationalityText varchar(50)
+			   , StatusValue varchar(10),StatusText varchar(200), PanExmpt varchar(1), PanNo varchar(10), UID varchar(10), PanExemptValue int,PanExemptText varchar(200)
+			   , CAddress1 varchar(250), CAddress2 varchar(200), CAddress3 varchar(200), CPin varchar(10) , CCountryValue int,CCountryText varchar(50)
+			   , CStateValue int,CStateText varchar(50), CCityValue int,CCityText varchar(50),CorrespondenceAddress varchar(250)
+			   , OPhone varchar(11), RPhone varchar(11), Mobile varchar(10), Fax varchar(30), EmailID varchar(100)
+			   , SameAdrs varchar(1), PAddress1 varchar(250), PAddress2 varchar(200), PAddress3 varchar(200), PPin varchar(10), PCountryValue int
+			   , PCountryText varchar(50), PStateValue int,PStateText varchar(50), PCityValue int,PCityText varchar(50)
+			   , RegisteredAddress varchar(250),GAIncomeValue int,GAIncome varchar(200),OccupationValue int,OccupationText varchar(50)
+			   , ClntID varchar(10), CreatedBy varchar(10), CreateDateTime DateTime)
+		
+			  DECLARE @sql VARCHAR(MAX)
+			  SELECT @sql=''
+					
+			  SELECT @sql='
+			   select ROW_NUMBER()  OVER (ORDER BY KYCMain_ID) as RowID ,KYCMain_DocNo FormNo,KYCMain_ApplicationNumber KRAAplicatnNo
+			   ,KYCMain_ApplicationDate ApplicationDate,KYCMain_ClientType ClientType
+			   ,Case when KYCMain_ClientType = ''I'' then ''Individual'' when KYCMain_ClientType = ''N'' then ''NonIndividual'' End ClientTypeText
+			   ,KYCMain_ClientUCC ClntUCC,KYCMain_BranchID BranchID
+			   ,KYCMain_CompanyID CompanyID,KYCMain_FirstName FName,KYCMain_MiddleName MName,KYCMain_LastName LName
+			   ,Ltrim(Rtrim(isnull(KYCMain_FirstName,'''')))+'' ''+Ltrim(Rtrim(isnull(KYCMain_MiddleName,'''')))+'' ''+ Ltrim(Rtrim(isnull(KYCMain_LastName,''''))) Name
+			   ,KYCMain_FatherSpouseName FatherName,KYCMain_Gender GenderValue
+			   ,Case when KYCMain_Gender = ''M'' then ''Male'' when KYCMain_Gender = ''F'' then ''Female'' End GenderText
+			   ,KYCMain_MaritalStatus MrgStatusValue,Case when KYCMain_MaritalStatus = ''S'' then ''Single'' when KYCMain_MaritalStatus = ''M'' then ''Married'' End MrgStatusText
+			   ,Convert(Varchar,KYCMain_DateOfBirth,106) DOB,KYCMain_DateOfBirth DOBDate,KYCMain_Nationality NationalityValue,(select cou_country from tbl_master_country where cou_id=KYCMain_Nationality) NationalityText
+			   ,KYCMain_TaxStatus StatusValue,(select lgl_legalStatus from tbl_master_legalStatus where lgl_id = KYCMain_TaxStatus)StatusText
+			   ,KYCMain_PANExempt PanExmpt,KYCMain_PAN PanNo,KYCMain_UID  UID,KYCMain_PanExemptProof PanExemptValue
+			   ,(select PANExemptCategory_Description from Master_PANExemptCategory where PANExemptCategory_id=KYCMain_PanExemptProof)PanExemptText
+			   ,KYCMain_CAddress1 CAddress1,KYCMain_CAddress2 CAddress2,KYCMain_CAddress3 CAddress3,KYCMain_CPin CPin
+			   ,KYCMain_CCountry CCountryValue,(select cou_country from tbl_master_country where cou_id=KYCMain_CCountry)CCountryText
+			   ,KYCMain_CState CStateValue,(select state from tbl_master_state where id=KYCMain_CState)CStateText
+			   ,KYCMain_CCity CCityValue,(Select city_name from tbl_master_city where city_id=KYCMain_CCity)CCityText
+			   ,(select ISNULL( ltrim(rtrim(KYCMain_CAddress1))+'' '','''')+ISNULL( ltrim(rtrim(KYCMain_CAddress2))+'' '','''')
+				+ISNULL( ltrim(rtrim(KYCMain_CAddress3))+'' '','''')+(select ltrim(rtrim(city_name))+''-''+ltrim(rtrim(KYCMain_CPin))
+				+'','' from tbl_master_city where city_id=KYCMain_CCity)+(select ltrim(rtrim(state))+'','' from tbl_master_state where id=KYCMain_CState)
+				+(select LTRIM(rtrim(cou_country)) from tbl_master_country where cou_id=KYCMain_CCountry) )CorrespondenceAddress
+			   ,KYCMain_OPhone OPhone,KYCMain_RPhone RPhone,KYCMain_Mobile Mobile,KYCMain_Fax Fax,KYCMain_EmailID EmailID
+			   ,KYCMain_CPSame SameAdrs,KYCMain_PAddress1 PAddress1,KYCMain_PAddress2 PAddress2
+			   ,KYCMain_PAddress3 PAddress3,KYCMain_PPin PPin,KYCMain_PCountry PCountryValue
+			   ,(select cou_country from tbl_master_country where cou_id=KYCMain_PCountry)PCountryText
+			   ,KYCMain_PState PStateValue,(select state from tbl_master_state where id=KYCMain_PState)PStateText
+			   ,KYCMain_PCity PCityValue,(Select city_name from tbl_master_city where city_id=KYCMain_PCity)PCityText
+			   ,(select ISNULL( ltrim(rtrim(KYCMain_PAddress1))+'' '','''')+ISNULL( ltrim(rtrim(KYCMain_PAddress2))+'' '','''')
+				+ISNULL( ltrim(rtrim(KYCMain_PAddress3))+'' '','''')+(select ltrim(rtrim(city_name))+''-''+ltrim(rtrim(KYCMain_PPin))
+				+'','' from tbl_master_city where city_id=KYCMain_PCity)+(select ltrim(rtrim(state))+'','' from tbl_master_state where id=KYCMain_PState)
+				+(select LTRIM(rtrim(cou_country)) from tbl_master_country where cou_id=KYCMain_PCountry) )RegisteredAddress
+			   ,KYCMain_GAIncome GAIncomeValue,(select AnnualIncome_Description from Master_AnnualIncome where AnnualIncome_ID= KYCMain_GAIncome)GAIncomeText,KYCMain_Occupation OccupationValue
+			   ,(select pro_professionName from tbl_master_profession where pro_id = KYCMain_Occupation)OccupationText
+			   ,KYCMain_CntID ClntID,KYCMain_CreateUser CreatedBy,KYCMain_CreateDateTime CreateDateTime
+			   from Master_KYCMain  
+	           
+			   where KYCMain_CompanyID='''+@Company+''' and KYCMain_CreateUser 
+			   in (select USER_ID from tbl_master_user where (user_EntryProfile=''P'' or user_EntryProfile=''F''
+			   or user_EntryProfile=''C'')) and KYCMain_ApplicationNumber not in (select CdslOfflineAccount_ApplicationNumber from Trans_CDSLOfflineAccount)' 
+	           
+			   if(@Fname <> '')
+			   Begin
+				 Select @sql=@sql+'and KYCMain_FirstName='''+@Fname+''''
+				 
+			   End
+			   
+			   if(@Mname <> '')
+			   Begin
+				 Select @sql=@sql+'and KYCMain_MiddleName='''+@Mname+''''
+				 
+			   End
+			   
+			   if(@Lname <> '')
+			   Begin
+				 Select @sql=@sql+' and KYCMain_LastName='''+@Lname+''''
+				 
+			   End
+	           
+	           if(@ClntType <> '')
+			   Begin
+				 Select @sql=@sql+' and KYCMain_ClientType='''+@ClntType+''''
+				 
+			   End
+			   
+			   if(@AplicatnNo <> '')
+			   Begin
+				 Select @sql=@sql+' and KYCMain_ApplicationNumber='''+@AplicatnNo+''''
+				
+			   End
+	           
+			   if(@AplicatnDt <> '')
+			   Begin
+				 Select @sql=@sql+' and KYCMain_ApplicationDate='''+@AplicatnDt+''''
+				 
+			   End
+	           
+			   if(@PanNo <> '')
+			   Begin
+				 Select @sql=@sql+' and KYCMain_PAN='''+@PanNo+''''
+				 
+			   End 
+	           
+			   if(@DOB <> '')
+			   Begin
+				 Select @sql=@sql+' and KYCMain_DateOfBirth='''+@DOB+''''
+				 
+			   End
+	           
+			   if(@EmlID <> '') 
+			   Begin
+				 Select @sql=@sql+' and KYCMain_EmailID='''+@EmlID+''''
+				 
+			   End
+	           
+			   --Select @sql=@sql+''''
+	           print @sql
+	           insert into #ClientData 
+			   EXEC( @sql)
+			   
+			   Select (Select COUNT(RowID) From #ClientData) TotalRecord,* from #ClientData
+			   Where RowID BETWEEN ((@PageNumber- 1) * @PageSize)+ 1 AND @PageNumber * @PageSize
+		   
+		   End
+		   
+		  if(@FetchType = 'Edit')
+		  Begin
+		  
+		    Select * into #FetchedData from
+		   (select ROW_NUMBER()  OVER (ORDER BY CDSLOfflineAccount_ID) as RowID
+		   ,[CdslOfflineAccount_CompanyID]ComPanyID,[CdslOfflineAccount_DPID]DPID,[CdslOfflineAccount_FinYear]FinYear
+           ,[CdslOfflineAccount_BranchID]BranchID,(Select KYCMain_DocNo from Master_KYCMain where KYCMain_ApplicationNumber =[CdslOfflineAccount_ApplicationNumber])FormNo,[CdslOfflineAccount_ApplicationNumber]KRAAplicatnNo
+		   ,(select KYCMain_ClientType from Master_KYCMain where KYCMain_ApplicationNumber =[CdslOfflineAccount_ApplicationNumber])ClientType
+		   ,CASE WHEN (select KYCMain_ClientType from Master_KYCMain where KYCMain_ApplicationNumber =[CdslOfflineAccount_ApplicationNumber])= 'I' Then 'Individual'
+				 WHEN (select KYCMain_ClientType from Master_KYCMain where KYCMain_ApplicationNumber =[CdslOfflineAccount_ApplicationNumber])= 'N' Then 'NonIndividual'
+		    End ClientTypeText
+		   ,(select KYCMain_ClientUCC from Master_KYCMain where KYCMain_ApplicationNumber =[CdslOfflineAccount_ApplicationNumber])ClientUCC
+		   ,(select Cast(Ltrim(Rtrim(CdslStaticData_ID)) as Varchar(10))+'~'+Ltrim(Rtrim(CdslStaticData_TypeCode)) from Master_CdslStaticDataCode where CdslStaticData_ID =[CdslOfflineAccount_ProductNumber])ProductTypeValue
+		   ,(select CdslStaticData_Description from Master_CdslStaticDataCode where CdslStaticData_ID =[CdslOfflineAccount_ProductNumber])ProductType,[CdslOfflineAccount_DateOfMaturity]MaturityDt
+		    --First Account Holder Details----------------------------------------------
+           ,[CdslOfflineAccount_CustomerID],[CdslOfflineAccount_FirstName]FHlderFName,[CdslOfflineAccount_MiddleName]FHlderMName
+           ,[CdslOfflineAccount_LastName]FHlderLName,[CdslOfflineAccount_Title]FHlderTitle,[CdslOfflineAccount_Suffix]FHlderSufx
+           ,[CdslOfflineAccount_FatherName]FHlderFatherName,[CdslOfflineAccount_Address1]FHlderCAdrs1,[CdslOfflineAccount_Address2]FHlderCAdrs2
+           ,[CdslOfflineAccount_Address3]FHlderCAdrs3,[CdslOfflineAccount_City]FHlderCCityValue,(Select city_name from tbl_master_city where city_id=[CdslOfflineAccount_City])FHlderCCityText,[CdslOfflineAccount_State]FHlderCStateValue
+           ,(select state from tbl_master_state where id=[CdslOfflineAccount_State])FHlderCStateText,[CdslOfflineAccount_Country]FHlderCCountryValue,(select cou_country from tbl_master_country where cou_id=[CdslOfflineAccount_Country])FHlderCCountryText,[CdslOfflineAccount_Zip]FHlderCPin
+           ,[CdslOfflineAccount_Phone1]TelOfc,[CdslOfflineAccount_Phone2]TelRes,[CdslOfflineAccount_AdditionalPhone]MobileNo,[CdslOfflineAccount_Fax]FaxNo,[CdslOfflineAccount_EmailID]EmailID
+           ,[CdslOfflineAccount_PAN]FHlderPanNo,[CdslOfflineAccount_PANExempt]FHldrIsPanExmpt,[CdslOfflineAccount_PANExemptType]FHlderExmptnType,[CdslOfflineAccount_PANVerification]FHlderPanVerificatn
+           ,[CdslOfflineAccount_UID]FHlderUID,[CdslOfflineAccount_ITCircle]FHlderITCircle,(select KYCMain_CPSame from Master_KYCMain where KYCMain_ApplicationNumber = [CdslOfflineAccount_ApplicationNumber])SameAddress
+           ,[CdslOfflineAccount_PermAddress1]FHlderPAdrs1,[CdslOfflineAccount_PermAddress2]FHlderPAdrs2,[CdslOfflineAccount_PermAddress3]FHlderPAdrs3
+           ,[CdslOfflineAccount_PermCity]FHlderPCityValue,(Select city_name from tbl_master_city where city_id=[CdslOfflineAccount_PermCity])FHlderPCityText,[CdslOfflineAccount_PermState]FHlderPStateValue
+           ,(select state from tbl_master_state where id=[CdslOfflineAccount_PermState])FHlderPStateText,[CdslOfflineAccount_PermCountry]FHlderPCountryValue,(select cou_country from tbl_master_country where cou_id=[CdslOfflineAccount_PermCountry])FHlderPCountryText,[CdslOfflineAccount_PermZIP]FHlderPPin
+           --Second Account Holder Details----------------------------------------------
+           ,[CdslOfflineAccount_SecondHolderName]SHlderFName,[CdslOfflineAccount_SecondHolderMiddleName]SHlderMName,[CdslOfflineAccount_SecondHolderLastName]SHlderLName
+           ,[CdslOfflineAccount_SecondHolderTitle]SHlderTitle,[CdslOfflineAccount_SecondHolderSuffix]SHlderSufx,[CdslOfflineAccount_SecondHolderFatherName]SHlderFatherName
+           ,[CdslOfflineAccount_SecondHolderPAN]SHlderPanNo,[CdslOfflineAccount_SecondHolderPANExempt]SHldrIsPanExmpt,[CdslOfflineAccount_SecondHolderPANExemptType]SHlderExmptnType
+           ,[CdslOfflineAccount_SecondHolderPANVerification]SHlderPanVerificatn,[CdslOfflineAccount_SecondHolderUID]SHlderUID,[CdslOfflineAccount_SecondHolderITCircle]SHlderITCircle
+           --Third Account Holder Details-----------------------------------------------
+           ,[CdslOfflineAccount_ThirdHolderName]THlderFName
+           ,[CdslOfflineAccount_ThirdHolderMiddleName]THlderMName,[CdslOfflineAccount_ThirdHolderLastName]THlderLName,[CdslOfflineAccount_ThirdHolderTitle]THlderTitle
+           ,[CdslOfflineAccount_ThirdHolderSuffix]THlderSufx,[CdslOfflineAccount_ThirdHolderFatherName]THlderFatherName,[CdslOfflineAccount_ThirdHolderPAN]THlderPanNo,[CdslOfflineAccount_ThirdHolderPANExemptType]THlderExmptnType
+           ,[CdslOfflineAccount_ThirdHolderPANExempt]THldrIsPanExmpt,[CdslOfflineAccount_ThirdHolderPANVerification]THlderPanVerificatn,[CdslOfflineAccount_ThirdHolderUID]THlderUID
+           ,[CdslOfflineAccount_ThirdHolderITCircle]THlderITCircle
+           --User Text------------------------------------------------------------------
+           ,[CDSLOfflineAccount_UserText1]UserFld1,[CDSLOfflineAccount_UserText2]UserFld2
+           ,[CDSLOfflineAccount_UserText3]UserFld3
+           --Product Details------------------------------------------------------------
+           ,[CdslOfflineAccount_DPIntrnlRefNo]DPIntrnlRefNo,Convert(Varchar,[CdslOfflineAccount_DateOfBirth],106)DOB,[CdslOfflineAccount_DateOfBirth]DOBDate,[CdslOfflineAccount_Sex]Gender,Case when [CdslOfflineAccount_Sex] = 'M' then 'Male' when [CdslOfflineAccount_Sex] = 'F' then 'Female' End GenderText,[CdslOfflineAccount_OccupationCode]Occupation
+           ,(select pro_professionName from tbl_master_profession where pro_id = [CdslOfflineAccount_OccupationCode])OccupationText,[CdslOfflineAccount_LifeStyleCode]LifeStyle,(select Cast(Ltrim(Rtrim(CdslStaticData_ID)) as Varchar(10))+'~'+Ltrim(Rtrim(CdslStaticData_TypeCode)) from Master_CdslStaticDataCode where CdslStaticData_ID =[CdslOfflineAccount_GeographicalCode])GeoCodeValue
+           ,(select CdslStaticData_Description from Master_CdslStaticDataCode where CdslStaticData_ID =[CdslOfflineAccount_GeographicalCode])GeoCodeText
+           ,(select Cast(Ltrim(Rtrim(CdslStaticData_ID)) as Varchar(10))+'~'+Ltrim(Rtrim(CdslStaticData_TypeCode)) from Master_CdslStaticDataCode where CdslStaticData_ID =[CdslOfflineAccount_EducationCode])EducationValue
+           ,(select CdslStaticData_Description from Master_CdslStaticDataCode where CdslStaticData_ID = [CdslOfflineAccount_EducationCode])EducationText
+           ,[CdslOfflineAccount_IncomeCode]AnnualIncomeValue,(select AnnualIncome_Description from Master_AnnualIncome where AnnualIncome_ID = [CdslOfflineAccount_IncomeCode])AnnualIncomeText
+           ,[CdslOfflineAccount_Nationality]Nationality,(select cou_country from tbl_master_country where cou_id = [CdslOfflineAccount_Nationality])NationalityText
+           ,[CdslOfflineAccount_LegalStatus]Status,(select lgl_legalStatus from tbl_master_legalStatus where lgl_id = [CdslOfflineAccount_LegalStatus])StatusText
+           ,[CdslOfflineAccount_FeeType]BOFeeType,(select lng_language from tbl_master_language where lng_id = [CdslOfflineAccount_LanguageCode])LanguageText,[CdslOfflineAccount_LanguageCode]LanguageValue
+           ,[CdslOfflineAccount_BankOption]Bank5,(select Cast(Ltrim(Rtrim(CdslStaticData_ID)) as Varchar(10))+'~'+Ltrim(Rtrim(CdslStaticData_TypeCode)) from Master_CdslStaticDataCode where CdslStaticData_ID = [CdslOfflineAccount_StaffRelative])RelativeValue
+           ,(select CdslStaticData_Description from Master_CdslStaticDataCode where CdslStaticData_ID = [CdslOfflineAccount_StaffRelative])RelativeText
+           ,[CdslOfflineAccount_StaffCode]StaffCode,[CdslOfflineAccount_RGESS]RGESS,[CdslOfflineAccount_AnnualReportFlag]AnnualRpt,[CdslOfflineAccount_PledgeSIFlag]PSIFlag,[CdslOfflineAccount_EmailRTADownloadFlag]ERDFlag
+           ,[CdslOfflineAccount_BSDAFlag]BSDACFlag,(select Cast(Ltrim(Rtrim(CdslStaticData_ID)) as Varchar(10))+'~'+Ltrim(Rtrim(CdslStaticData_TypeCode)) from Master_CdslStaticDataCode where CdslStaticData_ID = [CdslOfflineAccount_SecurityAccessCode])SecurityAccessValue
+           ,(select CdslStaticData_Description from Master_CdslStaticDataCode where CdslStaticData_ID = [CdslOfflineAccount_SecurityAccessCode])SecurityAccessText
+           ,(select Cast(Ltrim(Rtrim(CdslStaticData_ID)) as Varchar(10))+'~'+Ltrim(Rtrim(CdslStaticData_TypeCode)) from Master_CdslStaticDataCode where CdslStaticData_ID =[CdslOfflineAccount_BOCategory])BOCategoryValue
+           ,(select CdslStaticData_Description from Master_CdslStaticDataCode where CdslStaticData_ID =[CdslOfflineAccount_BOCategory])BOCategoryText,[CdslOfflineAccount_SettlementPlanningFlag]BOSettPlng
+           ,[CdslOfflineAccount_DivBankIFSC]DBIFSC,[CdslOfflineAccount_RBIReference]RBIRefNo,[CdslOfflineAccount_RBIApprovalDate]RBIAprvlDt
+           ,[CdslOfflineAccount_SEBIRegNumber]SEBIRegNo,(select Cast(Ltrim(Rtrim(CdslStaticData_ID)) as Varchar(10))+'~'+Ltrim(Rtrim(CdslStaticData_TypeCode)) from Master_CdslStaticDataCode where CdslStaticData_ID = [CdslOfflineAccount_TaxDeductionStatus])BenTaxDeductStatusValue
+           ,(select CdslStaticData_Description from Master_CdslStaticDataCode where CdslStaticData_ID = [CdslOfflineAccount_TaxDeductionStatus])BenTaxDeductStatusText,[CdslOfflineAccount_SmartCard]SmartCardReq
+           ,[CdslOfflineAccount_SmartCardNumber]SmartCardNo,[CdslOfflineAccount_SmartCardPIN]SmartCardPin,[CdslOfflineAccount_ECSMandate]ECS
+           ,[CdslOfflineAccount_ElectronicConfirmation]ElectronicCnfrmatn,(select Cast(Ltrim(Rtrim(CdslStaticData_ID)) as Varchar(10))+'~'+Ltrim(Rtrim(CdslStaticData_TypeCode)) from Master_CdslStaticDataCode where CdslStaticData_ID = [CdslOfflineAccount_DivCurrency])DividndCurncyValue
+           ,(select CdslStaticData_Description from Master_CdslStaticDataCode where CdslStaticData_ID = [CdslOfflineAccount_DivCurrency])DividndCurncyText
+           ,[CdslOfflineAccount_GroupCode]GroupCode,(select Cast(Ltrim(Rtrim(CdslStaticData_ID)) as Varchar(10))+'~'+Ltrim(Rtrim(CdslStaticData_TypeCode)) from Master_CdslStaticDataCode where CdslStaticData_ID =[CdslOfflineAccount_BOSubStatus])BOSubStatusValue
+           ,(select CdslStaticData_Description from Master_CdslStaticDataCode where CdslStaticData_ID =[CdslOfflineAccount_BOSubStatus])BOSubStatusText
+           ,(select Cast(Ltrim(Rtrim(CdslStaticData_ID)) as Varchar(10))+'~'+Ltrim(Rtrim(CdslStaticData_TypeCode)) from Master_CdslStaticDataCode where CdslStaticData_ID = [CdslOfflineAccount_ClearingCorpID])ClrngCorporatnIDValue
+           ,(select CdslStaticData_Description from Master_CdslStaticDataCode where CdslStaticData_ID = [CdslOfflineAccount_ClearingCorpID])ClrngCorporatnIDText
+           ,[CdslOfflineAccount_ClearingMemberID]ClrngMembrID,[CdslOfflineAccount_StockExchange]StckExchng,[CdslOfflineAccount_ConfirmationWaived]ConfrmatnWavd
+           ,[CdslOfflineAccount_TradingID]TradngID,(select Cast(Ltrim(Rtrim(CdslStaticData_ID)) as Varchar(10))+'~'+Ltrim(Rtrim(CdslStaticData_TypeCode)) from Master_CdslStaticDataCode where CdslStaticData_ID =[CdslOfflineAccount_StatementCycleCode])BOStatemntCycleValue
+           ,(select CdslStaticData_Description from Master_CdslStaticDataCode where CdslStaticData_ID = [CdslOfflineAccount_StatementCycleCode])BOStatemntCycleText,[CdslOfflineAccount_BankMICR]BENFBnkCode
+           ,(select Cast(Ltrim(Rtrim(CdslStaticData_ID)) as Varchar(10))+'~'+Ltrim(Rtrim(CdslStaticData_TypeCode)) from Master_CdslStaticDataCode where CdslStaticData_ID =[CdslOfflineAccount_BankAccountType])BENFBnkAcTypeValue
+           ,(select CdslStaticData_Description from Master_CdslStaticDataCode where CdslStaticData_ID =[CdslOfflineAccount_BankAccountType])BENFBnkAcTypeText,[CdslOfflineAccount_BankAccountNumber]BENFBnkAcNo
+           ,(select Currency_ID from Master_Currency where Currency_ID =[CdslOfflineAccount_BankCurrency])BENFBnkCCYValue
+           ,(select Currency_Name+'['+ltrim(rtrim(Currency_Symbol))+']' from Master_Currency where Currency_ID =[CdslOfflineAccount_BankCurrency])BENFBnkCCYText
+           ,[CdslOfflineAccount_DivBankMICR]DIVNDBnkCode,(select Cast(Ltrim(Rtrim(CdslStaticData_ID)) as Varchar(10))+'~'+Ltrim(Rtrim(CdslStaticData_TypeCode)) from Master_CdslStaticDataCode where CdslStaticData_ID =[CdslOfflineAccount_DivBankAccountType])DIVNDBnkAcTypeValue
+           ,(select CdslStaticData_Description from Master_CdslStaticDataCode where CdslStaticData_ID =[CdslOfflineAccount_DivBankAccountType])DIVNDBnkAcTypeText
+           ,[CdslOfflineAccount_DivBankAccountNumber]DIVNDAcNo,(select Currency_ID from Master_Currency where Currency_ID =[CdslOfflineAccount_DivBankCurrency])DIVNDBnkCCYValue
+           ,(select Currency_Name+'['+ltrim(rtrim(Currency_Symbol))+']' from Master_Currency where Currency_ID = [CdslOfflineAccount_DivBankCurrency])DIVNDBnkCCYText
+           ,[CDSLOfflineAccount_Category4Code]Catagory4
+           ,[CdslOfflineAccount_CreateUser]CreateUser,[CdslOfflineAccount_CreateDateTime]CreateDateTime
+           ,[CdslOfflineAccount_EntryProfile]EntryProfileStatus
+		   --POA Detail---------------------------------------------------------------------
+		   ,(select Ltrim(RTrim(isnull(CdslClients_FirstHolderName,'NOName')))+'['+Ltrim(Rtrim(CdslClients_BOID))+']' from Master_CdslClients where CdslClients_BOID = [CdslOfflinePOA_POAID])POAIDValue 
+		   ,([CdslOfflinePOA_POAID])POAIDText
+		   ,([CdslOfflinePOA_POARegistrationNo])POARegNo
+           ,[CdslOfflinePOA_GPABPA]GPABPA
+           ,[CdslOfflinePOA_EffectiveFrom]FrmDt
+           ,[CdslOfflinePOA_EffectiveUntil]ToDt
+           ,[CdslOfflinePOA_UserField1]POAUserFld1
+           ,[CdslOfflinePOA_UserField2]POAUserFld2
+           ,[CdslOfflinePOA_Remarks]Remarks
+           ,[CdslOfflinePOA_PurposeCode]PurposeCode
+           --Nominee Detail-----------------------------------------------------------------
+           ,[CdslOfflineNominee_FirstName]NomineeFName
+           ,[CdslOfflineNominee_MiddleName]NomineeMName
+           ,[CdslOfflineNominee_LastName]NomineeLName
+           ,[CdslOfflineNominee_Title]NomineeTitle
+           ,[CdslOfflineNominee_Suffix]NomineeSufx
+           ,[CdslOfflineNominee_FatherName]NomineeFatherName
+           ,[CdslOfflineNominee_Address1]NomineeAdrs1
+           ,[CdslOfflineNominee_Address2]NomineeAdrs2
+           ,[CdslOfflineNominee_Address3]NomineeAdrs3
+           ,[CdslOfflineNominee_City]NomineeCity
+           ,[CdslOfflineNominee_State]NomineeState
+           ,[CdslOfflineNominee_Country]NomineeCountry
+           ,[CdslOfflineNominee_Zip]NomineePin
+           ,[CdslOfflineNominee_Phone1]NomineeTelOfc
+           ,[CdslOfflineNominee_Phone2]NomineeTelRes
+           ,[CdslOfflineNominee_AdditionalPhone]NomineeMobileNo
+           ,[CdslOfflineNominee_DOB]NomineeDOB
+           ,[CdslOfflineNominee_Fax]NomineeFaxNo
+           ,[CdslOfflineNominee_PAN]NomineePanNo
+           ,[CdslOfflineNominee_UID]NomineeUID
+           ,[CdslOfflineNominee_ITCircle]NomineeITCircle
+           ,[CdslOfflineNominee_EmailID]NomineeEmailID
+           --Gurdian Detail-----------------------------------------------------------------
+           ,[CdslOfflineAccount_GuardianFirstName]GurdianFName
+           ,[CdslOfflineAccount_GuardianMiddleName]GurdianMName
+           ,[CdslOfflineAccount_GuardianLastName]GurdianLName
+           ,[CdslOfflineAccount_GuardianTitle]GurdianTitle
+           ,[CdslOfflineAccount_GuardianSuffix]GurdianSufx
+           ,[CdslOfflineAccount_GuardianFatherName]GurdianFatherName
+           ,[CdslOfflineAccount_GuardianAddress1]GurdianAdrs1
+           ,[CdslOfflineAccount_GuardianAddress2]GurdianAdrs2
+           ,[CdslOfflineAccount_GuardianAddress3]GurdianAdrs3
+           ,[CdslOfflineAccount_GuardianCity]GurdianCity
+           ,[CdslOfflineAccount_GuardianState]GurdianState
+           ,[CdslOfflineAccount_GuardianCountry]GurdianCountry
+           ,[CdslOfflineAccount_GuardianZip]GurdianPin
+           ,[CdslOfflineAccount_GuardianPhone1]GurdianTelOfc
+           ,[CdslOfflineAccount_GuardianPhone2]GurdianTelRes
+           ,[CdslOfflineAccount_GuardianAdditionalPhone]GurdianMobileNo
+           ,[CdslOfflineAccount_GuardianDOB]GurdianDOB
+           ,[CdslOfflineAccount_GuardianFax]GurdianFaxNo
+           ,[CdslOfflineAccount_GuardianPAN]GurdianPanNo
+           ,[CdslOfflineAccount_GuardianUID]GurdianUID
+           ,[CdslOfflineAccount_GuardianITCircle]GurdianITCircle
+           ,[CdslOfflineAccount_GuardianEmailID]GurdianEmailID
+           --Nominee Gurdian Detail--------------------------------------------------------- 
+           ,[CdslOfflineNominee_GuardianFirstName]NomGurdianFName
+           ,[CdslOfflineNominee_GuardianMiddleName]NomGurdianMName
+           ,[CdslOfflineNominee_GuardianLastName]NomGurdianLName
+           ,[CdslOfflineNominee_GuardianTitle]NomGurdianTitle
+           ,[CdslOfflineNominee_GuardianSuffix]NomGurdianSufx
+           ,[CdslOfflineNominee_GuardianFatherName]NomGurdianFatherName
+           ,[CdslOfflineNominee_GuardianAddress1]NomGurdianAdrs1
+           ,[CdslOfflineNominee_GuardianAddress2]NomGurdianAdrs2
+           ,[CdslOfflineNominee_GuardianAddress3]NomGurdianAdrs3
+           ,[CdslOfflineNominee_GuardianCity]NomGurdianCity
+           ,[CdslOfflineNominee_GuardianState]NomGurdianState
+           ,[CdslOfflineNominee_GuardianCountry]NomGurdianCountry
+           ,[CdslOfflineNominee_GuardianZip]NomGurdianPin
+           ,[CdslOfflineNominee_GuardianPhone1]NomGurdianTelOfc
+           ,[CdslOfflineNominee_GuardianPhone2]NomGurdianTelRes
+           ,[CdslOfflineNominee_GuardianAdditionalPhone]NomGurdianMobileNo
+           ,[CdslOfflineNominee_GuardianDOB]NomGurdianDOB
+           ,[CdslOfflineNominee_GuardianFax]NomGurdianFaxNo
+           ,[CdslOfflineNominee_GuardianPAN]NomGurdianPanNo
+           ,[CdslOfflineNominee_GuardianUID]NomGurdianUID
+           ,[CdslOfflineNominee_GuardianITCircle]NomGurdianITCircle
+           ,[CdslOfflineNominee_GuardianEmailID]NomGurdianEmailID
+		    
+		   from 
+		   (
+				Select * From (
+								select * From Trans_CDSLOfflineAccount
+								 Left Outer Join Trans_CdslOfflinePOA 
+								on Trans_CDSLOfflineAccount.CdslOfflineAccount_ID=Trans_CdslOfflinePOA.CdslOfflinePOA_MainID
+								) Account_POA
+				Left Outer Join Trans_CDSLOfflineNominee 
+				on Account_POA.CdslOfflineAccount_ID=Trans_CDSLOfflineNominee.CdslOfflineNominee_MainID				
+			) Account_POA_Nominee
+			Where ((DATEADD(dd, 0, DATEDIFF(dd, 0, CDSLOfflineAccount_CreateDateTime))) Between @FromDate and @ToDate)
+			and (CdslOfflineAccount_AuthorizeUser1 is null and CdslOfflineAccount_AuthorizeUser2 is null and CdslOfflineAccount_AuthorizeUser3 is null))as T1
+		   
+		   
+		   --Trans_CDSLOfflineAccount
+		   --Left outer join Trans_CdslOfflinePOA on CdslOfflineAccount_ID=CdslOfflinePOA_MainID)Account_POA
+		   --Left outer join Trans_CDSLOfflineNominee on CdslOfflineAccount_ID=CdslOfflineNominee_MainID
+		   --and ((DATEADD(dd, 0, DATEDIFF(dd, 0, CDSLOfflineAccount_CreateDateTime))) Between @FromDate and @ToDate))as T1)as T2
+		    
+		   if(@AplicatnNo <> '')
+		   Begin
+			Select * From #FetchedData where KRAAplicatnNo = @AplicatnNo
+		   
+		   End
+			   
+		   Select (Select COUNT(RowID) From #FetchedData) TotalRecord,* from #FetchedData
+		   Where RowID BETWEEN ((@PageNumber- 1) * @PageSize)+ 1 AND @PageNumber * @PageSize
+		  End 
+End
+
+--exec CDSL_Registration_Fetch
+--@FetchType ='ADD',--ADD,EDIT
+--@User = 399,
+--@Company = 'COR0000002',
+--@Fname = '',
+--@Mname = '',
+--@Lname = '',
+--@AplicatnNo = 'APP0000000000125',
+--@FormNo ='',
+--@AplicatnDt = '',
+--@PanNo ='',
+--@DOB ='',
+--@EmlID='',
+--@ClntType='',
+--@CreatedateTime='08-01-2013',
+--@PageSize = 10,
+--@PageNumber = 1,
+--@FromDate = '08-01-2013',
+--@ToDate = '08-01-2013'
+

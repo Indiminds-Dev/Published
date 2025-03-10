@@ -3,18 +3,17 @@ name: Sync Local Folder
 on:
   push:
     branches:
-      - main  # Trigger on push to main branch
+      - main
   schedule:
-    - cron: '0 * * * *'  # Optional: Run hourly
+    - cron: '0 * * * *'  # Optional: Hourly sync
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted  # Targets your Windows server
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Pull Latest Changes
+      - name: Sync Local Folder
         run: |
+          cd "C:\Trilok\Projects\Published"
           git pull origin main
           echo "Local folder synced with remote repository"
+        shell: cmd  # Use Windows CMD shell

@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Sync Local Folder
         run: |
-          cd "C:\Trilok\Projects\Published"
+          cd "C:\Application"
           git pull origin main
           echo "Local folder synced with remote repository"
         shell: cmd  # Use Windows CMD shell

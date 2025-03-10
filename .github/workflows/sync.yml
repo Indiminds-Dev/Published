@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Sync Local Folder
         run: |
-          cd "C:\Application"
+          cd "C:\FitOffice-AI\Published"
           git pull origin main
           echo "Local folder synced with remote repository"
         shell: cmd  # Use Windows CMD shell

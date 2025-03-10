@@ -1,6 +1,0 @@
-#region ShowClientFORMarginStocks
-else if (idlist[0] == "Company")
-            {
-                DT = oDBEngine.GetDataTable("tbl_Master_Company ", " top 10  LTRIM(RTrim(cmp_Name))+' ['+LTRIM(Rtrim(cmp_internalid))+']',LTRIM(Rtrim(Cmp_Internalid))", "cmp_Name like '%" + reqStr + "%'");
-            }
-#endregion

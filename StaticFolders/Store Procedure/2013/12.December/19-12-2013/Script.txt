@@ -1,1 +1,0 @@
-alter table Trans_SignedDocuments add SignedDocuments_ForDate datetime

@@ -1,0 +1,226 @@
+
+----Generate SP and Generic Method for Stock Calculation By buy/Sell Trade 
+  --on a Item with FIFO Process by Trade Entry Time
+  
+----Start Sir given-------------
+--select ExchangeTrades_CustomerID,ExchangeTrades_ProductSeriesID,ExchangeTrades_TradeDate,
+--		--ExchangeTrades_TradeEntryTime,
+--		case When ExchangeTrades_TradeEntryTime is null 
+--						Then substring(cast(ExchangeTrades_TradeDate AS varchar(20)),0,10) +' 23:59:59' 
+--											Else ExchangeTrades_TradeEntryTime end TradeEntryTime,
+--		ExchangeTrades_BuySellFlag,ExchangeTrades_UnitPriceQuantity,ExchangeTrades_UnitPrice,
+--		ExchangeTrades_MarketValue 
+--from Trans_ExchangeTrades 
+--where exchangeTrades_Segment=25
+--	  and ExchangeTrades_CustomerID is not null
+--	  and ExchangeTrades_TradeDate is not null	  
+--	  and ExchangeTrades_ProductSeriesID in (select Equity_SeriesID from Master_Equity 
+--										where Equity_ExchSegmentID=2 and Equity_EffectUntil>='2013-03-01')
+--order by ExchangeTrades_CustomerID,ExchangeTrades_ProductSeriesID,ExchangeTrades_BuySellFlag,
+--			ExchangeTrades_TradeDate,ExchangeTrades_TradeEntryTime
+
+
+----End Sir given-------------		 
+
+ALTER Procedure [dbo].[Report_StockMeasurement]
+	@CompanyID varchar(10),
+	@ExchangeSegmentID int,
+	@ProductEffectFrom datetime,
+	@ProductEffectTo datetime
+AS
+BEGIN		
+		IF OBJECT_ID('tempdb..#TmpMainData') IS NOT NULL
+			DROP TABLE #TmpMainData
+		create table #TmpMainData(TradeID int Identity(1,1) Primary Key,CustomerID varchar(10),ProductSeriesID varchar(10),
+								  TradeDate DateTime,TradeEntryTime DateTime,BuySellFlag char(1),
+								  UnitPriceQuantity numeric(28,6),UnitPrice numeric(28,4),MarketValue numeric(28,4)
+								 )
+		-------------Index To Fetch -----------------------------------------------------------------
+		------------ExchangeTrades_SettlementNumber, ExchangeTrades_TradeDate, ExchangeTrades_Segment, 
+		------------ExchangeTrades_CompanyID, ExchangeTrades_SettlementType, ExchangeTrades_CustomerID, 
+		------------ExchangeTrades_CustTransactionID
+		
+		--Declare @CompanyID varchar(10),@ExchangeSegmentID int,@ProductEffectFrom datetime,@ProductEffectTo datetime
+		--Set @CompanyID='COR0000002'
+		--Set @ExchangeSegmentID=25
+		--Set @ProductEffectFrom='2011-04-01'
+		--Set @ProductEffectTo='2014-03-01'
+		  
+		Insert into #TmpMainData		
+		select ExchangeTrades_CustomerID,ExchangeTrades_ProductSeriesID,ExchangeTrades_TradeDate,
+			   case When ExchangeTrades_TradeEntryTime is null 
+							Then CONVERT(VARCHAR(10),ExchangeTrades_TradeDate,120)+' 23:59:59'
+					When CONVERT(VARCHAR(10),ExchangeTrades_TradeEntryTime,120)='1900-01-01' 
+							Then CONVERT(VARCHAR(10),ExchangeTrades_TradeDate,120)
+									+' '+convert(nvarchar,CAST(ExchangeTrades_TradeEntryTime as time),108)
+						Else ExchangeTrades_TradeEntryTime end,				
+			   ExchangeTrades_BuySellFlag,ExchangeTrades_UnitPriceQuantity,
+			   ExchangeTrades_UnitPrice,ExchangeTrades_MarketValue 
+		from Trans_ExchangeTrades 
+		where ExchangeTrades_SettlementNumber is not null
+			  and ExchangeTrades_TradeDate is not null
+			  and ExchangeTrades_Segment=@ExchangeSegmentID 	  
+			  and ExchangeTrades_CompanyID=@CompanyID
+			  and ExchangeTrades_CustomerID is not null			
+			  and ExchangeTrades_ProductSeriesID in (select Equity_SeriesID from Master_Equity where Equity_ExchSegmentID=2 
+														   and (Equity_EffectUntil between @ProductEffectFrom and @ProductEffectTo)
+												    )		
+		
+		IF OBJECT_ID('tempdb..#DisplayTable') IS NOT NULL
+			DROP TABLE #DisplayTable
+		create table #DisplayTable(TradeID int Identity(1,1) Primary Key,CustomerID varchar(10),ProductSeriesID varchar(10),
+								   TradeDate DateTime,TradeEntryTime DateTime,BuySellFlag char(1),
+								   UnitPriceQuantity numeric(28,6),UnitPrice numeric(28,4),MarketValue numeric(28,4)
+								   ,StockFlag char(1))
+								
+		Insert Into #DisplayTable
+			select  CustomerID,ProductSeriesID,TradeDate,TradeEntryTime,BuySellFlag,UnitPriceQuantity,
+				   UnitPrice,MarketValue,null 
+			from #TmpMainData
+			order by CustomerID,ProductSeriesID,BuySellFlag,TradeDate,TradeEntryTime			
+		
+--select * from #DisplayTable
+		IF OBJECT_ID('tempdb..#TmpBuySell') IS NOT NULL
+			DROP TABLE #TmpBuySell
+		Create Table #TmpBuySell(BuySellID int Identity(1,1) Primary Key,CustID varchar(10),ProductID varchar(10),Buy numeric(28,6),Sell numeric(28,6)
+								 ,BuyExtra numeric(28,6),SellExtra numeric(28,6))
+
+		Insert into #TmpBuySell(CustID,ProductID)
+		Select CustomerID,ProductSeriesID
+		From #DisplayTable
+		group by CustomerID,ProductSeriesID	  
+
+		Update #TmpBuySell set Buy=isnull((select isnull(totalBuy,0) 
+										   From (Select CustomerID,ProductSeriesID,
+													    isnull(SUM(UnitPriceQuantity),0) totalBuy
+												 From #DisplayTable where BuySellFlag=1
+												 group by CustomerID,ProductSeriesID
+												) TotBuy 
+										   where CustomerID=CustID
+										      	and ProductSeriesID=ProductID
+										   ),0)
+							   ,Sell=isnull((select isnull(totalSell,0) 
+											 From (Select CustomerID,ProductSeriesID,
+														  isnull(SUM(UnitPriceQuantity),0) totalSell
+												   From #DisplayTable where BuySellFlag=2
+												   group by CustomerID,ProductSeriesID
+												  ) TotSell 
+											where CustomerID=CustID
+												  and ProductSeriesID=ProductID
+										    ),0)
+
+		Delete from #TmpBuySell where Buy=Sell
+
+		IF OBJECT_ID('tempdb..#TmpDiffStock') IS NOT NULL
+			DROP TABLE #TmpDiffStock
+		Create table #TmpDiffStock(DiffStockID int Identity(1,1) Primary Key,CustID varchar(10),ProductID varchar(10),
+							Buy numeric(28,6),Sell numeric(28,6),BuyExtra numeric(28,6),SellExtra numeric(28,6))
+									
+		insert into #TmpDiffStock 
+		Select  CustID,ProductID,Buy,Sell,
+				(Case When (isnull(Buy,0)>isnull(Sell,0)) Then (isnull(Buy,0)-isnull(Sell,0)) else 0 end),
+				(Case When (isnull(Sell,0)>isnull(Buy,0)) Then (isnull(Sell,0)-isnull(Buy,0)) else 0 end) 
+		from #TmpBuySell
+		
+		
+		---Buy/Sell Difference Wise Stock calculation---
+		If((Select COUNT(*) from #TmpDiffStock)>0)
+			Begin				
+				----------Select Total Buy/Sell Difference for a Customer of a Product-------				
+				Declare @CustomerID varchar(10),@ProductSeriesID varchar(20),@BuySellCounter int,@BuySellMaxCounter int
+				Set @BuySellCounter=1
+				Select @BuySellMaxCounter =Count(*) From #TmpDiffStock
+				While(@BuySellCounter<=@BuySellMaxCounter)  
+					Begin
+						Declare @TotalBuyExtra numeric(28,6),@TotalSellExtra numeric(28,6)
+						
+						Select @CustomerID=CustID,@ProductSeriesID=ProductID,@TotalBuyExtra=BuyExtra,@TotalSellExtra=SellExtra 
+						From #TmpDiffStock Where DiffStockID=@BuySellCounter 
+						
+						Declare @BuyExtra numeric(28,6),@SellExtra numeric(28,6),@TradeID int,@TradeCounter int--,@maxTradeID int
+						Set @BuyExtra=0		
+						Set @SellExtra=0			
+						set @TradeCounter=0
+						
+						if(@TotalBuyExtra<>0)
+							Begin
+									----Calculation for Buy
+									While(@TotalBuyExtra<>0)
+										Begin	
+												Select @TradeID= (MAX(TradeID)-@TradeCounter) From #DisplayTable 
+												where CustomerID=@CustomerID and ProductSeriesID=@ProductSeriesID
+													  And BuySellFlag=1 		
+												
+												Select @BuyExtra=ISNULL(UnitPriceQuantity,0) From #DisplayTable where TradeID=@TradeID 
+												
+												If(isnull(@BuyExtra,0)<=isnull(@TotalBuyExtra,0))
+													Begin
+														Update #DisplayTable Set StockFlag='S' Where TradeID=@TradeID
+														Set @TotalBuyExtra=isnull(@TotalBuyExtra,0)-isnull(@BuyExtra,0)
+													End
+												Else
+													Begin														 
+														 Insert into #DisplayTable
+														 Select CustomerID,ProductSeriesID,TradeDate,TradeEntryTime,BuySellFlag
+																,@TotalBuyExtra,UnitPrice,(isnull(@TotalBuyExtra,0) * isnull(UnitPrice,0)),'S'	 
+														 From #DisplayTable where TradeID=@TradeID
+														 
+														 Update #DisplayTable Set UnitPriceQuantity=ISNULL((isnull(@BuyExtra,0)-ISNULL(@TotalBuyExtra,0)),0)
+																				  ,MarketValue=ISNULL((ISNULL((isnull(@BuyExtra,0)-ISNULL(@TotalBuyExtra,0)),0)*isnull(UnitPrice,0)),0)																				  
+														 Where TradeID=@TradeID 
+														 
+														 Set @TotalBuyExtra=0
+													End	
+												
+												Set @TradeCounter=@TradeCounter+1
+										End							
+							End
+						Else
+							Begin
+									----Calculation for Sell
+									While(@TotalSellExtra<>0)
+										Begin	
+												Select @TradeID= (MAX(TradeID)-@TradeCounter) From #DisplayTable 
+												where CustomerID=@CustomerID and ProductSeriesID=@ProductSeriesID
+													  And BuySellFlag=2
+												
+												Select @SellExtra=ISNULL(UnitPriceQuantity,0) From #DisplayTable where TradeID=@TradeID 
+												
+												If(isnull(@SellExtra,0)<=isnull(@TotalSellExtra,0))
+													Begin													
+														Update #DisplayTable Set StockFlag='S' Where TradeID=@TradeID
+														Set @TotalSellExtra=isnull(@TotalSellExtra,0)-isnull(@SellExtra,0)
+													End
+												Else
+													Begin														 
+														 Insert into #DisplayTable
+														 Select CustomerID,ProductSeriesID,TradeDate,TradeEntryTime,BuySellFlag
+																,@TotalSellExtra,UnitPrice,(isnull(@TotalSellExtra,0) * isnull(UnitPrice,0)),'S'	 
+														 From #DisplayTable where TradeID=@TradeID
+														 
+														 Update #DisplayTable Set UnitPriceQuantity=ISNULL((isnull(@SellExtra,0)-ISNULL(@TotalSellExtra,0)),0)
+																				  ,MarketValue=ISNULL((ISNULL((isnull(@SellExtra,0)-ISNULL(@TotalSellExtra,0)),0)*isnull(UnitPrice,0)),0)
+														 Where TradeID=@TradeID 
+														 Set @TotalSellExtra=0
+													End							
+												
+												Set @TradeCounter=@TradeCounter+1
+										End	
+							End	
+						
+						Set @BuySellCounter=@BuySellCounter+1
+					End					
+			End
+
+		select --ROW_NUMBER() Over(Order by CustomerID,ProductSeriesID,BuySellFlag,TradeDate,TradeEntryTime) TradeID,
+			   CustomerID,ProductSeriesID,TradeDate,TradeEntryTime,BuySellFlag,UnitPriceQuantity,
+			   UnitPrice,MarketValue,StockFlag 
+		from #DisplayTable
+		order by CustomerID,ProductSeriesID,BuySellFlag,TradeDate,TradeEntryTime
+
+		---Delete Temporary table-----
+		Drop table #TmpBuySell
+		drop Table #TmpDiffStock
+		Drop table #TmpMainData
+		Drop Table #DisplayTable 
+End

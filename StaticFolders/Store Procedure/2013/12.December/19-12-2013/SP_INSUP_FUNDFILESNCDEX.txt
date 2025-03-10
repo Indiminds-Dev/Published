@@ -1,0 +1,555 @@
+
+
+ALTER  PROCEDURE [dbo].[SP_INSUP_FUNDFILESNCDEX]
+@FileType varchar(100),
+@ModifyUser	int,
+@ExcSegmt int,
+@ExchangeSegmentID int,
+@CashBankAccount varchar(20),
+@FilePath varchar(250)=null,
+@ExchangeTrades_CompanyID varchar(100)=null,
+@FinYear varchar(100)=null,
+@BranchID int
+AS
+BEGIN
+	
+		Declare @exchnageId varchar(20)
+		IF(@ExchangeSegmentID=9)
+		BEGIN
+			SET @exchnageId='NCDEX-COMM'
+		END
+		IF(@ExchangeSegmentID=11)
+		BEGIN
+			SET @exchnageId='NMCE-COMM'
+		END
+		
+		declare @ReadFrom as int
+		declare @Q as varchar(250)
+		declare @P int 
+		Declare @Min as Int
+		Declare @Max As Int
+				
+		IF @FileType='BK01'
+		BEGIN
+				
+			
+			CREATE TABLE  #tmpTrans_FundFiles (
+
+				[FundFIles_TransactionRecievedDate] varchar(100) null,
+				[FundFIles_TransactionCode]  varchar(100) null,
+				[FundFIles_TransactionNumber] varchar(100) null,
+				[FundFIles_Description] varchar(100) NULL,
+				[FundFIles_DebitAmount] varchar(100) NULL,
+				[FundFIles_CreditAmount] varchar(100) NULL
+				--[FundFIles_MODE] varchar(100) NULL
+				
+				)
+			
+				set @ReadFrom=2
+				
+				set @Q='BULK INSERT #tmpTrans_FundFiles FROM '+ char(39) + @FilePath + char(39) + ' with (firstrow = ' + convert(varchar,@ReadFrom) + ' , FIELDTERMINATOR = ' + char(39) + ',' + char(39) + ' , ROWTERMINATOR = ' + char(39) + char(10)+ + char(39) +')'
+				print @Q
+				exec (@Q)
+
+
+				alter table #tmpTrans_FundFiles
+						add  	[FundFIlesFO_ID] [bigint] IDENTITY(1,1) NOT NULL	
+								
+				
+--				Select * from #tmpTrans_FundFiles
+				set @Min=(Select MIN([FundFIlesFO_ID]) from #tmpTrans_FundFiles)
+				set @Max=(Select MAX([FundFIlesFO_ID]) from #tmpTrans_FundFiles)
+
+			
+			DECLARE @strDate varchar(20)
+			DECLARE @INSTRNO VARCHAR(20)
+			DECLARE @FNSTRNO VARCHAR(20)
+
+			declare @tempvoucher table(cashbank_vouchernumber varchar(100),cashbank_companyID varchar(20),cashbank_ExchangeSegmentID int,cashbank_transactiondate varchar(100),cashbank_branchid int)
+
+			WHILE(@Min<=@Max)
+			BEGIN	
+					
+					
+					SET @strDate=(Select [FundFIles_TransactionRecievedDate] FROM #tmpTrans_FundFiles WHERE [FundFIlesFO_ID]=@Min)
+					SET @FNSTRNO=(SELECT [FundFIles_TransactionNumber] FROM #tmpTrans_FundFiles WHERE [FundFIlesFO_ID]=@Min)
+					if(len(@FNSTRNO)>6)
+					BEGIN
+						SET @INSTRNO=(SELECT SUBSTRING(LTRIM(RTRIM([FundFIles_TransactionNumber])),9,6) FROM #tmpTrans_FundFiles WHERE [FundFIlesFO_ID]=@Min)
+					END
+					else
+					BEGIN
+						SET @INSTRNO=(SELECT [FundFIles_TransactionNumber] FROM #tmpTrans_FundFiles WHERE [FundFIlesFO_ID]=@Min)
+					END
+------------------------------------IF EXIST DELETE CashBankVouchers---------------------------------------------- 
+							DELETE from @tempvoucher
+						
+
+							insert into @tempvoucher(cashbank_vouchernumber,cashbank_companyID,cashbank_ExchangeSegmentID,cashbank_transactiondate,cashbank_branchid)
+							Select cashbank_vouchernumber,cashbank_companyID,cashbank_ExchangeSegmentID,cashbank_transactiondate,cashbank_branchid
+							from Trans_CashBankVouchers,Trans_CashBankDetail  
+							where 
+							cashbank_companyID=@ExchangeTrades_CompanyID
+							And cashbank_exchangesegmentid=@ExcSegmt 
+                            and cashbank_transactiondate=Convert(datetime,@strDate,121)
+							and cashbank_cashbankid=@CashBankAccount
+							and CashBank_ID=CashBankDetail_VoucherID
+							and CashBankDetail_InstrumentNumber in(@INSTRNO)
+
+							DELETE from Trans_CashBankVouchers
+							WHERE cashbank_Id IN(Select CashBankDetail_VoucherId from trans_cashbankdetail  
+							where 
+							cashbankdetail_InstrumentDate IN(Convert(datetime,@strDate,121))
+							AND CASHBANKDETAIL_INSTRUMENTNUMBER IN(@INSTRNO)
+							AND CASHBANKDETAIL_CASHBANKID=@CashBankAccount
+							AND CASHBANKDETAIL_MAINACCOUNTID='SYSTM00007'
+							AND CASHBANKDETAIL_BRANCHID=1
+							AND CASHBANKDETAIL_SUBACCOUNTID=@exchnageId)
+
+-------------------------- IF EXIST DELETE ACCOUNTS LEDGER------------------------------------------------------     
+
+
+
+							delete from trans_accountsledger 
+							where 
+                            AccountsLedger_TransactionType='Cash_Bank' 
+							AND AccountsLedger_TransactionReferenceID in(Select cashbank_vouchernumber from @tempvoucher)
+							and AccountsLedger_CompanyID in(Select cashbank_companyID from @tempvoucher) 
+                            and AccountsLedger_exchangesegmentid in(Select cashbank_ExchangeSegmentID from @tempvoucher) 
+                            and AccountsLedger_transactiondate in(Select cast(cashbank_transactiondate as datetime) from @tempvoucher)  
+							and AccountsLedger_branchid in(Select cashbank_branchid from @tempvoucher)
+							and AccountsLedger_FinYear=@FinYear
+ 
+
+
+-----------------------------------IF EXIST DELETE cashbankdetail----------------------------------------------------------------------------------------
+
+							DELETE 
+--							Select * 
+							from trans_cashbankdetail  
+							where 
+							cashbankdetail_InstrumentDate IN(Convert(datetime,@strDate,121))
+							AND CASHBANKDETAIL_INSTRUMENTNUMBER IN(@INSTRNO)
+							AND CASHBANKDETAIL_CASHBANKID=@CashBankAccount
+							AND CASHBANKDETAIL_MAINACCOUNTID='SYSTM00007'
+							AND CASHBANKDETAIL_BRANCHID=1
+							AND CASHBANKDETAIL_SUBACCOUNTID=@exchnageId
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------      
+
+							
+					SET @Min=@Min+1
+					
+			END
+				
+				
+
+	
+				CREATE TABLE #tmpTrans_FundFilesFOMODIFIED
+				(
+						CashReportID int,
+						CashBank_PayeeAccountID  varchar(100) null,
+						CashBank_ID int,
+						CashBank_InstrumentDate1 varchar(100) NULL,
+						CashBank_MainAccountID varchar(100) NULL,
+						SubAccountID varchar(100) NULL,
+						CashBank_InstrumentType varchar(100) NULL,
+						CashBank_InstrumentNumber varchar(100) NULL,
+						CashBank_InstrumentDate datetime,
+						CashBank_AmountWithdrawl decimal(20,4),
+						CashBank_AmountDeposit decimal(20,4),
+						LineNarration varchar(100) null,
+						IssuingBank varchar(100) null,
+						CustomerBank varchar(100) null,
+						AuthLetterRef varchar(100) null,
+						SubAccount1 varchar(100) null,
+						MainAccount1 varchar(100) null,
+						InstType1 varchar(100) null,
+						Payee1 varchar(100) null,
+						Bank varchar(100) null,
+						WithDrawl decimal(20,4),
+						Receipt decimal(20,4),
+						DraftYes varchar(100) null,
+						Type char(10) null,
+						Date varchar(100) null,
+						Segement varchar(100) null,
+						Branch varchar(100) null,
+						CashBankAccount varchar(100) null,
+						SettlementNo varchar(100) null,
+						SettlementType varchar(100) null,
+						Narration varchar(100) null
+				)
+--
+				INSERT INTO #tmpTrans_FundFilesFOMODIFIED
+				(
+						CashReportID ,
+						CashBank_PayeeAccountID ,
+						CashBank_ID,
+						CashBank_InstrumentDate1 ,
+						CashBank_MainAccountID,
+						SubAccountID ,
+						CashBank_InstrumentType ,
+						CashBank_InstrumentNumber ,
+						CashBank_InstrumentDate,
+						CashBank_AmountWithdrawl ,
+						CashBank_AmountDeposit, 
+						LineNarration , 
+						IssuingBank ,
+						CustomerBank ,
+						AuthLetterRef ,
+						MainAccount1 ,
+						SubAccount1, 
+						InstType1 ,
+						Payee1 ,
+						Bank,
+						WithDrawl,
+--						Receipt ,
+						DraftYes, 
+						Type ,
+						Date ,
+						Segement,
+						Branch, 
+						CashBankAccount ,
+						SettlementNo ,
+						SettlementType ,
+						Narration 
+				)
+				SELECT 
+				
+						cast([FundFIlesFO_ID] as int),
+						'',
+						0,
+						[FundFIles_TransactionRecievedDate],
+						(SELECT top(1) MainAccount_ReferenceID  FROM master_mainaccount where Mainaccount_AccountCode='SYSTM00007'),
+						(SELECT CASE WHEN @ExchangeSegmentID='9' then 'NCDEX-COMM' WHEN @ExchangeSegmentID='11' then 'NMCE-COMM' ELSE '' END),
+						'E',
+						case when len([FundFIles_TransactionNumber])>6 then SUBSTRING(LTRIM(RTRIM([FundFIles_TransactionNumber])),9,6)
+						when len([FundFIles_TransactionNumber])=6 then [FundFIles_TransactionNumber]
+						else '' end,
+						[FundFIles_TransactionRecievedDate],
+						CAST(REPLACE([FundFIles_DebitAmount],CHAR(13),'') as decimal(20,4)),
+						CAST(REPLACE([FundFIles_CreditAmount],CHAR(13),'') as decimal(20,4)),
+						[FundFIles_DESCRIPTION],
+						'',
+						'0',
+						'',
+						(Select MAINACCOUNT_NAME from master_mainaccount where MainAccount_AccountCode='SYSTM00007'),
+						(Select SUBACCOUNT_NAME from master_subaccount where SubAccount_MainAcReferenceID='SYSTM00007' AND
+						 SUBACCOUNT_CODE=(CASE when @ExchangeSegmentID='9' then 'NCDEX-COMM'WHEN @ExchangeSegmentID='11' then 'NMCE-COMM' ELSE '' END)),
+						'Cheque',
+						'Select',
+						'',
+						CAST(REPLACE([FundFIles_DebitAmount],CHAR(13),'') as decimal(20,4)),
+--						CAST(REPLACE([FundFIles_CreditAmount],CHAR(13),'') as decimal(20,4)),
+						'',
+						(SELECT CASE WHEN [FundFIles_DebitAmount]<>'0.00' THEN 'P' WHEN [FundFIles_CreditAmount]<>'0.00' THEN 'R' ELSE '' END),
+						[FundFIles_TransactionRecievedDate],
+						@ExcSegmt,
+						'1',
+						@CashBankAccount,
+						'',
+						'',
+						'FUND STATEMENT FOR '+[FundFIles_TransactionRecievedDate]
+					FROM #tmpTrans_FundFiles 
+					where not exists(select [FundFIles_Description]	where [FundFIles_Description] like '%SETTLEMENT%')
+					
+--				
+				SELECT * from #tmpTrans_FundFilesFOMODIFIED
+--				
+				
+--
+--          END
+		
+	 END
+-------------------------- Indexing of TRans_CashBankDetail----------------	 
+--CashBankDetail_ID
+--CashBankDetail_VoucherID
+--CashBankDetail_MainAccountID
+--CashBankDetail_SubAccountID
+--CashBankDetail_BranchID
+------------------------------Indexing of Trans_CashBankVouchers----------------
+----CashBank_ID
+----CashBank_FinYear
+----CashBank_VoucherNumber
+----CashBank_ExchangeSegmentID
+----CashBank_TransactionDate
+-------------------------------Indexing of Trans_AccountsLedger--------------------
+--AccountsLedger_id
+--AccountsLedger_CompanyID
+--AccountsLedger_ExchangeSegmentID
+--AccountsLedger_FinYear
+--AccountsLedger_TransactionDate
+--AccountsLedger_MainAccountID
+--AccountsLedger_SubAccountID
+	 
+	 
+	IF @FileType='BK02'
+	Begin
+		
+			Create Table #BK02
+			(
+				BK02_Col1 Varchar(20),BK02_Col2 Varchar(250),BK02_Col3 Varchar(15),
+				BK02_Col4 Varchar(1),BK02_Col5 Varchar(15),BK02_Col6 Varchar(15),
+				BK02_Col7 Numeric(18,4)
+				
+			)
+			
+			set @ReadFrom=1
+			
+			set @Q='BULK INSERT #BK02 FROM '+ char(39) + @FilePath + char(39) + ' with (firstrow = ' + convert(varchar,@ReadFrom) + ' , FIELDTERMINATOR = ' + char(39) + ',' + char(39) + ' , ROWTERMINATOR = ' + char(39) + char(10)+ + char(39) +')'
+			
+			BEGIN TRANSACTION
+			
+				exec (@Q)
+			
+			IF @@ERROR != 0 
+			BEGIN
+				ROLLBACK TRANSACTION 
+				RETURN
+			END
+			ELSE
+			BEGIN----1
+			select * from #BK02
+				--Exclude all The UnWanted Record Except '1111'
+				Delete from #BK02 Where BK02_Col3<>1111 or BK02_Col4='C'
+				select * from #BK02 Where BK02_Col3=1111 or BK02_Col4<>'C'
+				
+				alter table #BK02
+						add  	[BK02_ID] [bigint] IDENTITY(1,1) NOT NULL	
+						
+				select * into #TblInstrument from
+			    (select RIGHT(BK02_Col1,6)InstrumentNumber from #BK02)T1
+			    
+			    select * into #TblIBRefNo from
+			    (select CashBankDetail_IBRef from Trans_CashBankDetail where CashBankDetail_InstrumentNumber in(select * from #TblInstrument))T2
+			    
+			    delete from Trans_CashBankVouchers where CashBank_IBRef in(select * from #TblIBRefNo)
+			    delete from Trans_CashBankDetail where CashBankDetail_InstrumentNumber in(select * from #TblInstrument)
+			    delete from Trans_AccountsLedger where AccountsLedger_IBRef in(select * from #TblIBRefNo)
+			    
+			IF @@ERROR != 0 
+			BEGIN
+				ROLLBACK TRANSACTION 
+				RETURN
+			END
+			ELSE
+			BEGIN---2
+			
+			----Create Table #BK02Payment
+			----(
+			----	[BK02_ID] [bigint] IDENTITY(1,1) NOT NULL,BK02_Col1 Varchar(20),BK02_Col2 Varchar(250),BK02_Col3 Varchar(15),
+			----	BK02_Col4 Varchar(1),BK02_Col5 Varchar(15),BK02_Col6 Varchar(15),
+			----	BK02_Col7 Numeric(18,4)
+				
+			----)
+			
+			----Create Table #BK02Reciept
+			----(
+			----	[BK02_ID] [bigint] IDENTITY(1,1) NOT NULL,BK02_Col1 Varchar(20),BK02_Col2 Varchar(250),BK02_Col3 Varchar(15),
+			----	BK02_Col4 Varchar(1),BK02_Col5 Varchar(15),BK02_Col6 Varchar(15),
+			----	BK02_Col7 Numeric(18,4)
+				
+			----)
+			-----------For Creating voucher only of Payment('P') Type--------------------
+			----Insert into #BK02Payment
+			----Select * from #BK02 where BK02_Col4='D'
+			
+			-----------For Creating voucher only of Reciept('R') Type--------------------
+			----Insert into #BK02Reciept
+			----Select * from #BK02 where BK02_Col4='C'
+			
+			----select * from #BK02Payment
+			----select * from #BK02Reciept
+			
+			IF @@ERROR != 0 
+			BEGIN
+				ROLLBACK TRANSACTION 
+				RETURN
+			END
+			ELSE
+			BEGIN---3
+			---------------------------------------Start Inserting Voucher Of Payment Type---------------------------			
+			Declare @MaxCount int,@MinCount int,@TransactionDate Datetime,@NextCashBankVoucher varchar(20),@NextCashBankVoucherNumber varchar(20),@ibref varchar(20)
+			
+			Select @MaxCount=MAX(BK02_ID) from #BK02
+			Select @MinCount=MIN(BK02_ID) From #BK02
+			
+			if(@MaxCount<>0 or @MaxCount is not null)
+			Begin
+				WHILE(@MinCount<=@MaxCount)
+				BEGIN
+					
+					Select @TransactionDate	= RIGHT(LEFT(BK02_Col1,8),4)+'-'+Right(LEFT(LEFT(BK02_Col1,8),4),2)+'-'+left(LEFT(LEFT(BK02_Col1,8),4),2)from #BK02 where BK02_ID=@MinCount
+					Select @NextCashBankVoucher=dbo.fnGetNextCashBankID('P',@TransactionDate,@ExcSegmt,@ExchangeTrades_CompanyID)
+					
+																				
+					Insert into Trans_CashBankVouchers(CashBank_VoucherNumber,CashBank_CompanyID,CashBank_FinYear,CashBank_ExchangeSegmentID,CashBank_BranchID,CashBank_TransactionDate,
+					CashBank_CashBankID,CashBank_TransactionType,CashBank_Narration,CashBank_IBRef )
+					
+					select 'P/'+right(replicate('0',7)+isnull(cast(((right(@NextCashBankVoucher,7)-1)+(ROW_NUMBER()  OVER (ORDER BY  BK02_ID))) as varchar),'0'),7) ,
+					@ExchangeTrades_CompanyID,@FinYear,@ExcSegmt,@BranchID,@TransactionDate TransDate,@CashBankAccount,'P' TranType,BK02_Col2 Narration,
+					cast(@ExcSegmt as varchar)+'P'+right(replicate('0',7)+isnull(cast(((right(@NextCashBankVoucher,7)-1)+(ROW_NUMBER()  OVER (ORDER BY  BK02_ID))) as varchar),'0'),7)
+					+RIGHT(LEFT(BK02_Col1,8),4)+Right(LEFT(LEFT(BK02_Col1,8),4),2)+left(LEFT(LEFT(BK02_Col1,8),4),2)IBRef  
+					from #BK02 where BK02_ID=@MinCount
+					
+					--select * from Trans_CashBankVouchers where 
+					--CashBank_TransactionDate=@TransactionDate 
+					--and CashBank_VoucherNumber=(select 'P/'+right(replicate('0',7)+isnull(cast(((right(@NextCashBankVoucher,7)-1)+(ROW_NUMBER()  OVER (ORDER BY  BK02_ID))) as varchar),'0'),7)from #BK02Payment where BK02_ID=@MinCount)
+					
+					
+					Insert into Trans_CashBankDetail(CashBankDetail_VoucherID,CashBankDetail_MainAccountID,CashBankDetail_BranchID,CashBankDetail_SubAccountID,
+					CashBankDetail_PaymentAmount,CashBankDetail_ReceiptAmount,CashBankDetail_InstrumentType,CashBankDetail_InstrumentNumber,CashBankDetail_InstrumentDate,
+					CashBankDetail_Narration,CashBankDetail_BankStatementDate,CashBankDetail_BankValueDate,CashBankDetail_CashBankID,
+					CashBankDetail_IBRef)
+					
+					select (select CashBank_ID from Trans_CashBankVouchers where CashBank_TransactionDate = @TransactionDate and  CashBank_ExchangeSegmentID =@ExcSegmt 
+					and CashBank_VoucherNumber=(select 'P/'+right(replicate('0',7)+isnull(cast(((right(@NextCashBankVoucher,7)-1)+(ROW_NUMBER()  OVER (ORDER BY  BK02_ID))) as varchar),'0'),7)from #BK02 where BK02_ID=@MinCount)),
+					'SYSTM00007',@BranchID,@exchnageId,BK02_Col7 PaymentAmnt,0.0000,'E',RIGHT(BK02_Col1,6)InstrumentNumber,
+					@TransactionDate InstrumentDate,BK02_Col2 Narration,@TransactionDate BankStatementDate,@TransactionDate BankValueDate,@CashBankAccount,
+					cast(@ExcSegmt as varchar)+'P'+right(replicate('0',7)+isnull(cast(((right(@NextCashBankVoucher,7)-1)+(ROW_NUMBER()  OVER (ORDER BY  BK02_ID))) as varchar),'0'),7)+RIGHT(LEFT(BK02_Col1,8),4)
+					+Right(LEFT(LEFT(BK02_Col1,8),4),2)+left(LEFT(LEFT(BK02_Col1,8),4),2)IBRef  
+					from #BK02 where BK02_ID=@MinCount
+					
+					select @ibref=cast(@ExcSegmt as varchar)+'P'+right(replicate('0',7)+isnull(cast(((right(@NextCashBankVoucher,7)-1)+(ROW_NUMBER()  OVER (ORDER BY  BK02_ID))) as varchar),'0'),7)+RIGHT(LEFT(BK02_Col1,8),4)+Right(LEFT(LEFT(BK02_Col1,8),4),2)+left(LEFT(LEFT(BK02_Col1,8),4),2) from #BK02 where BK02_ID=@MinCount
+				    print @ibref
+					------------------------------Insert AccountsLedger--------------------------------------------------------------------------------------------------
+					Insert into Trans_AccountsLedger(AccountsLedger_FinYear,AccountsLedger_CompanyID,AccountsLedger_BranchId,AccountsLedger_ExchangeSegmentID,AccountsLedger_MainAccountID,AccountsLedger_SubAccountID,
+					AccountsLedger_TransactionType,AccountsLedger_TransactionDate,AccountsLedger_TransactionReferenceID,AccountsLedger_InstrumentNumber,AccountsLedger_InstrumentDate,AccountsLedger_BankNameAndAcNumber,AccountsLedger_CashBankName,
+					AccountsLedger_Narration,AccountsLedger_AmountDr,AccountsLedger_AmountCr,AccountsLedger_ValueDate,AccountsLedger_IBRef)
+					
+					Select CashBank_FinYear,CashBank_CompanyID,CashBank_BranchID,CashBank_ExchangeSegmentID,CashBankDetail_MainAccountID,CashBankDetail_SubAccountID,
+					'Cash_Bank',CashBank_TransactionDate,CashBank_VoucherNumber,CashBankDetail_InstrumentNumber,CashBankDetail_InstrumentDate,'','',
+					CashBank_Narration,CashBankDetail_PaymentAmount,CashBankDetail_ReceiptAmount,CashBankDetail_BankValueDate,CashBankDetail_IBRef
+					from Trans_CashBankVouchers,Trans_CashBankDetail where CashBankDetail_IBRef=CashBank_IBRef 
+					and CashBank_IBRef=@ibref
+					
+					Insert into Trans_AccountsLedger(AccountsLedger_FinYear,AccountsLedger_CompanyID,AccountsLedger_BranchId,AccountsLedger_ExchangeSegmentID,AccountsLedger_MainAccountID,AccountsLedger_SubAccountID,
+					AccountsLedger_TransactionType,AccountsLedger_TransactionDate,AccountsLedger_TransactionReferenceID,AccountsLedger_InstrumentNumber,AccountsLedger_InstrumentDate,AccountsLedger_BankNameAndAcNumber,AccountsLedger_CashBankName,
+					AccountsLedger_Narration,AccountsLedger_AmountDr,AccountsLedger_AmountCr,AccountsLedger_ValueDate,AccountsLedger_IBRef)
+					
+					Select CashBank_FinYear,CashBank_CompanyID,CashBank_BranchID,CashBank_ExchangeSegmentID,CashBank_CashBankID,CashBankDetail_SubAccountID,
+					'Cash_Bank',CashBank_TransactionDate,CashBank_VoucherNumber,CashBankDetail_InstrumentNumber,CashBankDetail_InstrumentDate,'','',
+					CashBank_Narration,CashBankDetail_ReceiptAmount,CashBankDetail_PaymentAmount,CashBankDetail_BankValueDate,CashBankDetail_IBRef
+					from Trans_CashBankVouchers,Trans_CashBankDetail where CashBankDetail_IBRef=CashBank_IBRef 
+					and CashBank_IBRef=@ibref
+					
+					
+					SET @MinCount=@MinCount+1	
+				End
+			End
+			
+			--IF @@ERROR != 0 
+			--BEGIN
+			--	ROLLBACK TRANSACTION 
+			--	RETURN
+			--END
+			--ELSE
+			--BEGIN---4
+			---------------------------------------End Inserting Voucher Of Payment Type---------------------------			
+			
+			---------------------------------------Start Inserting Voucher Of Reciept Type---------------------------			
+			--Select @MaxCount=MAX(BK02_ID) from #BK02Reciept
+			--Select @MinCount=MIN(BK02_ID) From #BK02Reciept
+			
+			--if(@MaxCount<>0 or @MaxCount is not null)
+			--Begin
+			--	WHILE(@MinCount<=@MaxCount)
+			--	BEGIN
+					
+			--		Select @TransactionDate	= RIGHT(LEFT(BK02_Col1,8),4)+'-'+Right(LEFT(LEFT(BK02_Col1,8),4),2)+'-'+left(LEFT(LEFT(BK02_Col1,8),4),2)from #BK02Reciept where BK02_ID=@MinCount
+			--		Select @NextCashBankVoucher=dbo.fnGetNextCashBankID('R',@TransactionDate,@ExcSegmt,@ExchangeTrades_CompanyID)			
+					
+					
+			--		Insert into Trans_CashBankVouchers(CashBank_VoucherNumber,CashBank_CompanyID,CashBank_FinYear,CashBank_ExchangeSegmentID,CashBank_BranchID,CashBank_TransactionDate,
+			--		CashBank_CashBankID,CashBank_TransactionType,CashBank_Narration,CashBank_IBRef)
+					
+			--		select 'R/'+right(replicate('0',7)+isnull(cast(((right(@NextCashBankVoucher,7)-1)+(ROW_NUMBER()  OVER (ORDER BY  BK02_ID))) as varchar),'0'),7) ,
+			--		@ExchangeTrades_CompanyID,@FinYear,@ExcSegmt,@BranchID,@TransactionDate TransDate,@CashBankAccount,'R' TranType,BK02_Col2 Narration
+			--		,cast(@ExcSegmt as varchar)+'R'+right(replicate('0',7)+isnull(cast(((right(@NextCashBankVoucher,7)-1)+(ROW_NUMBER()  OVER (ORDER BY  BK02_ID))) as varchar),'0'),7)+RIGHT(LEFT(BK02_Col1,8),4)+Right(LEFT(LEFT(BK02_Col1,8),4),2)+left(LEFT(LEFT(BK02_Col1,8),4),2)IBRef  
+			--		from #BK02Reciept where BK02_ID=@MinCount
+					
+			--		--select * from Trans_CashBankVouchers where 
+			--		--CashBank_TransactionDate=@TransactionDate 
+			--		--and CashBank_VoucherNumber=(select 'R/'+right(replicate('0',7)+isnull(cast(((right(@NextCashBankVoucher,7)-1)+(ROW_NUMBER()  OVER (ORDER BY  BK02_ID))) as varchar),'0'),7)from #BK02Payment where BK02_ID=@MinCount)
+					
+					
+			--		Insert into Trans_CashBankDetail(CashBankDetail_VoucherID,CashBankDetail_MainAccountID,CashBankDetail_BranchID,CashBankDetail_SubAccountID,
+			--		CashBankDetail_PaymentAmount,CashBankDetail_ReceiptAmount,CashBankDetail_InstrumentType,CashBankDetail_InstrumentNumber,CashBankDetail_InstrumentDate,
+			--		CashBankDetail_Narration,CashBankDetail_BankStatementDate,CashBankDetail_BankValueDate,CashBankDetail_CashBankID,
+			--		CashBankDetail_IBRef)
+					
+			--		select (select CashBank_ID from Trans_CashBankVouchers where CashBank_TransactionDate = @TransactionDate and  CashBank_ExchangeSegmentID =@ExcSegmt and CashBank_VoucherNumber=(select 'R/'+right(replicate('0',7)+isnull(cast(((right(@NextCashBankVoucher,7)-1)+(ROW_NUMBER()  OVER (ORDER BY  BK02_ID))) as varchar),'0'),7)from #BK02Reciept where BK02_ID=@MinCount)),
+			--		'SYSTM00007',@BranchID,@exchnageId,BK02_Col7 PaymentAmnt,BK02_Col7 RecieptAmnt,'E',RIGHT(BK02_Col1,6)InstrumentNumber,
+			--		@TransactionDate InstrumentDate,BK02_Col2 Narration,@TransactionDate BankStatementDate,@TransactionDate BankValueDate,@CashBankAccount,
+			--		cast(@ExcSegmt as varchar)+'R'+right(replicate('0',7)+isnull(cast(((right(@NextCashBankVoucher,7)-1)+(ROW_NUMBER()  OVER (ORDER BY  BK02_ID))) as varchar),'0'),7)+RIGHT(LEFT(BK02_Col1,8),4)+Right(LEFT(LEFT(BK02_Col1,8),4),2)+left(LEFT(LEFT(BK02_Col1,8),4),2)IBRef  
+			--		from #BK02Reciept where BK02_ID=@MinCount
+				    
+				    
+			--	    select @ibref=cast(@ExcSegmt as varchar)+'R'+right(replicate('0',7)+isnull(cast(((right(@NextCashBankVoucher,7)-1)+(ROW_NUMBER()  OVER (ORDER BY  BK02_ID))) as varchar),'0'),7)+RIGHT(LEFT(BK02_Col1,8),4)+Right(LEFT(LEFT(BK02_Col1,8),4),2)+left(LEFT(LEFT(BK02_Col1,8),4),2) from #BK02Reciept where BK02_ID=@MinCount
+			--	    print @ibref
+			--	    ------------------------------Insert AccountsLedger--------------------------------------------------------------------------------------------------
+			--		Insert into Trans_AccountsLedger(AccountsLedger_FinYear,AccountsLedger_CompanyID,AccountsLedger_BranchId,AccountsLedger_ExchangeSegmentID,AccountsLedger_MainAccountID,AccountsLedger_SubAccountID,
+			--		AccountsLedger_TransactionType,AccountsLedger_TransactionDate,AccountsLedger_TransactionReferenceID,AccountsLedger_InstrumentNumber,AccountsLedger_InstrumentDate,AccountsLedger_BankNameAndAcNumber,AccountsLedger_CashBankName,
+			--		AccountsLedger_Narration,AccountsLedger_AmountDr,AccountsLedger_AmountCr,AccountsLedger_ValueDate,AccountsLedger_IBRef)
+					
+			--		Select CashBank_FinYear,CashBank_CompanyID,CashBank_BranchID,CashBank_ExchangeSegmentID,CashBankDetail_MainAccountID,CashBankDetail_SubAccountID,
+			--		'Cash_Bank',CashBank_TransactionDate,CashBank_VoucherNumber,CashBankDetail_InstrumentNumber,CashBankDetail_InstrumentDate,'','',
+			--		CashBank_Narration,CashBankDetail_PaymentAmount,CashBankDetail_ReceiptAmount,CashBankDetail_BankValueDate,CashBankDetail_IBRef
+			--		from Trans_CashBankVouchers,Trans_CashBankDetail 
+			--		where CashBank_TransactionDate=@TransactionDate and CashBank_TransactionDate=CashBankDetail_InstrumentDate
+			--		and CashBankDetail_IBRef=CashBank_IBRef and CashBank_IBRef=@ibref
+					
+			--		Insert into Trans_AccountsLedger(AccountsLedger_FinYear,AccountsLedger_CompanyID,AccountsLedger_BranchId,AccountsLedger_ExchangeSegmentID,AccountsLedger_MainAccountID,AccountsLedger_SubAccountID,
+			--		AccountsLedger_TransactionType,AccountsLedger_TransactionDate,AccountsLedger_TransactionReferenceID,AccountsLedger_InstrumentNumber,AccountsLedger_InstrumentDate,AccountsLedger_BankNameAndAcNumber,AccountsLedger_CashBankName,
+			--		AccountsLedger_Narration,AccountsLedger_AmountDr,AccountsLedger_AmountCr,AccountsLedger_ValueDate,AccountsLedger_IBRef)
+					
+			--		Select CashBank_FinYear,CashBank_CompanyID,CashBank_BranchID,CashBank_ExchangeSegmentID,CashBank_CashBankID,CashBankDetail_SubAccountID,
+			--		'Cash_Bank',CashBank_TransactionDate,CashBank_VoucherNumber,CashBankDetail_InstrumentNumber,CashBankDetail_InstrumentDate,'','',
+			--		CashBank_Narration,CashBankDetail_ReceiptAmount,CashBankDetail_PaymentAmount,CashBankDetail_BankValueDate,CashBankDetail_IBRef
+			--		from Trans_CashBankVouchers,Trans_CashBankDetail where CashBank_TransactionDate=@TransactionDate and CashBank_TransactionDate=CashBankDetail_InstrumentDate
+			--		and CashBankDetail_IBRef=CashBank_IBRef and CashBank_IBRef=@ibref
+					
+			--		SET @MinCount=@MinCount+1
+			--	End
+			--End
+			---------------------------------------End Inserting Voucher Of Reciept Type---------------------------			
+			IF @@ERROR != 0 
+			BEGIN
+				ROLLBACK TRANSACTION 
+				RETURN
+			END
+			ELSE
+			BEGIN
+			COMMIT TRANSACTION --finally, Commit the transaction if Success..
+				RETURN
+			END
+			--END---4
+		  END---3
+		END---2
+	END------1
+			
+	End
+	 
+		
+	 
+		
+
+END
+
+
+--exec [SP_INSUP_Trade] 'InsertTradeDataCSV',373,16,'COR0000001'
+
+--exec [SP_INSUP_FUNDFILESNCDEX] 'InsertTradeData',416,28,9,'a019','\\192.168.0.101\\CommonFolderInfluxCRM\\NCDEX_BK01_00346_10022011.CSV','COR0000002','2010-2011'
+
+
+--SELECT * from Trans_ExchangeTrades where ExchangeTrades_TradeDate='2010-01-29' AND ExchangeTrades_Segment=1 09:14:10.000'
+
+
+--Select * from master_Settlements where settlements_exchangesegmentID=1
+
+
+
+
+
+

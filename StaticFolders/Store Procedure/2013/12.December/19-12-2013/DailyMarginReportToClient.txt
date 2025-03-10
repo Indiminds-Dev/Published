@@ -1,0 +1,2107 @@
+
+----declare @Clinet varchar(max)--,@group varchar(max)
+----set @Clinet='''CLR0000507'',''CLK0000346'''
+----exec [DailyMarginReportToClient] '03/11/2013 12:00:00 AM',@Clinet,'25','BRANCH','COR0000002','2012-2013','CHK','CHK','CHK'
+
+ALTER procedure [dbo].[DailyMarginReportToClient]
+@date varchar(30),
+@clients varchar(max),
+@segment varchar(max),
+@grptype varchar(20),
+@CompanyID varchar(50),
+@Finyear varchar(50),
+@chkappmargin varchar(10),
+@CHKDETAILSEQURITY VARCHAR(10),
+@CHKPRINT VARCHAR(10)
+
+
+
+AS
+BEGIN
+	Set NOCOUNT ON;
+	
+		Declare @segmentname varchar(max),@client varchar(max),@POABenefit char(1)
+
+			select @POABenefit=(select DISTINCT 1 from Config_RiskProfile where RiskProfile_SegmentID=@segment and isnull(RiskProfile_ConsiderPOA,'0')='1')
+			
+			Set @segmentname=''
+				if (CHARINDEX(',',@segment)<>'0')
+					Begin
+						Select @segmentname=dbo.fnSplit(@segment,',',1)
+					End
+					Else
+					Begin
+						Set @segmentname=@segment
+					End
+			CREATE TABLE #TAB (SRNO INT,CLIENTID VARCHAR(50),CLIENTNAME VARCHAR(500),UCC VARCHAR(50),
+						 GROUPCODE VARCHAR(50),GROUPNAME VARCHAR(500),SEGMENT VARCHAR(50),PARTICULARS VARCHAR(50),
+						 SEGMNETID VARCHAR(20))
+			CREATE TABLE #TAB1 (SRNO INT,CLIENTID VARCHAR(500),Name VARCHAR(5000),UCC VARCHAR(500),
+						 SEGMNETID VARCHAR(20),SEGMENT VARCHAR(500),PARTICULARS VARCHAR(500),
+						 upto varchar(500),ondt varchar(500),enddt varchar(500),GRPID varchar(500),GRPNAME VARCHAR(5000),
+						 tmcode varchar(500),sebino varchar(500),CompilanceofficerName varchar(500),clientemail varchar (500),
+						 clientphone varchar(500),CompilanceofficerPhone varchar(500),CompilanceofficerEmail varchar(500),
+						 compliancepin varchar (500),compliancecity varchar(500),complianceadd1 varchar(500),complianceadd2 varchar(500),
+						 complianceadd3 varchar (500),compcity varchar(500),comppin varchar(500),compadd1 varchar(500),compadd2 varchar (500),
+						 compadd3 varchar(500),cmppanno varchar(500),cmpphno varchar(500),cmpfax varchar (500),
+						 cmpemail varchar(500),cmpname varchar(500),cmpaddress varchar(500),CLIENTADDRESS1 varchar(500),
+						 CLIENTADDRESS2 varchar (500),cmpservicetax varchar(500),feild varchar(500),feild1 varchar (500),
+						 feild2 varchar(500),fordate varchar(500))
+			Create table #Client (autoid int identity(1,1),clientid varchar(max),segname varchar(50),segid int)
+			set @client= Replace(@clients,'''','')	  
+         --Insert into #Client (clientid,segname) 
+         --select col,replace(crg_exchange,' ','') from fnSplitReturnTable(@client,',')
+         --inner join
+         --tbl_master_contactExchange
+         --on crg_cntID=col
+         --order by crg_cntID,crg_exchange
+       
+         
+			CREATE TABLE #TABSEGMENT (SEGMENTID VARCHAR(50),SEGMENTNAME VARCHAR(100),EXCHSEGMENT VARCHAR(10))
+
+			DECLARE @SQL VARCHAR(MAX),@PREVDATE VARCHAR(100),@ONDATE VARCHAR(100),
+			@PREVDATECOLUMNAME VARCHAR(100),@ONTDATECOLUMNNAME VARCHAR(100),@ENDTDATECOLUMNNAME VARCHAR(100)
+			
+			SELECT @PREVDATE=CONVERT(VARCHAR(12),CAST([dbo].[fn_TDays](cast(@date as datetime),-1,1)AS DATETIME),106)
+			SELECT @ONDATE=CONVERT(VARCHAR(12),CAST(@date AS DATETIME),106)
+
+			-----COLUMN NAME
+			SELECT @PREVDATECOLUMNAME ='[Upto '+@PREVDATE+' ( Opening )]'
+			SELECT @ONTDATECOLUMNNAME ='[On '+@ONDATE+' ( Net Adjustment )]'
+			SELECT @ENDTDATECOLUMNNAME ='[End Of '+@ONDATE+' ( Closing )]'
+			-----------------ALTER COLUMN HEADER NAME
+			SELECT @SQL=''
+			SELECT @SQL='ALTER TABLE #TAB ADD	' + @PREVDATECOLUMNAME + ' NUMERIC(28,2),
+												' + @ONTDATECOLUMNNAME + ' NUMERIC(28,2),
+												' + @ENDTDATECOLUMNNAME + 'NUMERIC(28,2)'
+			EXEC(@SQL)
+			-----------------SEGMENTS FETCH
+			SELECT @SQL=''
+			SELECT @SQL='SELECT EXCH_INTERNALID, 
+			CASE WHEN EXCH_EXCHID=''EXN0000002'' AND exch_segmentId=''CM'' THEN ''NSE-CM''
+			WHEN EXCH_EXCHID=''EXB0000001'' AND exch_segmentId=''CM'' THEN ''BSE-CM''
+			WHEN EXCH_EXCHID=''EXN0000002'' AND exch_segmentId=''FO'' THEN ''NSE-FO''
+			WHEN EXCH_EXCHID=''EXC0000001'' AND EXCH_SEGMENTID=''CM'' THEN ''CSE-CM''
+			WHEN EXCH_EXCHID=''EXB0000001'' AND EXCH_SEGMENTID=''FO'' THEN ''BSE-FO''
+			WHEN EXCH_EXCHID=''EXM0000001'' AND EXCH_SEGMENTID=''COMM'' THEN ''MCX-COMM''
+			WHEN EXCH_EXCHID=''EXI0000001'' AND EXCH_SEGMENTID=''COMM'' THEN ''ICEX-COMM''
+			WHEN EXCH_EXCHID=''EXN0000004'' AND EXCH_SEGMENTID=''COMM'' THEN ''NCDEX-COMM''
+			WHEN EXCH_EXCHID=''EXN0000005'' AND EXCH_SEGMENTID=''COMM'' THEN ''NMCE-COMM''
+			WHEN EXCH_EXCHID=''EXD0000001'' AND EXCH_SEGMENTID=''COMM'' THEN ''DGCX-COMM''
+			WHEN EXCH_EXCHID=''EXM0000002'' AND EXCH_SEGMENTID=''CDX'' THEN ''MCXSX-CDX''
+			WHEN EXCH_EXCHID=''EXU0000001'' AND EXCH_SEGMENTID=''CDX'' THEN ''USE-CDX''
+			WHEN EXCH_EXCHID=''EXN0000002'' AND EXCH_SEGMENTID=''CDX'' THEN ''NSE-CDX''
+			WHEN EXCH_EXCHID=''EXN0000006'' AND EXCH_SEGMENTID=''SPOT'' THEN ''NSEL-SPOT''
+			WHEN EXCH_EXCHID=''EXA0000002'' AND EXCH_SEGMENTID=''COMM'' THEN ''ACE-COMM''
+			WHEN EXCH_EXCHID=''EXI0000002'' AND EXCH_SEGMENTID=''COMM'' THEN ''INMX-COMM''
+			WHEN EXCH_EXCHID=''EXM0000002'' AND EXCH_SEGMENTID=''CM'' THEN ''MCXSX-CM''
+			WHEN EXCH_EXCHID=''EXM0000002'' AND EXCH_SEGMENTID=''FO'' THEN ''MCXSX-FO''
+			ELSE NULL END AS SEGMENT,
+			CASE WHEN EXCH_EXCHID=''EXN0000002'' AND exch_segmentId=''CM'' THEN ''1''
+			WHEN EXCH_EXCHID=''EXB0000001'' AND exch_segmentId=''CM'' THEN ''4''
+			WHEN EXCH_EXCHID=''EXN0000002'' AND exch_segmentId=''FO'' THEN ''2''
+			WHEN EXCH_EXCHID=''EXC0000001'' AND EXCH_SEGMENTID=''CM'' THEN ''15''
+			WHEN EXCH_EXCHID=''EXB0000001'' AND EXCH_SEGMENTID=''FO'' THEN ''5''
+			WHEN EXCH_EXCHID=''EXM0000001'' AND EXCH_SEGMENTID=''COMM'' THEN ''7''
+			WHEN EXCH_EXCHID=''EXI0000001'' AND EXCH_SEGMENTID=''COMM'' THEN ''12''
+			WHEN EXCH_EXCHID=''EXN0000004'' AND EXCH_SEGMENTID=''COMM'' THEN ''9''
+			WHEN EXCH_EXCHID=''EXN0000005'' AND EXCH_SEGMENTID=''COMM'' THEN ''11''
+			WHEN EXCH_EXCHID=''EXD0000001'' AND EXCH_SEGMENTID=''COMM'' THEN ''10''
+			WHEN EXCH_EXCHID=''EXM0000002'' AND EXCH_SEGMENTID=''CDX'' THEN ''8''
+			WHEN EXCH_EXCHID=''EXU0000001'' AND EXCH_SEGMENTID=''CDX'' THEN ''13''
+			WHEN EXCH_EXCHID=''EXN0000002'' AND EXCH_SEGMENTID=''CDX'' THEN ''3''
+			WHEN EXCH_EXCHID=''EXN0000006'' AND EXCH_SEGMENTID=''SPOT'' THEN ''14''
+			WHEN EXCH_EXCHID=''EXA0000002'' AND EXCH_SEGMENTID=''COMM'' THEN ''17''
+			WHEN EXCH_EXCHID=''EXI0000002'' AND EXCH_SEGMENTID=''COMM'' THEN ''18''
+			WHEN EXCH_EXCHID=''EXM0000002'' AND EXCH_SEGMENTID=''CM'' THEN ''19''
+			WHEN EXCH_EXCHID=''EXM0000002'' AND EXCH_SEGMENTID=''FO'' THEN ''20''
+			ELSE NULL END AS EXCHSEGMENT FROM  
+			tbl_master_companyExchange
+			WHERE EXCH_INTERNALID IN ('+@segment+')
+			AND exch_compid='''+@CompanyID+''''
+			INSERT INTO #TABSEGMENT (SEGMENTID,SEGMENTNAME,EXCHSEGMENT) EXEC(@SQL)
+			--select * from #TABSEGMENT
+			--update #Client set segid=SEGMENTID from #TABSEGMENT where segname=SEGMENTNAME
+			--select * from #Client
+			
+			-----------------Applicable Margin	(CM)
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Initial Margin'',8,ISNULL(PRVresult,0),ISNULL(ONresult,0),CUSTOMERID FROM
+			(SELECT PRVresult,ONresult,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select Sum(isnull(CMMarginSummary_MTMLosses,0)+isnull(CMMarginSummary_TotalMargin,0)) as PRVresult,
+			CMMarginSummary_CustomerID AS PRVCUSTOMERID,
+			CMMarginSummary_ExchangeSegmentID AS PRVEXCHSEGMENT,
+			SEGMENTNAME AS PRVSEGMENTNAME
+			from Trans_CMMarginSummary,#TABSEGMENT  
+			where 
+			CMMarginSummary_CalculationType=''Exch''
+			AND CMMarginSummary_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND CMMarginSummary_Date='''+@PREVDATE+'''
+			AND CMMarginSummary_ExchangeSegmentID=SEGMENTID
+			AND CMMarginSummary_CompanyID='''+@Companyid+'''
+			group by CMMarginSummary_ExchangeSegmentID,CMMarginSummary_CustomerID,SEGMENTNAME) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select Sum(isnull(CMMarginSummary_MTMLosses,0)+isnull(CMMarginSummary_TotalMargin,0)) as ONresult,
+			CMMarginSummary_CustomerID AS ONCUSTOMERID,
+			CMMarginSummary_ExchangeSegmentID AS ONEXCHSEGMENT,
+			SEGMENTNAME AS ONSEGMENTNAME
+			from Trans_CMMarginSummary,#TABSEGMENT
+			where 
+			CMMarginSummary_CalculationType=''Exch''
+			AND CMMarginSummary_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND CMMarginSummary_Date='''+@ONDATE+'''
+			AND CMMarginSummary_ExchangeSegmentID=SEGMENTID
+			AND CMMarginSummary_CompanyID='''+@Companyid+'''
+			group by CMMarginSummary_ExchangeSegmentID,CMMarginSummary_CustomerID,SEGMENTNAME) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' WHERE (ISNULL(PRVresult,0)<>0 OR ISNULL(ONresult,0)<>0)'
+				END
+			EXEC(@SQL)
+			
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Exposure Margin'',9,ISNULL(PRVresult,0),ISNULL(ONresult,0),CUSTOMERID FROM
+			(SELECT PRVresult,ONresult,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select ''0''  as PRVresult,
+			CMMarginSummary_CustomerID AS PRVCUSTOMERID,
+			CMMarginSummary_ExchangeSegmentID AS PRVEXCHSEGMENT,
+			SEGMENTNAME AS PRVSEGMENTNAME
+			from Trans_CMMarginSummary,#TABSEGMENT  
+			where 
+			CMMarginSummary_CalculationType=''Exch''
+			AND CMMarginSummary_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND CMMarginSummary_Date='''+@PREVDATE+'''
+			AND CMMarginSummary_ExchangeSegmentID=SEGMENTID
+			AND CMMarginSummary_CompanyID='''+@Companyid+'''
+			group by CMMarginSummary_ExchangeSegmentID,CMMarginSummary_CustomerID,SEGMENTNAME) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select ''0'' as ONresult,
+			CMMarginSummary_CustomerID AS ONCUSTOMERID,
+			CMMarginSummary_ExchangeSegmentID AS ONEXCHSEGMENT,
+			SEGMENTNAME AS ONSEGMENTNAME
+			from Trans_CMMarginSummary,#TABSEGMENT
+			where 
+			CMMarginSummary_CalculationType=''Exch''
+			AND CMMarginSummary_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND CMMarginSummary_Date='''+@ONDATE+'''
+			AND CMMarginSummary_ExchangeSegmentID=SEGMENTID
+			AND CMMarginSummary_CompanyID='''+@Companyid+'''
+			group by CMMarginSummary_ExchangeSegmentID,CMMarginSummary_CustomerID,SEGMENTNAME) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' WHERE (ISNULL(PRVresult,0)<>0 OR ISNULL(ONresult,0)<>0)'
+				END
+			EXEC(@SQL)
+		
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Total Margin'',10,ISNULL(PRVresult,0),ISNULL(ONresult,0),CUSTOMERID FROM
+			(SELECT PRVresult,ONresult,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select Sum(isnull(CMMarginSummary_MTMLosses,0)+isnull(CMMarginSummary_TotalMargin,0)) as PRVresult,
+			CMMarginSummary_CustomerID AS PRVCUSTOMERID,
+			CMMarginSummary_ExchangeSegmentID AS PRVEXCHSEGMENT,
+			SEGMENTNAME AS PRVSEGMENTNAME
+			from Trans_CMMarginSummary,#TABSEGMENT  
+			where 
+			CMMarginSummary_CalculationType=''Exch''
+			AND CMMarginSummary_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND CMMarginSummary_Date='''+@PREVDATE+'''
+			AND CMMarginSummary_ExchangeSegmentID=SEGMENTID
+			AND CMMarginSummary_CompanyID='''+@Companyid+'''
+			group by CMMarginSummary_ExchangeSegmentID,CMMarginSummary_CustomerID,SEGMENTNAME) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select Sum(isnull(CMMarginSummary_MTMLosses,0)+isnull(CMMarginSummary_TotalMargin,0)) as ONresult,
+			CMMarginSummary_CustomerID AS ONCUSTOMERID,
+			CMMarginSummary_ExchangeSegmentID AS ONEXCHSEGMENT,
+			SEGMENTNAME AS ONSEGMENTNAME
+			from Trans_CMMarginSummary,#TABSEGMENT
+			where 
+			CMMarginSummary_CalculationType=''Exch''
+			AND CMMarginSummary_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND CMMarginSummary_Date='''+@ONDATE+'''
+			AND CMMarginSummary_ExchangeSegmentID=SEGMENTID
+			AND CMMarginSummary_CompanyID='''+@Companyid+'''
+			group by CMMarginSummary_ExchangeSegmentID,CMMarginSummary_CustomerID,SEGMENTNAME) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' WHERE (ISNULL(PRVresult,0)<>0 OR ISNULL(ONresult,0)<>0)'
+				END
+			EXEC(@SQL)
+			 
+			
+
+			
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Initial Margin'',8,ISNULL(PRVresult,0),ISNULL(ONresult,0),CUSTOMERID FROM
+			(SELECT PRVresult,ONresult,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select Sum(isnull(DailyFOMargin_SpanMargin,0)+isnull(DailyFOMargin_BuyPremium,0)) as PRVresult,
+			DailyFOMargin_CustomerID AS PRVCUSTOMERID,
+			DailyFOMargin_ExchangeSegmentID AS PRVEXCHSEGMENT,
+			SEGMENTNAME AS PRVSEGMENTNAME
+			from Trans_DailyFOMargin,#TABSEGMENT  
+			where DailyFOMargin_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND DailyFOMargin_Date='''+@PREVDATE+'''
+			AND DailyFOMargin_ExchangeSegmentID=SEGMENTID
+			AND DailyFOMargin_CompanyID='''+@Companyid+'''
+			group by DailyFOMargin_ExchangeSegmentID,DailyFOMargin_CustomerID,SEGMENTNAME) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select Sum(isnull(DailyFOMargin_SpanMargin,0)+isnull(DailyFOMargin_BuyPremium,0)) as ONresult,
+			DailyFOMargin_CustomerID AS ONCUSTOMERID,
+			DailyFOMargin_ExchangeSegmentID AS ONEXCHSEGMENT,
+			SEGMENTNAME AS ONSEGMENTNAME
+			from Trans_DailyFOMargin,#TABSEGMENT
+			where DailyFOMargin_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND DailyFOMargin_Date='''+@ONDATE+'''
+			AND DailyFOMargin_ExchangeSegmentID=SEGMENTID
+			AND DailyFOMargin_CompanyID='''+@Companyid+'''
+			group by DailyFOMargin_ExchangeSegmentID,DailyFOMargin_CustomerID,SEGMENTNAME) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' WHERE (ISNULL(PRVresult,0)<>0 OR ISNULL(ONresult,0)<>0)'
+				END
+			EXEC(@SQL)
+		
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Exposure Margin'',9,ISNULL(PRVresult,0),ISNULL(ONresult,0),CUSTOMERID FROM
+			(SELECT PRVresult,ONresult,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select Sum(isnull(DailyFOMargin_ExposureMargin,0)) as PRVresult,
+			DailyFOMargin_CustomerID AS PRVCUSTOMERID,
+			DailyFOMargin_ExchangeSegmentID AS PRVEXCHSEGMENT,
+			SEGMENTNAME AS PRVSEGMENTNAME
+			from Trans_DailyFOMargin,#TABSEGMENT  
+			where DailyFOMargin_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND DailyFOMargin_Date='''+@PREVDATE+'''
+			AND DailyFOMargin_ExchangeSegmentID=SEGMENTID
+			AND DailyFOMargin_CompanyID='''+@Companyid+'''
+			group by DailyFOMargin_ExchangeSegmentID,DailyFOMargin_CustomerID,SEGMENTNAME) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select Sum(isnull(DailyFOMargin_ExposureMargin,0)) as ONresult,
+			DailyFOMargin_CustomerID AS ONCUSTOMERID,
+			DailyFOMargin_ExchangeSegmentID AS ONEXCHSEGMENT,
+			SEGMENTNAME AS ONSEGMENTNAME
+			from Trans_DailyFOMargin,#TABSEGMENT
+			where DailyFOMargin_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND DailyFOMargin_Date='''+@ONDATE+'''
+			AND DailyFOMargin_ExchangeSegmentID=SEGMENTID
+			AND DailyFOMargin_CompanyID='''+@Companyid+'''
+			group by DailyFOMargin_ExchangeSegmentID,DailyFOMargin_CustomerID,SEGMENTNAME) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' WHERE (ISNULL(PRVresult,0)<>0 OR ISNULL(ONresult,0)<>0)'
+				END
+			EXEC(@SQL)
+			
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Total Margin'',10,ISNULL(PRVresult,0),ISNULL(ONresult,0),CUSTOMERID FROM
+			(SELECT PRVresult,ONresult,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select Sum(isnull(DailyFOMargin_SpanMargin,0)+isnull(DailyFOMargin_BuyPremium,0)+isnull(DailyFOMargin_ExposureMargin,0)) as PRVresult,
+			DailyFOMargin_CustomerID AS PRVCUSTOMERID,
+			DailyFOMargin_ExchangeSegmentID AS PRVEXCHSEGMENT,
+			SEGMENTNAME AS PRVSEGMENTNAME
+			from Trans_DailyFOMargin,#TABSEGMENT  
+			where DailyFOMargin_CustomerID IN (select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND DailyFOMargin_Date='''+@PREVDATE+'''
+			AND DailyFOMargin_ExchangeSegmentID=SEGMENTID
+			AND DailyFOMargin_CompanyID='''+@Companyid+'''
+			group by DailyFOMargin_ExchangeSegmentID,DailyFOMargin_CustomerID,SEGMENTNAME) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select Sum(isnull(DailyFOMargin_SpanMargin,0)+isnull(DailyFOMargin_BuyPremium,0)+isnull(DailyFOMargin_ExposureMargin,0)) as ONresult,
+			DailyFOMargin_CustomerID AS ONCUSTOMERID,
+			DailyFOMargin_ExchangeSegmentID AS ONEXCHSEGMENT,
+			SEGMENTNAME AS ONSEGMENTNAME
+			from Trans_DailyFOMargin,#TABSEGMENT
+			where DailyFOMargin_CustomerID IN (select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND DailyFOMargin_Date='''+@ONDATE+'''
+			AND DailyFOMargin_ExchangeSegmentID=SEGMENTID
+			AND DailyFOMargin_CompanyID='''+@Companyid+'''
+			group by DailyFOMargin_ExchangeSegmentID,DailyFOMargin_CustomerID,SEGMENTNAME) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' WHERE (ISNULL(PRVresult,0)<>0 OR ISNULL(ONresult,0)<>0)'
+				END
+			EXEC(@SQL)
+			
+	------ Addded for Margin in COMM/CDX segments as well in the same report --------------------------
+				-----------------Applicable Margin	(COMM/CDX)
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Initial Margin'',8,ISNULL(PRVresult,0),ISNULL(ONresult,0),CUSTOMERID FROM
+			(SELECT PRVresult,ONresult,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select Sum(isnull(ComMarginSummary_InitialMargin,0)+isnull(ComMarginSummary_Premium,0)) as PRVresult,
+			ComMarginSummary_CustomerID AS PRVCUSTOMERID,
+			ComMarginSummary_SegmentID AS PRVEXCHSEGMENT,
+			SEGMENTNAME AS PRVSEGMENTNAME
+			from Trans_ComMarginSummary,#TABSEGMENT  
+			where ComMarginSummary_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND ComMarginSummary_Date='''+@PREVDATE+'''
+			AND ComMarginSummary_SegmentID=SEGMENTID
+			AND ComMarginSummary_CompanyID='''+@Companyid+'''
+			group by ComMarginSummary_SegmentID,ComMarginSummary_CustomerID,SEGMENTNAME) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select Sum(isnull(ComMarginSummary_InitialMargin,0)+isnull(ComMarginSummary_Premium,0)) as ONresult,
+			ComMarginSummary_CustomerID AS ONCUSTOMERID,
+			ComMarginSummary_SegmentID AS ONEXCHSEGMENT,
+			SEGMENTNAME AS ONSEGMENTNAME
+			from Trans_ComMarginSummary,#TABSEGMENT
+			where ComMarginSummary_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND ComMarginSummary_Date='''+@ONDATE+'''
+			AND ComMarginSummary_SegmentID=SEGMENTID
+			AND ComMarginSummary_CompanyID='''+@Companyid+'''
+			group by ComMarginSummary_SegmentID,ComMarginSummary_CustomerID,SEGMENTNAME) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' WHERE (ISNULL(PRVresult,0)<>0 OR ISNULL(ONresult,0)<>0)'
+				END
+			EXEC(@SQL)
+			print '1st'
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Exposure Margin'',9,ISNULL(PRVresult,0),ISNULL(ONresult,0),CUSTOMERID FROM
+			(SELECT PRVresult,ONresult,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select Sum(isnull(ComMarginSummary_ELMMargin,0)) as PRVresult,
+			ComMarginSummary_CustomerID AS PRVCUSTOMERID,
+			ComMarginSummary_SegmentID AS PRVEXCHSEGMENT,
+			SEGMENTNAME AS PRVSEGMENTNAME
+			from Trans_ComMarginSummary,#TABSEGMENT  
+			where ComMarginSummary_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND ComMarginSummary_Date='''+@PREVDATE+'''
+			AND ComMarginSummary_SegmentID=SEGMENTID
+			AND ComMarginSummary_CompanyID='''+@Companyid+'''
+			group by ComMarginSummary_SegmentID,ComMarginSummary_CustomerID,SEGMENTNAME) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select Sum(isnull(ComMarginSummary_ELMMargin,0)) as ONresult,
+			ComMarginSummary_CustomerID AS ONCUSTOMERID,
+			ComMarginSummary_SegmentID AS ONEXCHSEGMENT,
+			SEGMENTNAME AS ONSEGMENTNAME
+			from Trans_ComMarginSummary,#TABSEGMENT
+			where ComMarginSummary_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND ComMarginSummary_Date='''+@ONDATE+'''
+			AND ComMarginSummary_SegmentID=SEGMENTID
+			AND ComMarginSummary_CompanyID='''+@Companyid+'''
+			group by ComMarginSummary_SegmentID,ComMarginSummary_CustomerID,SEGMENTNAME) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' WHERE (ISNULL(PRVresult,0)<>0 OR ISNULL(ONresult,0)<>0)'
+				END
+			EXEC(@SQL)
+			print '2nd'
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Total Margin'',10,ISNULL(PRVresult,0),ISNULL(ONresult,0),CUSTOMERID FROM
+			(SELECT PRVresult,ONresult,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select Sum(isnull(ComMarginSummary_InitialMargin,0)+isnull(ComMarginSummary_Premium,0)+isnull(ComMarginSummary_ELMMargin,0)) as PRVresult,
+			ComMarginSummary_CustomerID AS PRVCUSTOMERID,
+			ComMarginSummary_SegmentID AS PRVEXCHSEGMENT,
+			SEGMENTNAME AS PRVSEGMENTNAME
+			from Trans_ComMarginSummary,#TABSEGMENT  
+			where ComMarginSummary_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND ComMarginSummary_Date='''+@PREVDATE+'''
+			AND ComMarginSummary_SegmentID=SEGMENTID
+			AND ComMarginSummary_CompanyID='''+@Companyid+'''
+			group by ComMarginSummary_SegmentID,ComMarginSummary_CustomerID,SEGMENTNAME) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select Sum(isnull(ComMarginSummary_InitialMargin,0)+isnull(ComMarginSummary_Premium,0)+isnull(ComMarginSummary_ELMMargin,0)) as ONresult,
+			ComMarginSummary_CustomerID AS ONCUSTOMERID,
+			ComMarginSummary_SegmentID AS ONEXCHSEGMENT,
+			SEGMENTNAME AS ONSEGMENTNAME
+			from Trans_ComMarginSummary,#TABSEGMENT
+			where ComMarginSummary_CustomerID IN( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')
+			AND ComMarginSummary_Date='''+@ONDATE+'''
+			AND ComMarginSummary_SegmentID=SEGMENTID
+			AND ComMarginSummary_CompanyID='''+@Companyid+'''
+			group by ComMarginSummary_SegmentID,ComMarginSummary_CustomerID,SEGMENTNAME) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' WHERE (ISNULL(PRVresult,0)<>0 OR ISNULL(ONresult,0)<>0)'
+				END
+			EXEC(@SQL)
+			 
+			--select * from #Client left outer join #TAB on #Client.clientid=#TAB.CLIENTID 
+			--and #Client.segid=#TAB.SEGMNETID
+			
+-------------------------------------- End COMM/CDX Margin ------------------------
+
+			-----------------Ledger Balance
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Ledger Balance'',1,ISNULL(PRVresult,0),ISNULL(ONresult,0),CUSTOMERID FROM
+			(SELECT PRVresult,ONresult,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select sum(isnull(accountsledger_amountCr,0.0)-isnull(accountsledger_amountDr,0.0)) as PRVresult,
+			AccountsLedger_SubAccountID as PRVCUSTOMERID,
+			AccountsLedger_ExchangeSegmentID as PRVEXCHSEGMENT,
+			SEGMENTNAME AS PRVSEGMENTNAME
+			from trans_accountsledger,#TABSEGMENT where
+			accountsledger_mainaccountid=''SYSTM00001'''
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' AND AccountsLedger_SubAccountID IN(SELECT DISTINCT CLIENTID FROM #TAB)'
+				END
+			ELSE
+				BEGIN
+						SELECT @SQL=@SQL + ' AND AccountsLedger_SubAccountID IN ( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')'
+				END
+			SELECT @SQL=@SQL + '
+			AND AccountsLedger_ExchangeSegmentID=SEGMENTID
+			AND AccountsLedger_TransactionDate<='''+@PREVDATE+'''
+			AND ltrim(rtrim(AccountsLedger_FinYear))='''+@Finyear+'''
+			AND AccountsLedger_CompanyID='''+@Companyid+'''
+			group by AccountsLedger_ExchangeSegmentID,AccountsLedger_SubAccountID,SEGMENTNAME) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select sum(isnull(accountsledger_amountCr,0.0)-isnull(accountsledger_amountDr,0.0)) as ONresult,
+			AccountsLedger_SubAccountID as ONCUSTOMERID,
+			AccountsLedger_ExchangeSegmentID as ONEXCHSEGMENT,
+			SEGMENTNAME AS ONSEGMENTNAME
+			from trans_accountsledger,#TABSEGMENT where
+			accountsledger_mainaccountid=''SYSTM00001'''
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' AND AccountsLedger_SubAccountID IN(SELECT DISTINCT CLIENTID FROM #TAB)'
+				END
+			ELSE
+				BEGIN
+						SELECT @SQL=@SQL + ' AND AccountsLedger_SubAccountID IN ( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')'
+				END
+			SELECT @SQL=@SQL + '
+			AND AccountsLedger_ExchangeSegmentID=SEGMENTID
+			AND AccountsLedger_TransactionDate<='''+@ONDATE+'''
+			AND ltrim(rtrim(AccountsLedger_FinYear))='''+@Finyear+'''
+			AND AccountsLedger_CompanyID='''+@Companyid+'''
+			group by AccountsLedger_ExchangeSegmentID,AccountsLedger_SubAccountID,SEGMENTNAME) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			EXEC(@SQL)
+
+			-----------------Cash Deposit
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Cash Deposit'',2,ISNULL(PRVresult,0),ISNULL(ONresult,0),CUSTOMERID FROM
+			(SELECT PRVresult,ONresult,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select sum(isnull(accountsledger_amountCr,0.0)-isnull(accountsledger_amountDr,0.0)) as PRVresult,
+			AccountsLedger_SubAccountID as PRVCUSTOMERID,
+			AccountsLedger_ExchangeSegmentID as PRVEXCHSEGMENT,
+			SEGMENTNAME AS PRVSEGMENTNAME
+			from trans_accountsledger,#TABSEGMENT where
+			accountsledger_mainaccountid=''SYSTM00002'''
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' AND AccountsLedger_SubAccountID IN(SELECT DISTINCT CLIENTID FROM #TAB)'
+				END
+			ELSE
+				BEGIN
+						SELECT @SQL=@SQL + ' AND AccountsLedger_SubAccountID IN ( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')'
+				END
+			SELECT @SQL=@SQL + '
+			AND AccountsLedger_ExchangeSegmentID=SEGMENTID
+			AND AccountsLedger_TransactionDate<='''+@PREVDATE+'''
+			AND ltrim(rtrim(AccountsLedger_FinYear))='''+@Finyear+'''
+			AND AccountsLedger_CompanyID='''+@Companyid+'''
+			group by AccountsLedger_ExchangeSegmentID,AccountsLedger_SubAccountID,SEGMENTNAME) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select sum(isnull(accountsledger_amountCr,0.0)-isnull(accountsledger_amountDr,0.0)) as ONresult,
+			AccountsLedger_SubAccountID as ONCUSTOMERID,
+			AccountsLedger_ExchangeSegmentID as ONEXCHSEGMENT,
+			SEGMENTNAME AS ONSEGMENTNAME
+			from trans_accountsledger,#TABSEGMENT where
+			accountsledger_mainaccountid=''SYSTM00002'''
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' AND AccountsLedger_SubAccountID IN(SELECT DISTINCT CLIENTID FROM #TAB)'
+				END
+			ELSE
+				BEGIN
+						SELECT @SQL=@SQL + ' AND AccountsLedger_SubAccountID IN ( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')'
+				END
+			SELECT @SQL=@SQL + '
+			AND AccountsLedger_ExchangeSegmentID=SEGMENTID
+			AND AccountsLedger_TransactionDate<='''+@ONDATE+'''
+			AND ltrim(rtrim(AccountsLedger_FinYear))='''+@Finyear+'''
+			AND AccountsLedger_CompanyID='''+@Companyid+'''
+			group by AccountsLedger_ExchangeSegmentID,AccountsLedger_SubAccountID,SEGMENTNAME) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			EXEC(@SQL)
+
+			-----------------FDRs
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''FDRs'',3,ISNULL(PRVresult,0),ISNULL(ONresult,0),CUSTOMERID FROM
+			(SELECT PRVresult,ONresult,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select sum(isnull(accountsledger_amountCr,0.0)-isnull(accountsledger_amountDr,0.0)) as PRVresult,
+			AccountsLedger_SubAccountID as PRVCUSTOMERID,
+			AccountsLedger_ExchangeSegmentID as PRVEXCHSEGMENT,
+			SEGMENTNAME AS PRVSEGMENTNAME
+			from trans_accountsledger,#TABSEGMENT where
+			accountsledger_mainaccountid=''SYSTM00003'''
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' AND AccountsLedger_SubAccountID IN(SELECT DISTINCT CLIENTID FROM #TAB)'
+				END
+			ELSE
+				BEGIN
+						SELECT @SQL=@SQL + ' AND AccountsLedger_SubAccountID IN ( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')'
+				END
+			SELECT @SQL=@SQL + '
+			AND AccountsLedger_ExchangeSegmentID=SEGMENTID
+			AND AccountsLedger_TransactionDate<='''+@PREVDATE+'''
+			AND ltrim(rtrim(AccountsLedger_FinYear))='''+@Finyear+'''
+			AND AccountsLedger_CompanyID='''+@Companyid+'''
+			group by AccountsLedger_ExchangeSegmentID,AccountsLedger_SubAccountID,SEGMENTNAME) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select sum(isnull(accountsledger_amountCr,0.0)-isnull(accountsledger_amountDr,0.0)) as ONresult,
+			AccountsLedger_SubAccountID as ONCUSTOMERID,
+			AccountsLedger_ExchangeSegmentID as ONEXCHSEGMENT,
+			SEGMENTNAME AS ONSEGMENTNAME
+			from trans_accountsledger,#TABSEGMENT where
+			accountsledger_mainaccountid=''SYSTM00003'''
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @SQL=@SQL + ' AND AccountsLedger_SubAccountID IN(SELECT DISTINCT CLIENTID FROM #TAB)'
+				END
+			ELSE
+				BEGIN
+						SELECT @SQL=@SQL + ' AND AccountsLedger_SubAccountID IN ( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')'
+				END
+			SELECT @SQL=@SQL + '
+			AND AccountsLedger_ExchangeSegmentID=SEGMENTID
+			AND AccountsLedger_TransactionDate<='''+@ONDATE+'''
+			AND ltrim(rtrim(AccountsLedger_FinYear))='''+@Finyear+'''
+			AND AccountsLedger_CompanyID='''+@Companyid+'''
+			group by AccountsLedger_ExchangeSegmentID,AccountsLedger_SubAccountID,SEGMENTNAME) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			EXEC(@SQL)
+
+			
+			---------------Securities 
+			------------------------------------------------FOR PRV DATE
+			CREATE TABLE  #MARGINSTOCKS (Clientid varchar(50),Stocksresult numeric(28,6),Quantity numeric(28,6),
+			productid varchar(500),closeprice  numeric(28,6),segment varchar(20),segmentname varchar(50),
+			varmargin numeric(28,6))
+
+			DECLARE @ABC TABLE (QuantityS NUMERIC(28,6),CustomerIDS VARCHAR(50),ProductSeriesIDS VARCHAR(50),
+			SegmentIDS VARCHAR(50),SettlementNumberS VARCHAR(50),SettlementNumberT VARCHAR(50),
+			SourceSegmentId VARCHAR(50))
+
+			DECLARE @sqlabc VARCHAR(MAX)
+			SET @sqlabc=''
+			SET @sqlabc='select isnull(DematTransactions_Quantity,0) as QuantityS,
+			DematTransactions_CustomerID as CustomerIDS,
+			DematTransactions_ProductSeriesID as ProductSeriesIDS,
+			DematTransactions_SegmentID as SegmentIDS,
+			DematTransactions_SettlementNumberS as SettlementNumberS,
+			DematTransactions_SettlementNumberT as SettlementNumberT,
+			DematTransactions_SourceSegmentId as SourceSegmentId
+			from Trans_DematTransactions where
+			DematTransactions_Date<='''+@PREVDATE+'''
+			and DematTransactions_FinYear='''+@Finyear+''''
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @sqlabc=@sqlabc + ' AND DematTransactions_CustomerID IN(SELECT DISTINCT CLIENTID FROM #TAB)'
+				END
+			ELSE
+				BEGIN
+						SELECT @sqlabc=@sqlabc + ' AND DematTransactions_CustomerID IN ( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')'
+				END
+			SELECT @sqlabc=@sqlabc + '
+			AND ((DematTransactions_SettlementNumberS IN(''Margin'',''Hldbk''))
+					OR (DematTransactions_SettlementNumberT IN(''Margin'',''Hldbk'')))
+			and (DematTransactions_SegmentID IN(SELECT DISTINCT SEGMENTID FROM #TABSEGMENT) 
+					or DematTransactions_SourceSegmentId IN(SELECT DISTINCT SEGMENTID FROM #TABSEGMENT))
+			and DematTransactions_CompanyID='''+@Companyid+''''
+			INSERT INTO @ABC(QuantityS,CustomerIDS,ProductSeriesIDS,SegmentIDS,SettlementNumberS,SettlementNumberT,
+			SourceSegmentId) EXEC(@sqlabc)
+
+			
+			select * into #t from 
+			(select * from @ABC where SourceSegmentId is not null) as tab 
+			delete from @ABC where SourceSegmentId is not null
+
+			insert into @ABC(QuantityS,CustomerIDS,ProductSeriesIDS,SegmentIDS,
+			SettlementNumberS,SettlementNumberT,SourceSegmentId)
+			select QuantityS,CustomerIDS,ProductSeriesIDS,SegmentIDS,null,
+			SettlementNumberT,null
+			from #t where SourceSegmentId<>SegmentIDS
+
+
+			insert into @ABC(QuantityS,CustomerIDS,ProductSeriesIDS,SegmentIDS,
+			SettlementNumberS,SettlementNumberT,SourceSegmentId)
+			select QuantityS,CustomerIDS,ProductSeriesIDS,SourceSegmentId,
+			SettlementNumberS,null,null
+			from #t where SourceSegmentId<>SegmentIDS
+
+			delete from @ABC where SegmentIDS not in(SELECT DISTINCT segmentid FROM #TABSEGMENT)
+			
+
+				---------------MARGIN
+				INSERT INTO #MARGINSTOCKS(Clientid,productid,Quantity,segment,segmentname)
+				select 
+				case when CustomerIDS is null then CustomerIDT else CustomerIDS end as Client,
+				case when ProductSeriesIDS is null then ProductSeriesIDT else ProductSeriesIDS end as product,
+				(ISNULL(Quantityt,0.0)-ISNULL(QuantityS,0.0)) AS QuantityTTEMP,
+				case when SegmentIDS is null then SegmentIDT else SegmentIDS end as SegmentIDS,
+				case when crg_exchangeS is null then crg_exchangeT else crg_exchangeS end as crg_exchangeS from
+
+				(select  sum(isnull(QuantityS,0)) as QuantityS,
+				CustomerIDS as CustomerIDS,
+				ProductSeriesIDS as ProductSeriesIDS,
+				SegmentIDS as SegmentIDS,
+				SEGMENTNAME as crg_exchangeS
+				from @ABC,#TABSEGMENT where
+				rtrim(ltrim(SettlementNumberS))='Margin'
+				and SegmentIDS=segmentid
+				group by CustomerIDS,ProductSeriesIDS,SegmentIDS,SEGMENTNAME) as tabS
+				
+				full outer join
+
+				(select  sum(isnull(QuantityS,0)) as QuantityT,
+				CustomerIDS as CustomerIDT,
+				ProductSeriesIDS as ProductSeriesIDT,
+				SegmentIDS as SegmentIDT,
+				SEGMENTNAME as crg_exchangeT
+				from @ABC,#TABSEGMENT where
+				rtrim(ltrim(SettlementNumberT))='Margin'
+				and SegmentIDS=segmentid 
+				group by CustomerIDS,ProductSeriesIDS,SegmentIDS,SEGMENTNAME) as tabT
+				
+				on(CustomerIDS=CustomerIDT
+					and ProductSeriesIDS=ProductSeriesIDT
+						and SegmentIDS=SegmentIDT
+							and crg_exchangeS=crg_exchangeT)
+
+				----------HOLDBACK
+				INSERT INTO #MARGINSTOCKS(Clientid,productid,Quantity,segment,segmentname)
+				select 
+				case when CustomerIDS is null then CustomerIDT else CustomerIDS end as Client,
+				case when ProductSeriesIDS is null then ProductSeriesIDT else ProductSeriesIDS end as product,
+				(ISNULL(Quantityt,0.0)-ISNULL(QuantityS,0.0)) AS QuantityTTEMP,
+				case when SegmentIDS is null then SegmentIDT else SegmentIDS end as SegmentIDS,
+				case when crg_exchangeS is null then crg_exchangeT else crg_exchangeS end as crg_exchangeS from
+
+				(select  sum(isnull(QuantityS,0)) as QuantityS,
+				CustomerIDS as CustomerIDS,
+				ProductSeriesIDS as ProductSeriesIDS,
+				SegmentIDS as SegmentIDS,
+				SEGMENTNAME as crg_exchangeS
+				from @ABC,#TABSEGMENT where
+				rtrim(ltrim(SettlementNumberS))='HLDBK'
+				and SegmentIDS=segmentid 
+				group by CustomerIDS,ProductSeriesIDS,SegmentIDS,SEGMENTNAME) as tabS
+				
+				full outer join
+
+				(select  sum(isnull(QuantityS,0)) as QuantityT,
+				CustomerIDS as CustomerIDT,
+				ProductSeriesIDS as ProductSeriesIDT,
+				SegmentIDS as SegmentIDT,
+				SEGMENTNAME as crg_exchangeT
+				from @ABC,#TABSEGMENT where
+				rtrim(ltrim(SettlementNumberT))='HLDBK' 
+				and SegmentIDS=segmentid 
+				group by CustomerIDS,ProductSeriesIDS,SegmentIDS,SEGMENTNAME) as tabT
+				
+				on(CustomerIDS=CustomerIDT
+					and ProductSeriesIDS=ProductSeriesIDT
+						and SegmentIDS=SegmentIDT
+							and crg_exchangeS=crg_exchangeT)
+
+				------------FETCH CLOSE PRICE				
+				update #MARGINSTOCKS set closeprice=DailyStat_Close
+				from Trans_DailyStatistics,
+				(select MAX(DailyStat_DateTime) AS DATE,DailyStat_ProductSeriesID AS PRDID
+				from Trans_DailyStatistics,#MARGINSTOCKS
+				where DailyStat_DateTime<=dateadd(day,-1,@PREVDATE)
+				AND DailyStat_ProductSeriesID=productid
+				GROUP BY DailyStat_ProductSeriesID) AS TB
+				WHERE DailyStat_ProductSeriesID=productid
+				AND PRDID=productid AND productid=PRDID
+				AND DailyStat_DateTime=DATE
+				
+				------------HAIRCUT CAL
+				update #MARGINSTOCKS set varmargin=DailyVar_AppMargin
+				from Trans_DailyVar,
+				(select MAX(DailyVar_Date) AS DATE,DailyVar_ProductSeriesID AS PRDID
+				from Trans_DailyVar,#MARGINSTOCKS
+				where DailyVar_Date<=dateadd(day,-1,@PREVDATE)
+				and DailyVar_ProductSeriesID=productid
+				GROUP BY DailyVar_ProductSeriesID) AS TB
+				where DailyVar_ProductSeriesID=productid
+				AND PRDID=DailyVar_ProductSeriesID 
+				AND productid=PRDID
+				AND DailyVar_Date=DATE
+
+			update #MARGINSTOCKS set Stocksresult=((Quantity*isnull(closeprice,0))*(100-isnull(varmargin,0))/100)
+-------			
+			-------------------------------------------------------------FOR ON DATE
+			CREATE TABLE   #MARGINSTOCKS1  (Clientid varchar(50),Stocksresult numeric(28,6),Quantity numeric(28,6),
+			productid varchar(500),closeprice  numeric(28,6),segment varchar(20),segmentname varchar(50),
+			varmargin numeric(28,6),stocktype varchar(20),scripname varchar(500),isinno varchar(50),
+			accid varchar(50),IsPOA char(1) null)
+
+			DECLARE @ABC1 TABLE (QuantityS NUMERIC(28,6),CustomerIDS VARCHAR(50),ProductSeriesIDS VARCHAR(50),
+			SegmentIDS VARCHAR(50),SettlementNumberS VARCHAR(50),SettlementNumberT VARCHAR(50),
+			SourceSegmentId VARCHAR(50),OwnAccountS varchar(30),OwnAccountT varchar(30))
+			
+			SET @sqlabc=''
+			SET @sqlabc='select  isnull(DematTransactions_Quantity,0) as QuantityS,
+			DematTransactions_CustomerID as CustomerIDS,
+			DematTransactions_ProductSeriesID as ProductSeriesIDS,
+			DematTransactions_SegmentID as SegmentIDS,
+			DematTransactions_SettlementNumberS as SettlementNumberS,
+			DematTransactions_SettlementNumberT as SettlementNumberT,
+			DematTransactions_SourceSegmentId as SourceSegmentId,
+			DematTransactions_OwnAccountS,DematTransactions_OwnAccountT
+			from Trans_DematTransactions where
+			DematTransactions_Date<='''+@ONDATE+'''
+			and DematTransactions_FinYear='''+@Finyear+''''
+			IF @chkappmargin<>'UNCHK'
+				BEGIN
+						SELECT @sqlabc=@sqlabc + ' AND DematTransactions_CustomerID IN(SELECT DISTINCT CLIENTID FROM #TAB)'
+				END
+			ELSE
+				BEGIN
+						SELECT @sqlabc=@sqlabc + ' AND DematTransactions_CustomerID IN ( select distinct cnt_internalid from tbl_master_contact where 
+												cnt_internalid in('+@clients+') and cnt_internalid like ''CL%''
+												and isnull(cnt_clienttype,''Retail'')<>''Pro trading'')'
+				END
+			SELECT @sqlabc=@sqlabc + '
+			AND ((DematTransactions_SettlementNumberS IN(''Margin'',''Hldbk''))
+					OR (DematTransactions_SettlementNumberT IN(''Margin'',''Hldbk'')))
+			and (DematTransactions_SegmentID IN(SELECT DISTINCT SEGMENTID FROM #TABSEGMENT) 
+					or DematTransactions_SourceSegmentId IN(SELECT DISTINCT SEGMENTID FROM #TABSEGMENT))
+			and DematTransactions_CompanyID='''+@Companyid+''''
+			INSERT INTO @ABC1(QuantityS,CustomerIDS,ProductSeriesIDS,SegmentIDS,SettlementNumberS,SettlementNumberT,
+			SourceSegmentId,OwnAccountS,OwnAccountT) EXEC(@sqlabc)
+			
+			
+			select * into #t1 from 
+			(select * from @ABC1 where SourceSegmentId is not null) as tab 
+			delete from @ABC1 where SourceSegmentId is not null
+
+			insert into @ABC1(QuantityS,CustomerIDS,ProductSeriesIDS,SegmentIDS,
+			SettlementNumberS,SettlementNumberT,SourceSegmentId,OwnAccountS,OwnAccountT)
+			select QuantityS,CustomerIDS,ProductSeriesIDS,SegmentIDS,null,
+			SettlementNumberT,null,OwnAccountS,OwnAccountT
+			from #t1 where SourceSegmentId<>SegmentIDS
+
+
+			insert into @ABC1(QuantityS,CustomerIDS,ProductSeriesIDS,SegmentIDS,
+			SettlementNumberS,SettlementNumberT,SourceSegmentId,OwnAccountS,OwnAccountT)
+			select QuantityS,CustomerIDS,ProductSeriesIDS,SourceSegmentId,
+			SettlementNumberS,null,null,OwnAccountS,OwnAccountT
+			from #t1 where SourceSegmentId<>SegmentIDS
+
+			delete from @ABC1 where SegmentIDS not in(SELECT DISTINCT segmentid FROM #TABSEGMENT)
+			
+
+				---------------MARGIN
+				INSERT INTO #MARGINSTOCKS1(Clientid,productid,Quantity,segment,segmentname,stocktype,accid)
+				select 
+				case when CustomerIDS is null then CustomerIDT else CustomerIDS end as Client,
+				case when ProductSeriesIDS is null then ProductSeriesIDT else ProductSeriesIDS end as product,
+				(ISNULL(Quantityt,0.0)-ISNULL(QuantityS,0.0)) AS QuantityTTEMP,
+				case when SegmentIDS is null then SegmentIDT else SegmentIDS end as SegmentIDS,
+				case when crg_exchangeS is null then crg_exchangeT else crg_exchangeS end as crg_exchangeS,
+				'Margin',
+				case when OwnAccountS is null then OwnAccountT else OwnAccountS end as OwnAccountS from
+
+				(select  sum(isnull(QuantityS,0)) as QuantityS,
+				CustomerIDS as CustomerIDS,
+				ProductSeriesIDS as ProductSeriesIDS,
+				SegmentIDS as SegmentIDS,
+				SEGMENTNAME as crg_exchangeS,
+				OwnAccountS
+				from @ABC1,#TABSEGMENT where
+				rtrim(ltrim(SettlementNumberS))='Margin'
+				and SegmentIDS=segmentid
+				group by CustomerIDS,ProductSeriesIDS,SegmentIDS,SEGMENTNAME,OwnAccountS) as tabS
+				
+				full outer join
+
+				(select  sum(isnull(QuantityS,0)) as QuantityT,
+				CustomerIDS as CustomerIDT,
+				ProductSeriesIDS as ProductSeriesIDT,
+				SegmentIDS as SegmentIDT,
+				SEGMENTNAME as crg_exchangeT,
+				OwnAccountT
+				from @ABC1,#TABSEGMENT where
+				rtrim(ltrim(SettlementNumberT))='Margin'
+				and SegmentIDS=segmentid 
+				group by CustomerIDS,ProductSeriesIDS,SegmentIDS,SEGMENTNAME,OwnAccountT) as tabT
+				
+				on(CustomerIDS=CustomerIDT
+					and ProductSeriesIDS=ProductSeriesIDT
+						and SegmentIDS=SegmentIDT
+							and crg_exchangeS=crg_exchangeT
+								and OwnAccountS=OwnAccountT)
+
+				----------HOLDBACK
+				INSERT INTO #MARGINSTOCKS1(Clientid,productid,Quantity,segment,segmentname,stocktype,accid)
+				select 
+				case when CustomerIDS is null then CustomerIDT else CustomerIDS end as Client,
+				case when ProductSeriesIDS is null then ProductSeriesIDT else ProductSeriesIDS end as product,
+				(ISNULL(Quantityt,0.0)-ISNULL(QuantityS,0.0)) AS QuantityTTEMP,
+				case when SegmentIDS is null then SegmentIDT else SegmentIDS end as SegmentIDS,
+				case when crg_exchangeS is null then crg_exchangeT else crg_exchangeS end as crg_exchangeS,
+				'HLDBK', 
+				case when OwnAccountS is null then OwnAccountT else OwnAccountS end as OwnAccountS from
+				(select  sum(isnull(QuantityS,0)) as QuantityS,
+				CustomerIDS as CustomerIDS,
+				ProductSeriesIDS as ProductSeriesIDS,
+				SegmentIDS as SegmentIDS,
+				SEGMENTNAME as crg_exchangeS,
+				OwnAccountS
+				from @ABC1,#TABSEGMENT where
+				rtrim(ltrim(SettlementNumberS))='HLDBK'
+				and SegmentIDS=segmentid 
+				group by CustomerIDS,ProductSeriesIDS,SegmentIDS,SEGMENTNAME,OwnAccountS) as tabS
+				
+				full outer join
+
+				(select  sum(isnull(QuantityS,0)) as QuantityT,
+				CustomerIDS as CustomerIDT,
+				ProductSeriesIDS as ProductSeriesIDT,
+				SegmentIDS as SegmentIDT,
+				SEGMENTNAME as crg_exchangeT,
+				OwnAccountT
+				from @ABC1,#TABSEGMENT where
+				rtrim(ltrim(SettlementNumberT))='HLDBK' 
+				and SegmentIDS=segmentid 
+				group by CustomerIDS,ProductSeriesIDS,SegmentIDS,SEGMENTNAME,OwnAccountT) as tabT
+				
+				on(CustomerIDS=CustomerIDT
+					and ProductSeriesIDS=ProductSeriesIDT
+						and SegmentIDS=SegmentIDT
+							and crg_exchangeS=crg_exchangeT
+								and OwnAccountS=OwnAccountT)
+
+				------------FETCH CLOSE PRICE				
+				update #MARGINSTOCKS1 set closeprice=DailyStat_Close
+				from Trans_DailyStatistics,
+				(select MAX(DailyStat_DateTime) AS DATE,DailyStat_ProductSeriesID AS PRDID
+				from Trans_DailyStatistics,#MARGINSTOCKS1
+				where DailyStat_DateTime<=dateadd(day,-1,@ONDATE)
+				AND DailyStat_ProductSeriesID=productid
+				GROUP BY DailyStat_ProductSeriesID) AS TB
+				WHERE DailyStat_ProductSeriesID=productid
+				AND PRDID=productid AND productid=PRDID
+				AND DailyStat_DateTime=DATE
+				
+
+				------------HAIRCUT CAL
+				update #MARGINSTOCKS1 set varmargin=DailyVar_AppMargin
+				from Trans_DailyVar,
+				(select MAX(DailyVar_Date) AS DATE,DailyVar_ProductSeriesID AS PRDID
+				from Trans_DailyVar,#MARGINSTOCKS1
+				where DailyVar_Date<=dateadd(day,-1,@ONDATE)
+				and DailyVar_ProductSeriesID=productid
+				GROUP BY DailyVar_ProductSeriesID) AS TB
+				where DailyVar_ProductSeriesID=productid
+				AND PRDID=DailyVar_ProductSeriesID 
+				AND productid=PRDID
+				AND DailyVar_Date=DATE
+
+
+
+			update #MARGINSTOCKS1 set Stocksresult=((Quantity*isnull(closeprice,0))*(100-isnull(varmargin,0))/100)
+
+			-----------------Securities
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Securities'',6,ISNULL(PRVStocksresult,0),ISNULL(ONStocksresult,0),CUSTOMERID FROM
+			(SELECT PRVStocksresult,ONStocksresult,
+			CASE WHEN PRVClientid IS NULL THEN ONClientid ELSE PRVClientid END CUSTOMERID,
+			CASE WHEN PRVsegment IS NULL THEN ONsegment ELSE PRVsegment END EXCHSEGMENT,
+			CASE WHEN PRVsegmentname IS NULL THEN ONsegmentname ELSE PRVsegmentname END SEGMENT
+			FROM 
+			(select sum(isnull(Stocksresult,0.0)) as PRVStocksresult,
+			Clientid AS PRVClientid,segment AS PRVsegment,segmentname AS PRVsegmentname from 
+			#MARGINSTOCKS 	
+			group by Clientid,segment,segmentname) AS TBPRV
+			FULL OUTER JOIN
+			(select sum(isnull(Stocksresult,0.0)) as ONStocksresult,
+			Clientid AS ONClientid,segment AS ONsegment,segmentname AS ONsegmentname from 
+			#MARGINSTOCKS1 	
+			group by Clientid,segment,segmentname) AS TBON
+			ON
+				(PRVClientid=ONClientid AND PRVsegment=ONsegment AND PRVsegmentname=ONsegmentname)) AS TB'
+			EXEC(@SQL)
+
+----------------------- For POA Holding Value  ------------------------------------------------------------------------------------
+--- We find the value of POAHolding here and update the fields in #TAB table 
+---	We calculate the value of Stocks in POA Accounts in case the user follows the practice of considering POA holding as Margin Stocks
+If @POABenefit=1
+BEGIN
+	Alter table #TAB	Add	POAHolding1 numeric(22,2) null,
+							POAHolding2 numeric(22,2) null,
+							DPID varchar(8) null,
+							ClientID2 varchar(10) null,
+							RiskProfile varchar(15) null
+							
+	Create table #POAHld (CustomerID varchar(10) null,DPID varchar(8) null,ClientID varchar(10) null,ISIN varchar(12) null,Quantity numeric(18,3) null,
+							HCutRate numeric(8,4) null,Price numeric(15,4) null,Value numeric(22,2) null,AssetID bigint null,SeriesID bigint null)
+
+	Update #TAB Set RiskProfile=	ProfileMember_Code	
+									from Trans_ProfileMember,Config_RiskProfile 
+									where ProfileMember_Type=1
+									and ProfileMember_Code=RiskProfile_Code
+									and RiskProfile_SegmentID=SEGMNETID 
+									and ProfileMember_CustomerID=Clientid
+									and @ONDATE between ProfileMember_DateFrom and isnull(ProfileMember_DateTo,'2200-12-31')
+									and SRNO in (6)
+									
+
+	Update #TAB Set RiskProfile='DEFAULTRSK' where RiskProfile is NULL AND SRNO=6
+
+
+	Update #TAB Set DPID=dpd_dpCode,	ClientID2=dpd_ClientId 
+										from tbl_master_contactDPDetails,Config_RiskProfile 
+										where dpd_accountType='Default'
+										and dpd_POA=1 and Clientid=dpd_cntId
+										and RiskProfile_SegmentID=SEGMNETID
+										and @ONDATE between RiskProfile_DateFrom and isnull(RiskProfile_DateTo,'2200-12-31')
+										and RiskProfile_Code=RiskProfile
+										and RiskProfile_ConsiderPOA='1'
+										AND SRNO in (6)
+	
+	-- Fetch Records for NSDL accounts
+	Insert into #POAHld (CustomerID,DPID,ClientID,ISIN,Quantity)
+	Select #TAB.CLIENTID,#TAB.DPID,#TAB.ClientID2,NsdlHolding_ISIN,NsdlHolding_Free 
+	from trans_nsdlholding,#TAB
+	where LEFT(#TAB.DPID,2)='IN'
+	and #TAB.ClientID2=NsdlHolding_BenAccountNumber
+	and NsdlHolding_HoldingDateTime=@PREVDATE
+	
+	-- Fetch Records for CDSL accounts
+	Insert into #POAHld (CustomerID,DPID,ClientID,ISIN,Quantity)
+	Select #TAB.CLIENTID,#TAB.DPID,#TAB.ClientID2,CdslHolding_ISIN,CdslHolding_FreeBalance 
+	from Trans_CdslHolding,#TAB
+	where LEFT(#TAB.DPID,2)<>'IN'
+	and #TAB.ClientID2=CdslHolding_BenAccountNumber
+	and CdslHolding_HoldingDateTime=@PREVDATE
+
+	-- Find Rates for the ISINs which are there in any of the three CM segments
+	Update #POAHld Set AssetID=(select top 1 ISIN_ProductID from Master_ISIN where ISIN_Number=ISIN)
+	Update #POAHld Set SeriesID=(select top 1 Equity_SeriesID from Master_Equity where Equity_ExchSegmentID=1 and Equity_ProductID=AssetID)
+	Update #POAHld Set SeriesID=(select top 1 Equity_SeriesID from Master_Equity where Equity_ExchSegmentID=4 and Equity_ProductID=AssetID)
+									where SeriesID is NULL
+	Update #POAHld Set SeriesID=(select top 1 Equity_SeriesID from Master_Equity where Equity_ExchSegmentID=19 and Equity_ProductID=AssetID)
+									where SeriesID is NULL
+	
+	Update #POAHld Set HCutRate=DailyVar_AppMargin 
+								from Trans_DailyVar,(SELECT DailyVar_ProductSeriesID AS PRDID,MAX(DailyVar_Date)AS DATE
+													   FROM Trans_DailyVar,#POAHld 
+													   WHERE DailyVar_ProductSeriesID=SeriesID
+													   AND DailyVar_Date<=@PREVDATE
+													   GROUP BY DailyVar_ProductSeriesID) AS JK 
+								where DailyVar_ProductSeriesID=SeriesID
+								and DailyVar_Date=DATE
+
+	Update #POAHld Set Price=DailyStat_Close 
+								from Trans_DailyStatistics,(SELECT DailyStat_ProductSeriesID AS PRDID,MAX(DailyStat_DateTime)AS DATE
+															   FROM Trans_DailyStatistics,#POAHld 
+															   WHERE DailyStat_ProductSeriesID=SeriesID
+															   AND DailyStat_DateTime<=@PREVDATE
+															   GROUP BY DailyStat_ProductSeriesID) AS JK
+ 								where DailyStat_ProductSeriesID=SeriesID
+ 								and DailyStat_DateTime=DATE
+
+	Update #POAHld Set Value=Price*Quantity*(1-(HCutRate/100))
+
+	Update #TAB Set POAHolding1=PVal.Val
+	From (	Select CustomerID As CId,sum(isnull(Value,0)) As Val 
+			from #POAHld
+			Group by CustomerID) As PVal
+	where Clientid=CId and SRNO in (6,7)
+	
+	--Clear the table to hold values for the T-Day
+	Truncate table #POAHld
+	-- Populate with figures for the T-Day
+	-- Fetch Records for NSDL accounts
+	Insert into #POAHld (CustomerID,DPID,ClientID,ISIN,Quantity)
+	Select #TAB.CLIENTID,#TAB.DPID,#TAB.ClientID2,NsdlHolding_ISIN,NsdlHolding_Free 
+	from trans_nsdlholding,#TAB
+	where LEFT(#TAB.DPID,2)='IN'
+	and #TAB.ClientID2=NsdlHolding_BenAccountNumber
+	and NsdlHolding_HoldingDateTime=@ONDATE
+	
+	-- Fetch Records for CDSL accounts
+	Insert into #POAHld (CustomerID,DPID,ClientID,ISIN,Quantity)
+	Select #TAB.CLIENTID,#TAB.DPID,#TAB.ClientID2,CdslHolding_ISIN,CdslHolding_FreeBalance 
+	from Trans_CdslHolding,#TAB
+	where LEFT(#TAB.DPID,2)<>'IN'
+	and #TAB.ClientID2=CdslHolding_BenAccountNumber
+	and CdslHolding_HoldingDateTime=@ONDATE
+
+	-- Find Rates for the ISINs which are there in any of the three CM segments
+	Update #POAHld Set AssetID=(select top 1 ISIN_ProductID from Master_ISIN where ISIN_Number=ISIN)
+	Update #POAHld Set SeriesID=(select top 1 Equity_SeriesID from Master_Equity where Equity_ExchSegmentID=1 and Equity_ProductID=AssetID)
+	Update #POAHld Set SeriesID=(select top 1 Equity_SeriesID from Master_Equity where Equity_ExchSegmentID=4 and Equity_ProductID=AssetID)
+									where SeriesID is NULL
+	Update #POAHld Set SeriesID=(select top 1 Equity_SeriesID from Master_Equity where Equity_ExchSegmentID=19 and Equity_ProductID=AssetID)
+									where SeriesID is NULL
+	
+	Update #POAHld Set HCutRate=DailyVar_AppMargin 
+								from Trans_DailyVar,(SELECT DailyVar_ProductSeriesID AS PRDID,MAX(DailyVar_Date)AS DATE
+													   FROM Trans_DailyVar,#POAHld 
+													   WHERE DailyVar_ProductSeriesID=SeriesID
+													   AND DailyVar_Date<=@ONDATE
+													   GROUP BY DailyVar_ProductSeriesID) AS JK 
+								where DailyVar_ProductSeriesID=SeriesID
+								and DailyVar_Date=DATE
+
+	Update #POAHld Set Price=DailyStat_Close 
+								from Trans_DailyStatistics,(SELECT DailyStat_ProductSeriesID AS PRDID,MAX(DailyStat_DateTime)AS DATE
+															   FROM Trans_DailyStatistics,#POAHld 
+															   WHERE DailyStat_ProductSeriesID=SeriesID
+															   AND DailyStat_DateTime<=@ONDATE
+															   GROUP BY DailyStat_ProductSeriesID) AS JK
+ 								where DailyStat_ProductSeriesID=SeriesID
+ 								and DailyStat_DateTime=DATE
+
+	Update #POAHld Set Value=Price*Quantity*(1-(HCutRate/100))
+
+	Update #TAB Set POAHolding2=PVal.Val
+	From (	Select CustomerID As CId,sum(isnull(Value,0)) As Val 
+			from #POAHld
+			Group by CustomerID) As PVal
+	where Clientid=CId and SRNO in (6,7)
+	
+--- To Print the Detail of Holding ---
+			IF @CHKDETAILSEQURITY<>'UNCHK'
+				BEGIN
+				insert into #MARGINSTOCKS1 (Clientid,productid,Quantity,varmargin,stocktype,closeprice,segmentname,accid,Stocksresult,IsPOA)
+				Select CustomerID,SeriesID,Quantity,HCutRate,'POA Stock',Price,Case when left(DPID,2)='IN' then 'NSDL' Else 'CDSL' End,
+				ltrim(rtrim(DPID))+'-'+ltrim(rtrim(ClientID)),Value,'Y' from #POAHld
+				END
+
+	Drop table #POAHld
+
+--		Add POA Holding Value to Already Calculated Securities value
+			SELECT @SQL=''
+			SELECT @SQL='UPDATE #TAB SET '+@PREVDATECOLUMNAME+'='+ISNULL(@PREVDATECOLUMNAME,0.00)+'+ISNULL(POAHolding1,0.00)
+						 WHERE PARTICULARS IN (''Securities'')
+						 '
+			EXEC(@SQL)
+
+			SELECT @SQL=''
+			SELECT @SQL='UPDATE #TAB SET '+@ENDTDATECOLUMNNAME+'='+ISNULL(@ENDTDATECOLUMNNAME,0.00)+'+ISNULL(POAHolding2,0.00)
+						 WHERE PARTICULARS IN (''Securities'')
+						 '
+			EXEC(@SQL)
+
+END
+--   End POA Holding Value
+----------------------- For POA Holding Value [End]  ------------------------------------------------------------------------------------
+
+			-----------------Total Margin Deposit
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Total Margin Deposit'',7,ISNULL(PRVresult,0),ISNULL(ONresult,0),CUSTOMERID FROM
+			(SELECT PRVresult,ONresult,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select Sum(isnull('+@PREVDATECOLUMNAME+',0)) as PRVresult,
+			CLIENTID AS PRVCUSTOMERID,
+			SEGMNETID AS PRVEXCHSEGMENT,
+			SEGMENT AS PRVSEGMENTNAME
+			from #TAB --WHERE PARTICULARS<>''Applicable Margin''
+			WHERE PARTICULARS not in(''Initial Margin'',''Exposure Margin'',''Total Margin'')
+			group by SEGMNETID,CLIENTID,SEGMENT) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select Sum(isnull('+@ENDTDATECOLUMNNAME+',0)) as ONresult,
+			CLIENTID AS ONCUSTOMERID,
+			SEGMNETID AS ONEXCHSEGMENT,
+			SEGMENT AS ONSEGMENTNAME
+			from #TAB --WHERE PARTICULARS<>''Applicable Margin''
+			WHERE PARTICULARS not in(''Initial Margin'',''Exposure Margin'',''Total Margin'')
+			group by SEGMNETID,CLIENTID,SEGMENT) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			EXEC(@SQL)
+
+			
+			-----------------Margin Utilisation
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Additional Margin Reqd By Member as per RMS'',11,
+			CASE WHEN ISNULL(PRVDATEresult,0)<0 THEN 0.0 ELSE CASE WHEN ISNULL(PRVDATEresult,0)<ISNULL(PRVDATEresult1,0) THEN ISNULL(PRVDATEresult,0) ELSE ISNULL(PRVDATEresult1,0) END END,
+			CASE WHEN ISNULL(PRVONDATEresult,0)<0 THEN 0.0 ELSE CASE WHEN ISNULL(PRVONDATEresult,0)<ISNULL(PRVONDATEresult1,0) THEN ISNULL(PRVONDATEresult,0) ELSE ISNULL(PRVONDATEresult1,0) END END,
+			CUSTOMERID FROM
+			(SELECT PRVDATEresult,PRVONDATEresult,PRVDATEresult1,PRVONDATEresult1,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select ''0'' as PRVDATEresult,
+			''0'' as PRVONDATEresult,
+			CLIENTID AS PRVCUSTOMERID,
+			SEGMNETID AS PRVEXCHSEGMENT,
+			SEGMENT AS PRVSEGMENTNAME
+			from #TAB WHERE PARTICULARS=''Total Margin Deposit''
+			group by SEGMNETID,CLIENTID,SEGMENT) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select  Sum(isnull('+@PREVDATECOLUMNAME+',0)) as PRVDATEresult1,
+			Sum(isnull('+@ENDTDATECOLUMNNAME+',0)) as PRVONDATEresult1,
+			CLIENTID AS ONCUSTOMERID,
+			SEGMNETID AS ONEXCHSEGMENT,
+			SEGMENT AS ONSEGMENTNAME
+			from #TAB WHERE PARTICULARS=''Applicable Margin''
+			group by SEGMNETID,CLIENTID,SEGMENT) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			
+			EXEC(@SQL)
+
+			-----------------Excess Margin Deposit
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Excess Margin Deposit'',12,
+			CASE WHEN ISNULL(PRVDATEresult,0)>ISNULL(PRVDATEresult1,0) THEN ISNULL(PRVDATEresult,0)-ISNULL(PRVDATEresult1,0) ELSE 0.00 END ,
+			CASE WHEN ISNULL(PRVONDATEresult,0)>ISNULL(PRVONDATEresult1,0) THEN ISNULL(PRVONDATEresult,0)-ISNULL(PRVONDATEresult1,0) ELSE 0.00 END ,
+			CUSTOMERID FROM
+			(SELECT PRVDATEresult,PRVONDATEresult,PRVDATEresult1,PRVONDATEresult1,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select Sum(isnull('+@PREVDATECOLUMNAME+',0)) as PRVDATEresult,
+			Sum(isnull('+@ENDTDATECOLUMNNAME+',0)) as PRVONDATEresult,
+			CLIENTID AS PRVCUSTOMERID,
+			SEGMNETID AS PRVEXCHSEGMENT,
+			SEGMENT AS PRVSEGMENTNAME
+			from #TAB WHERE PARTICULARS=''Total Margin Deposit''
+			group by SEGMNETID,CLIENTID,SEGMENT) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select  Sum(isnull('+@PREVDATECOLUMNAME+',0)) as PRVDATEresult1,
+			Sum(isnull('+@ENDTDATECOLUMNNAME+',0)) as PRVONDATEresult1,
+			CLIENTID AS ONCUSTOMERID,
+			SEGMNETID AS ONEXCHSEGMENT,
+			SEGMENT AS ONSEGMENTNAME
+			from #TAB --WHERE PARTICULARS=''Applicable Margin''
+			WHERE PARTICULARS  in(''Total Margin'')--,''Exposure Margin'',''Total Margin'')
+			group by SEGMNETID,CLIENTID,SEGMENT) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			
+			EXEC(@SQL)
+
+
+			-----------------Shortfall (Margin Call)
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT SEGMENT,EXCHSEGMENT,''Shortfall (Margin Call)'',13,
+			CASE WHEN ISNULL(PRVDATEresult,0)<ISNULL(PRVDATEresult1,0) THEN ISNULL(PRVDATEresult1,0)-ISNULL(PRVDATEresult,0) ELSE 0.00 END ,
+			CASE WHEN ISNULL(PRVONDATEresult,0)<ISNULL(PRVONDATEresult1,0) THEN ISNULL(PRVONDATEresult1,0)-ISNULL(PRVONDATEresult,0) ELSE 0.00 END ,
+			CUSTOMERID FROM
+			(SELECT PRVDATEresult,PRVONDATEresult,PRVDATEresult1,PRVONDATEresult1,
+			CASE WHEN PRVCUSTOMERID IS NULL THEN ONCUSTOMERID ELSE PRVCUSTOMERID END CUSTOMERID,
+			CASE WHEN PRVEXCHSEGMENT IS NULL THEN ONEXCHSEGMENT ELSE PRVEXCHSEGMENT END EXCHSEGMENT,
+			CASE WHEN PRVSEGMENTNAME IS NULL THEN ONSEGMENTNAME ELSE PRVSEGMENTNAME END SEGMENT
+			FROM 
+			(select Sum(isnull('+@PREVDATECOLUMNAME+',0)) as PRVDATEresult,
+			Sum(isnull('+@ENDTDATECOLUMNNAME+',0)) as PRVONDATEresult,
+			CLIENTID AS PRVCUSTOMERID,
+			SEGMNETID AS PRVEXCHSEGMENT,
+			SEGMENT AS PRVSEGMENTNAME
+			from #TAB WHERE PARTICULARS=''Total Margin Deposit''
+			group by SEGMNETID,CLIENTID,SEGMENT) AS PRVTEB
+			
+			FULL OUTER JOIN
+
+			(select  Sum(isnull('+@PREVDATECOLUMNAME+',0)) as PRVDATEresult1,
+			Sum(isnull('+@ENDTDATECOLUMNNAME+',0)) as PRVONDATEresult1,
+			CLIENTID AS ONCUSTOMERID,
+			SEGMNETID AS ONEXCHSEGMENT,
+			SEGMENT AS ONSEGMENTNAME
+			from #TAB --WHERE PARTICULARS=''Applicable Margin''
+			WHERE PARTICULARS  in(''Total Margin'')--,''Exposure Margin'',''Total Margin'')
+			group by SEGMNETID,CLIENTID,SEGMENT) AS ONTAB
+
+			ON
+				(PRVCUSTOMERID=ONCUSTOMERID AND PRVEXCHSEGMENT=ONEXCHSEGMENT AND PRVSEGMENTNAME=ONSEGMENTNAME)) AS TB'
+			
+			EXEC(@SQL)
+
+			--------------------INSERT BLANK ROW
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT #TAB.SEGMENT,#TAB.SEGMNETID,''Ledger Balance'',1,0.00,0.00,CLIENTID 
+			FROM #TAB,#TABSEGMENT WHERE 
+			#TAB.SEGMNETID=#TABSEGMENT.SEGMENTID
+			AND NOT EXISTS(SELECT 1 FROM #TAB AS TT WHERE 
+			TT.PARTICULARS=''Ledger Balance'' AND TT.CLIENTID=#TAB.CLIENTID)'
+			EXEC(@SQL)
+
+
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT #TAB.SEGMENT,#TAB.SEGMNETID,''Cash Deposit'',2,0.00,0.00,CLIENTID 
+			FROM #TAB,#TABSEGMENT WHERE 
+			#TAB.SEGMNETID=#TABSEGMENT.SEGMENTID
+			AND NOT EXISTS(SELECT 1 FROM #TAB AS TT WHERE 
+			TT.PARTICULARS=''Cash Deposit'' AND TT.CLIENTID=#TAB.CLIENTID)'
+			EXEC(@SQL)
+
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT #TAB.SEGMENT,#TAB.SEGMNETID,''FDRs'',3,0.00,0.00,CLIENTID 
+			FROM #TAB,#TABSEGMENT WHERE 
+			#TAB.SEGMNETID=#TABSEGMENT.SEGMENTID
+			AND NOT EXISTS(SELECT 1 FROM #TAB AS TT WHERE 
+			TT.PARTICULARS=''FDRs'' AND TT.CLIENTID=#TAB.CLIENTID)'
+			EXEC(@SQL)
+
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT #TAB.SEGMENT,#TAB.SEGMNETID,''BGs'',4,0.00,0.00,CLIENTID 
+			FROM #TAB,#TABSEGMENT WHERE 
+			#TAB.SEGMNETID=#TABSEGMENT.SEGMENTID
+			AND NOT EXISTS(SELECT 1 FROM #TAB AS TT WHERE 
+			TT.PARTICULARS=''BGs'' AND TT.CLIENTID=#TAB.CLIENTID)'
+			EXEC(@SQL)
+			
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT #TAB.SEGMENT,#TAB.SEGMNETID,''Any other approved form of Margins*'',5,0.00,0.00,CLIENTID 
+			FROM #TAB,#TABSEGMENT WHERE 
+			#TAB.SEGMNETID=#TABSEGMENT.SEGMENTID
+			AND NOT EXISTS(SELECT 1 FROM #TAB AS TT WHERE 
+			TT.PARTICULARS=''Any other approved form of Margins*'' AND TT.CLIENTID=#TAB.CLIENTID)'
+			EXEC(@SQL)
+			
+			
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT #TAB.SEGMENT,#TAB.SEGMNETID,''Securities'',6,0.00,0.00,CLIENTID 
+			FROM #TAB,#TABSEGMENT WHERE 
+			#TAB.SEGMNETID=#TABSEGMENT.SEGMENTID
+			AND NOT EXISTS(SELECT 1 FROM #TAB AS TT WHERE 
+			TT.PARTICULARS=''Securities'' AND TT.CLIENTID=#TAB.CLIENTID)'
+			EXEC(@SQL)
+
+
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT #TAB.SEGMENT,#TAB.SEGMNETID,''Initial Margin'',8,0.00,0.00,CLIENTID 
+			FROM #TAB,#TABSEGMENT WHERE 
+			#TAB.SEGMNETID=#TABSEGMENT.SEGMENTID
+			AND NOT EXISTS(SELECT 1 FROM #TAB AS TT WHERE 
+			TT.PARTICULARS=''Shortfall (Margin Call)'' AND TT.CLIENTID=#TAB.CLIENTID)'
+			
+			EXEC(@SQL)
+			
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT #TAB.SEGMENT,#TAB.SEGMNETID,''Exposure Margin'',9,0.00,0.00,CLIENTID 
+			FROM #TAB,#TABSEGMENT WHERE 
+			#TAB.SEGMNETID=#TABSEGMENT.SEGMENTID
+			AND NOT EXISTS(SELECT 1 FROM #TAB AS TT WHERE 
+			TT.PARTICULARS=''Shortfall (Margin Call)'' AND TT.CLIENTID=#TAB.CLIENTID)'
+			EXEC(@SQL)
+			
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT #TAB.SEGMENT,#TAB.SEGMNETID,''Total Margin'',10,0.00,0.00,CLIENTID 
+			FROM #TAB,#TABSEGMENT WHERE 
+			#TAB.SEGMNETID=#TABSEGMENT.SEGMENTID
+			AND NOT EXISTS(SELECT 1 FROM #TAB AS TT WHERE 
+			TT.PARTICULARS=''Shortfall (Margin Call)'' AND TT.CLIENTID=#TAB.CLIENTID)'
+			EXEC(@SQL)
+
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT #TAB.SEGMENT,#TAB.SEGMNETID,''Additional Margin Reqd By Member as per RMS'',11,0.00,0.00,CLIENTID 
+			FROM #TAB,#TABSEGMENT WHERE 
+			#TAB.SEGMNETID=#TABSEGMENT.SEGMENTID
+			AND NOT EXISTS(SELECT 1 FROM #TAB AS TT WHERE 
+			TT.PARTICULARS=''Margin Utilisation'' AND TT.CLIENTID=#TAB.CLIENTID)'
+			EXEC(@SQL)
+
+
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT #TAB.SEGMENT,#TAB.SEGMNETID,''Excess Margin Deposit'',12,0.00,0.00,CLIENTID 
+			FROM #TAB,#TABSEGMENT WHERE 
+			#TAB.SEGMNETID=#TABSEGMENT.SEGMENTID
+			AND NOT EXISTS(SELECT 1 FROM #TAB AS TT WHERE 
+			TT.PARTICULARS=''Excess Margin Deposit'' AND TT.CLIENTID=#TAB.CLIENTID)'
+			EXEC(@SQL)
+
+			SELECT @SQL=''
+			SELECT @SQL='INSERT INTO #TAB(SEGMENT,SEGMNETID,PARTICULARS,SRNO,'+@PREVDATECOLUMNAME+','+@ENDTDATECOLUMNNAME+',CLIENTID)
+			SELECT DISTINCT #TAB.SEGMENT,#TAB.SEGMNETID,''Shortfall (Margin Call)'',13,0.00,0.00,CLIENTID 
+			FROM #TAB,#TABSEGMENT WHERE 
+			#TAB.SEGMNETID=#TABSEGMENT.SEGMENTID
+			AND NOT EXISTS(SELECT 1 FROM #TAB AS TT WHERE 
+			TT.PARTICULARS=''Shortfall (Margin Call)'' AND TT.CLIENTID=#TAB.CLIENTID)'
+			EXEC(@SQL)
+			
+			
+
+
+
+			SELECT @SQL=''
+			SELECT @SQL='UPDATE #TAB SET '+@ONTDATECOLUMNNAME+'='+@ENDTDATECOLUMNNAME+'-'+@PREVDATECOLUMNAME+'
+						 --WHERE PARTICULARS NOT IN (''Shortfall (Margin Call)'',''Excess Margin Deposit'')
+						 '
+						 --select @PREVDATECOLUMNAME
+						 --select @ONTDATECOLUMNNAME
+						 --select @ENDTDATECOLUMNNAME
+						-- select * from #TAB
+						
+			EXEC(@SQL)
+
+			
+----SELECT * FROM #TAB
+
+			-----------------------------------------END QUERY
+			
+				
+			SELECT @SQL=''
+			IF @CHKPRINT<>'UNCHK'
+			BEGIN
+			
+					
+			SELECT @SQL=@SQL+'Insert into #TAB1  
+							SELECT DISTINCT SRNO,CLIENTID,Name,UCC,SEGMNETID,SEGMENT,PARTICULARS, 
+							'+@PREVDATECOLUMNAME+','+@ONTDATECOLUMNNAME+','+@ENDTDATECOLUMNNAME+',
+							GRPID,replace(replace(GRPNAME,''</b>'',''''),''<b>'','''') as GRPNAME,
+							isnull((select ltrim(rtrim(exch_tmcode)) from tbl_master_companyExchange where exch_compId='''+@CompanyID+''' and exch_internalId='''+@segmentname+''' ),'''')as tmcode,
+							isnull((select ltrim(rtrim(exch_sebiNo)) from tbl_master_companyExchange where exch_compId='''+@CompanyID+''' and exch_internalId='''+@segmentname+''' ),'''')as sebino,
+							(select top 1 isnull(Cnt_FirstName,'''')+'' ''+isnull(Cnt_MiddleName,'''')+'' ''+isnull(Cnt_LastName,'''')from tbl_master_Contact where cnt_internalid in(select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID in ('+@segment+'))) As CompilanceofficerName,
+							(Select top 1 isnull(ltrim(rtrim(eml_email)),'''') from tbl_master_email where eml_cntid=CLIENTID and rtrim(eml_entity)=''Customer/Client'' and eml_type=''Official'' and isnull(eml_Status,''Y'')<>''N'') as clientemail,
+							(Select top 1 isnull(ltrim(rtrim(phf_phoneNumber)),'''') from tbl_master_phonefax where phf_cntid=CLIENTID and rtrim(phf_entity)=''Customer/Client'') as clientphone,
+							(select top 1 isnull(phf_countrycode,'''')+'' ''+isnull(phf_areacode,'''')+'' ''+isnull(phf_phonenumber,'''') from tbl_master_PhoneFax where Phf_cntid in (select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID in ('+@segment+'))) As CompilanceofficerPhone,
+							(select top 1 isnull(eml_email,'''') from tbl_master_Email where eml_cntid in (select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID in ('+@segment+'))) As CompilanceofficerEmail,
+							(select top 1 isnull(add_pin,'''') from tbl_master_address where add_cntid in (select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID in ('+@segment+'))) As compliancepin,
+							(select top 1 isnull(city_name,'''') from tbl_master_city,tbl_master_address where city_id=add_city and add_cntid in (select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID in ('+@segment+'))) As compliancecity,
+							
+							(select top 1 isnull(add_address1,'''') from tbl_master_address where add_cntid in (select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID in ('+@segment+'))) As complianceadd1,
+							(select top 1 isnull(add_address2,'''') from tbl_master_address where add_cntid in (select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID in ('+@segment+'))) As complianceadd2,
+							(select top 1 isnull(add_address3,'''') from tbl_master_address where add_cntid in (select exch_ComplianceOfficer from tbl_Master_CompanyeXchange where exch_internalID in ('+@segment+'))) As complianceadd3,
+							
+							(select top 1 isnull(city_name,'''') from tbl_master_city,tbl_master_address where city_id=add_city and add_cntid = CLIENTID) As compcity,
+							(select top 1 isnull(add_pin,'''') from tbl_master_address where add_cntid =CLIENTID) As comppin,
+							(select top 1 isnull(add_address1,'''') from tbl_master_address where add_cntid =CLIENTID) As compadd1,
+							(select top 1 isnull(add_address2,'''') from tbl_master_address where add_cntid =CLIENTID) As compadd2,
+							(select top 1 isnull(add_address3,'''') from tbl_master_address where add_cntid =CLIENTID) As compadd3,
+							
+							(select Top 1(cmp_panNo) from tbl_master_company where cmp_internalid='''+@CompanyID+''')as cmppanno,
+							isnull((Select top 1 phf_countryCode+''-''+phf_areaCode+''-''+phf_phoneNumber from tbl_master_phonefax where  PHF_TYPE=''Work'' AND phf_cntId='''+@Companyid+'''),'''')as cmpphno,
+							isnull((Select top 1 phf_countryCode+''-''+phf_areaCode+''-''+phf_phoneNumber from tbl_master_phonefax where  PHF_TYPE=''Fax'' AND phf_cntId='''+@Companyid+'''),'''')as cmpfax,
+							(select Top 1(eml_email) from tbl_master_email where eml_cntid='''+@CompanyID+''' and eml_type=''Official'')as cmpemail,
+							(select Top 1(cmp_Name) from tbl_master_company where cmp_internalid='''+@CompanyID+''')as cmpname,
+							(select top 1(isnull(add_address1,'' '')+'' ''+
+										isnull(add_address2,'' '')+'' ''+isnull(add_address3,'' '')+'',''+
+											isnull(city_name,'' '')+''-''+ isnull(add_pin,'' '')) 
+												from tbl_master_address,tbl_master_company,tbl_master_city
+													where cmp_internalid=add_cntid and cmp_internalid='''+@CompanyID+'''
+														and add_city=city_id and add_cntID='''+@CompanyID+''' 
+															AND add_entity=''Company'' AND add_addressType=''Office'')as cmpaddress,
+							(select top 1 (isnull(rtrim(ltrim(add_address1)),'''')+'' ''+isnull(rtrim(ltrim(add_address2)),''''))) AS CLIENTADDRESS1,
+							(select top 1 (isnull(rtrim(ltrim(add_address3)),'''')+'' ''+isnull(rtrim(ltrim(add_pin)),'''')+'',''+
+							(select top 1 isnull(city_name,'''') from tbl_master_city where city_id=add_city))) AS CLIENTADDRESS2,
+							(select Top 1(cmp_serviceTaxNo) from tbl_master_company where cmp_internalid='''+@Companyid+''')as cmpservicetax,
+							'+@PREVDATECOLUMNAME+' as feild,'+@ONTDATECOLUMNNAME+' as feild1,'+@ENDTDATECOLUMNNAME+' as feild2,
+							'''+@ONDATE+''' as fordate
+							FROM('
+			END
+			SELECT @SQL=@SQL+'
+							SELECT DISTINCT SRNO,CLIENTID,
+							(isnull(rtrim(cnt_firstName),'+char(39)+''+char(39)+') +'
+							+char(39)+' '+char(39)+ '+isnull(rtrim(cnt_middleName),'+char(39)+''+char(39)+')+'
+							+char(39)+' '+char(39)+ '+isnull(rtrim(cnt_lastName),'+char(39)+''+char(39)+')) as Name,
+							isnull(rtrim(cnt_UCC),'+char(39)+''+char(39)+') AS UCC,
+							SEGMNETID,SEGMENT,PARTICULARS,--'+@PREVDATECOLUMNAME+','+@ONTDATECOLUMNNAME+','+@ENDTDATECOLUMNNAME+',
+							CASE WHEN ISNULL('+@PREVDATECOLUMNAME+',0)=0 THEN NULL ELSE CASE WHEN ISNULL('+@PREVDATECOLUMNAME+',0)<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS('+@PREVDATECOLUMNAME+') AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS('+@PREVDATECOLUMNAME+') AS VARCHAR(8000)),''N'')  END END AS '+@PREVDATECOLUMNAME+',
+							CASE WHEN ISNULL('+@ONTDATECOLUMNNAME+',0)=0 THEN NULL ELSE CASE WHEN ISNULL('+@ONTDATECOLUMNNAME+',0)<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS('+@ONTDATECOLUMNNAME+') AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS('+@ONTDATECOLUMNNAME+') AS VARCHAR(8000)),''N'')  END END AS '+@ONTDATECOLUMNNAME+',
+							CASE WHEN ISNULL('+@ENDTDATECOLUMNNAME+',0)=0 THEN NULL ELSE CASE WHEN ISNULL('+@ENDTDATECOLUMNNAME+',0)<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS('+@ENDTDATECOLUMNNAME+') AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS('+@ENDTDATECOLUMNNAME+') AS VARCHAR(8000)),''N'')  END END AS '+@ENDTDATECOLUMNNAME+','
+			if @grptype<>'BRANCH'
+				BEGIN
+					Select @SQL=@SQL+'gpm_id AS GRPID,''<b>''+isnull(rtrim(GPM_DESCRIPTION),'+char(39)+''+char(39)+')+''</b>[ <b>''+isnull(rtrim(GPM_CODE),'+char(39)+''+char(39)+')+''</b>]'' AS GRPNAME'
+
+				END
+			ELSE 
+				BEGIN
+					Select @SQL=@SQL+'branch_id AS GRPID,''<b>''+isnull(rtrim(branch_description),'+char(39)+''+char(39)+')+''</b>[ <b>''+isnull(rtrim(branch_code),'+char(39)+''+char(39)+')+'' </b>]'' AS GRPNAME'
+				END
+			Select @SQL=@SQL+'
+			 FROM #TAB,tbl_master_contact,'
+			if @grptype<>'BRANCH'
+				BEGIN
+					Select @SQL=@SQL+' tbl_master_groupmaster,tbl_trans_group
+					where grp_contactid=CLIENTID
+					AND cnt_internalid=grp_contactid
+					AND cnt_internalid=grp_contactid
+					AND gpm_type='''+@grptype+'''
+					AND grp_groupmaster=gpm_id
+					AND GRP_GROUPTYPE='''+@grptype+''''
+					
+				END
+			ELSE
+				BEGIN
+					Select @SQL=@SQL+' tbl_master_branch 
+					where cnt_branchid=branch_id'
+				END
+			Select @SQL=@SQL+' AND cnt_internalid=CLIENTID'
+			IF @CHKPRINT<>'UNCHK'
+			BEGIN
+				Select @SQL=@SQL+') AS TB
+								LEFT OUTER JOIN
+				  tbl_master_address
+					ON(add_cntID=CLIENTID AND add_entity=''Customer/Client'' AND 
+							add_addressType=(select top 1 add_addressType from 
+											(select add_addressType,
+											  case when rtrim(ltrim(add_addressType))=''Correspondence'' then 1
+												when rtrim(ltrim(add_addressType))=''Registered'' then 2
+												when rtrim(ltrim(add_addressType))=''Residence'' then 3
+												else 4 end as addreorder
+												from tbl_master_address where 
+												add_cntID=CLIENTID
+												and add_entity=''Customer/Client'') tb
+												order by addreorder)
+					)'
+			END
+				Select @SQL=@SQL+' ORDER BY CLIENTID,SEGMENT ,SRNO'
+				EXEC(@SQL)
+
+Insert into #Client (clientid,segname,segid) 
+select distinct CLIENTID,SEGMENT,SEGMNETID from #TAB1
+--select * from #Client
+Declare @Clientstatic bigint,@Clientmaxcount bigint
+set @Clientstatic=1
+Select @Clientmaxcount=Max(autoid) From #Client
+	while (@Clientstatic<=@Clientmaxcount)
+		Begin
+		
+			if Not exists(select * from #TAB1,#Client where
+					autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT and segid=SEGMNETID
+					and SRNO='1')--and ISNULL(PARTICULARS,'')='')
+						Begin
+							Insert into #TAB1 (SRNO,CLIENTID,Name,UCC,SEGMENT,SEGMNETID,PARTICULARS,GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate)
+							(select top 1 '1',#Client.clientid,Name,UCC,segname,segid,'Ledger Balance',GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate from #TAB1,#Client
+							where autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT 
+							and segid=SEGMNETID)
+						
+						End
+			if Not exists(select * from #TAB1,#Client where
+					autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT and segid=SEGMNETID
+					and SRNO='2')--and ISNULL(PARTICULARS,'')='')
+						Begin
+							Insert into #TAB1 (SRNO,CLIENTID,Name,UCC,SEGMENT,SEGMNETID,PARTICULARS,GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate)
+							(select top 1 '2',#Client.clientid,Name,UCC,segname,segid,'Cash Deposit',GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate from #TAB1,#Client
+							where autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT 
+							and segid=SEGMNETID)
+						
+						End
+			if Not exists(select * from #TAB1,#Client where
+					autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT and segid=SEGMNETID
+					and SRNO='3')--and ISNULL(PARTICULARS,'')='')
+						Begin
+							Insert into #TAB1 (SRNO,CLIENTID,Name,UCC,SEGMENT,SEGMNETID,PARTICULARS,GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate)
+							(select top 1 '3',#Client.clientid,Name,UCC,segname,segid,'FDRs',GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate from #TAB1,#Client
+							where autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT 
+							and segid=SEGMNETID)
+						
+						End
+			if Not exists(select * from #TAB1,#Client where
+					autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT and segid=SEGMNETID
+					and SRNO='4')--and ISNULL(PARTICULARS,'')='')
+						Begin
+							Insert into #TAB1 (SRNO,CLIENTID,Name,UCC,SEGMENT,SEGMNETID,PARTICULARS,GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate)
+							(select top 1 '4',#Client.clientid,Name,UCC,segname,segid,'BGs',GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate from #TAB1,#Client
+							where autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT 
+							and segid=SEGMNETID)
+						
+						End
+			if Not exists(select * from #TAB1,#Client where
+					autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT and segid=SEGMNETID
+					and SRNO='5')--and ISNULL(PARTICULARS,'')='')
+						Begin
+							Insert into #TAB1 (SRNO,CLIENTID,Name,UCC,SEGMENT,SEGMNETID,PARTICULARS,GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate)
+							(select top 1 '5',#Client.clientid,Name,UCC,segname,segid,'Any other approved form of Margins*',GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate from #TAB1,#Client
+							where autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT 
+							and segid=SEGMNETID)
+						
+						End
+			if Not exists(select * from #TAB1,#Client where
+					autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT and segid=SEGMNETID
+					and SRNO='6')--and ISNULL(PARTICULARS,'')='')
+						Begin
+							Insert into #TAB1 (SRNO,CLIENTID,Name,UCC,SEGMENT,SEGMNETID,PARTICULARS,GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate)
+							(select top 1 '6',#Client.clientid,Name,UCC,segname,segid,'Securities',GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate from #TAB1,#Client
+							where autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT 
+							and segid=SEGMNETID)
+						
+						End
+			if Not exists(select * from #TAB1,#Client where
+					autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT and segid=SEGMNETID
+					and SRNO='7')--and ISNULL(PARTICULARS,'')='')
+						Begin
+							Insert into #TAB1 (SRNO,CLIENTID,Name,UCC,SEGMENT,SEGMNETID,PARTICULARS,GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate)
+							(select top 1 '7',#Client.clientid,Name,UCC,segname,segid,'Total Margin Deposit',GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate from #TAB1,#Client
+							where autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT 
+							and segid=SEGMNETID)
+						
+						End
+			if Not exists(select * from #TAB1,#Client where
+					autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT and segid=SEGMNETID
+					and SRNO='8')--and ISNULL(PARTICULARS,'')='')
+						Begin
+							Insert into #TAB1 (SRNO,CLIENTID,Name,UCC,SEGMENT,SEGMNETID,PARTICULARS,GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate)
+							(select top 1 '8',#Client.clientid,Name,UCC,segname,segid,'Initial Margin',GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate from #TAB1,#Client
+							where autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT 
+							and segid=SEGMNETID)
+						
+						End
+				if Not exists(select * from #TAB1,#Client where
+					autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT and segid=SEGMNETID
+					and SRNO='9')--and ISNULL(PARTICULARS,'')='')
+						Begin
+							Insert into #TAB1 (SRNO,CLIENTID,Name,UCC,SEGMENT,SEGMNETID,PARTICULARS,GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate)
+							(select top 1 '9',#Client.clientid,Name,UCC,segname,segid,'Exposure Margin',GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+												clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+												compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+												cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate from #TAB1,#Client
+							where autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT 
+							and segid=SEGMNETID)
+					
+						End
+					
+					if Not exists(select * from #TAB1,#Client where
+						autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT and segid=SEGMNETID
+						and SRNO='10')--and ISNULL(PARTICULARS,'')='')
+							Begin
+								Insert into #TAB1 (SRNO,CLIENTID,Name,UCC,SEGMENT,SEGMNETID,PARTICULARS,GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+													clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+													compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+													cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate)
+								(select top 1 '10',#Client.clientid,Name,UCC,segname,segid,'Total Margin',GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+													clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+													compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+													cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate from #TAB1,#Client
+								where autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT 
+								and segid=SEGMNETID)
+							
+							End
+					if Not exists(select * from #TAB1,#Client where
+						autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT and segid=SEGMNETID
+						and SRNO='11')--and ISNULL(PARTICULARS,'')='')
+							Begin
+								Insert into #TAB1 (SRNO,CLIENTID,Name,UCC,SEGMENT,SEGMNETID,PARTICULARS,GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+													clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+													compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+													cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate)
+								(select top 1 '11',#Client.clientid,Name,UCC,segname,segid,'Additional Margin Reqd By Member as per RMS',GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+													clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+													compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+													cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate from #TAB1,#Client
+								where autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT 
+								and segid=SEGMNETID)
+							
+							End
+					if Not exists(select * from #TAB1,#Client where
+						autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT and segid=SEGMNETID
+						and SRNO='12')--and ISNULL(PARTICULARS,'')='')
+							Begin
+								Insert into #TAB1 (SRNO,CLIENTID,Name,UCC,SEGMENT,SEGMNETID,PARTICULARS,GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+													clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+													compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+													cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate)
+								(select top 1 '12',#Client.clientid,Name,UCC,segname,segid,'Excess Margin Deposit',GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+													clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+													compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+													cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate from #TAB1,#Client
+								where autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT 
+								and segid=SEGMNETID)
+							
+							End
+					if Not exists(select * from #TAB1,#Client where
+						autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT and segid=SEGMNETID
+						and SRNO='13')--and ISNULL(PARTICULARS,'')='')
+							Begin
+								Insert into #TAB1 (SRNO,CLIENTID,Name,UCC,SEGMENT,SEGMNETID,PARTICULARS,GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+													clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+													compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+													cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate)
+								(select top 1 '13',#Client.clientid,Name,UCC,segname,segid,'Shortfall (Margin Call)',GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,
+													clientemail,clientphone,CompilanceofficerPhone,CompilanceofficerEmail,compliancepin,
+													compliancecity,complianceadd1,complianceadd2,complianceadd3,compcity,comppin,compadd1,compadd2,compadd3,
+													cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,fordate from #TAB1,#Client
+								where autoid=@Clientstatic and #Client.clientid=#TAB1.CLIENTID and segname=SEGMENT 
+								and segid=SEGMNETID)
+							
+							End
+				
+				Set @Clientstatic=@Clientstatic+1
+			End
+--select * from #Client
+--select * from #TAB1
+set @SQL=''
+select @SQL='Select SRNO,CLIENTID,Name,UCC,SEGMNETID,SEGMENT,PARTICULARS,
+					 upto as '+@PREVDATECOLUMNAME+', ondt as '+@ONTDATECOLUMNNAME+', enddt as '+@ENDTDATECOLUMNNAME+',
+					 GRPID,GRPNAME,tmcode,sebino,CompilanceofficerName,clientemail,clientphone,CompilanceofficerPhone,
+					 CompilanceofficerEmail,compliancepin,compliancecity,complianceadd1,complianceadd2,complianceadd3,
+					 compcity,comppin,compadd1,compadd2,compadd3,cmppanno,cmpphno,cmpfax,cmpemail,cmpname,cmpaddress,
+					 CLIENTADDRESS1,CLIENTADDRESS2,cmpservicetax,feild,feild1,feild2,fordate from #TAB1
+					 ORDER BY CLIENTID,SEGMENT ,SRNO'
+EXEC(@SQL)
+
+			CREATE TABLE #TT(CLIENT VARCHAR(50),
+							AMNT_PRVDATE NUMERIC(28,2),AMNT_ONDATE NUMERIC(28,2),AMNT_ENDDATE NUMERIC(28,2),
+							MIN_PRVDATE NUMERIC(28,2),MIN_ONDATE NUMERIC(28,2),MIN_ENDDATE NUMERIC(28,2))
+			
+			IF EXISTS(select 'Y' FROM (select count(SEGMENTID) as rowno from #TABSEGMENT) AS TB WHERE rowno>1)
+				BEGIN
+						-------AMNT INSERT FOR COMBINED CALCULATION BEGIN
+						SELECT @SQL=''
+						SELECT @SQL='SELECT CASE WHEN ApplicableCLIENTID IS NULL THEN MRGNCLIENTID ELSE ApplicableCLIENTID END,
+											ISNULL(MRGNDEPCOLUMN1,0)-ISNULL(ApplicableCOLUMN1,0),
+											ISNULL(MRGNDEPCOLUMN2,0)-ISNULL(ApplicableCOLUMN2,0),
+											ISNULL(MRGNDEPCOLUMN3,0)-ISNULL(ApplicableCOLUMN3,0),
+											CASE WHEN ISNULL(MRGNDEPCOLUMN1,0)>ISNULL(ApplicableCOLUMN1,0) THEN ISNULL(ApplicableCOLUMN1,0) ELSE ISNULL(MRGNDEPCOLUMN1,0) END,
+											CASE WHEN ISNULL(MRGNDEPCOLUMN2,0)>ISNULL(ApplicableCOLUMN2,0) THEN ISNULL(ApplicableCOLUMN2,0) ELSE ISNULL(MRGNDEPCOLUMN2,0) END,
+											CASE WHEN ISNULL(MRGNDEPCOLUMN3,0)>ISNULL(ApplicableCOLUMN3,0) THEN ISNULL(ApplicableCOLUMN3,0) ELSE ISNULL(MRGNDEPCOLUMN3,0) END
+
+									 FROM
+									(SELECT SUM(ISNULL('+@PREVDATECOLUMNAME+',0)) AS MRGNDEPCOLUMN1,
+											SUM(ISNULL('+@ONTDATECOLUMNNAME+',0)) AS MRGNDEPCOLUMN2,
+											SUM(ISNULL('+@ENDTDATECOLUMNNAME+',0)) AS MRGNDEPCOLUMN3,
+											CLIENTID AS MRGNCLIENTID
+									 FROM #TAB WHERE PARTICULARS=''Total Margin Deposit'' 
+									 GROUP BY CLIENTID)AS KK
+										FULL OUTER JOIN
+									(SELECT SUM(ISNULL('+@PREVDATECOLUMNAME+',0)) AS ApplicableCOLUMN1,
+											SUM(ISNULL('+@ONTDATECOLUMNNAME+',0)) AS ApplicableCOLUMN2,
+											SUM(ISNULL('+@ENDTDATECOLUMNNAME+',0)) AS ApplicableCOLUMN3,
+											CLIENTID AS ApplicableCLIENTID
+									 FROM #TAB --WHERE PARTICULARS=''Applicable Margin'' 
+									 WHERE PARTICULARS  in(''Total Margin'')--,''Exposure Margin'',''Total Margin'')
+									 GROUP BY CLIENTID)AS JJ
+										ON(MRGNCLIENTID=ApplicableCLIENTID)'
+						INSERT INTO #TT EXEC(@SQL)
+						
+						-------AMNT INSERT FOR COMBINED CALCULATION END
+
+						SELECT @SQL=''
+						SELECT @SQL='SELECT CLIENTID,''Combined'' as Combined,''Margin Deposit (All Segments)'' AS CombinedNAME,
+						CASE WHEN SUM(ISNULL('+@PREVDATECOLUMNAME+',0))=0 THEN NULL ELSE CASE WHEN SUM(ISNULL('+@PREVDATECOLUMNAME+',0))<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(SUM('+@PREVDATECOLUMNAME+')) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(SUM('+@PREVDATECOLUMNAME+')) AS VARCHAR(8000)),''N'')  END END AS feild,
+						CASE WHEN SUM(ISNULL('+@ONTDATECOLUMNNAME+',0))=0 THEN NULL ELSE  CASE WHEN SUM(ISNULL('+@ONTDATECOLUMNNAME+',0))<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(SUM('+@ONTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(SUM('+@ONTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'')  END END AS feild1,
+						CASE WHEN SUM(ISNULL('+@ENDTDATECOLUMNNAME+',0))=0 THEN NULL ELSE CASE WHEN SUM(ISNULL('+@ENDTDATECOLUMNNAME+',0))<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(SUM('+@ENDTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(SUM('+@ENDTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'')  END END AS feild2
+						FROM #TAB WHERE PARTICULARS=''Total Margin Deposit'' GROUP BY CLIENTID
+
+						UNION ALL
+
+						SELECT CLIENTID,''Combined'' as Combined,''Initial Margin'' AS CombinedNAME,
+						CASE WHEN SUM(ISNULL('+@PREVDATECOLUMNAME+',0))=0 THEN NULL ELSE CASE WHEN SUM(ISNULL('+@PREVDATECOLUMNAME+',0))<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(SUM('+@PREVDATECOLUMNAME+')) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(SUM('+@PREVDATECOLUMNAME+')) AS VARCHAR(8000)),''N'')  END END AS '+@PREVDATECOLUMNAME+',
+						CASE WHEN SUM(ISNULL('+@ONTDATECOLUMNNAME+',0))=0 THEN NULL ELSE CASE WHEN SUM(ISNULL('+@ONTDATECOLUMNNAME+',0))<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(SUM('+@ONTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(SUM('+@ONTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'')  END END AS '+@ONTDATECOLUMNNAME+',
+						CASE WHEN SUM(ISNULL('+@ENDTDATECOLUMNNAME+',0))=0 THEN NULL ELSE CASE WHEN SUM(ISNULL('+@ENDTDATECOLUMNNAME+',0))<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(SUM('+@ENDTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(SUM('+@ENDTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'')  END END AS '+@ENDTDATECOLUMNNAME+'
+						FROM #TAB WHERE PARTICULARS=''Initial Margin'' GROUP BY CLIENTID
+						
+						UNION ALL
+
+						SELECT CLIENTID,''Combined'' as Combined,''Exposure Margin'' AS CombinedNAME,
+						CASE WHEN SUM(ISNULL('+@PREVDATECOLUMNAME+',0))=0 THEN NULL ELSE CASE WHEN SUM(ISNULL('+@PREVDATECOLUMNAME+',0))<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(SUM('+@PREVDATECOLUMNAME+')) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(SUM('+@PREVDATECOLUMNAME+')) AS VARCHAR(8000)),''N'')  END END AS '+@PREVDATECOLUMNAME+',
+						CASE WHEN SUM(ISNULL('+@ONTDATECOLUMNNAME+',0))=0 THEN NULL ELSE CASE WHEN SUM(ISNULL('+@ONTDATECOLUMNNAME+',0))<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(SUM('+@ONTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(SUM('+@ONTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'')  END END AS '+@ONTDATECOLUMNNAME+',
+						CASE WHEN SUM(ISNULL('+@ENDTDATECOLUMNNAME+',0))=0 THEN NULL ELSE CASE WHEN SUM(ISNULL('+@ENDTDATECOLUMNNAME+',0))<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(SUM('+@ENDTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(SUM('+@ENDTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'')  END END AS '+@ENDTDATECOLUMNNAME+'
+						FROM #TAB WHERE PARTICULARS=''Exposure Margin'' GROUP BY CLIENTID
+						
+						UNION ALL
+
+						SELECT CLIENTID,''Combined'' as Combined,''Total Margin'' AS CombinedNAME,
+						CASE WHEN SUM(ISNULL('+@PREVDATECOLUMNAME+',0))=0 THEN NULL ELSE CASE WHEN SUM(ISNULL('+@PREVDATECOLUMNAME+',0))<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(SUM('+@PREVDATECOLUMNAME+')) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(SUM('+@PREVDATECOLUMNAME+')) AS VARCHAR(8000)),''N'')  END END AS '+@PREVDATECOLUMNAME+',
+						CASE WHEN SUM(ISNULL('+@ONTDATECOLUMNNAME+',0))=0 THEN NULL ELSE CASE WHEN SUM(ISNULL('+@ONTDATECOLUMNNAME+',0))<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(SUM('+@ONTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(SUM('+@ONTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'')  END END AS '+@ONTDATECOLUMNNAME+',
+						CASE WHEN SUM(ISNULL('+@ENDTDATECOLUMNNAME+',0))=0 THEN NULL ELSE CASE WHEN SUM(ISNULL('+@ENDTDATECOLUMNNAME+',0))<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(SUM('+@ENDTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(SUM('+@ENDTDATECOLUMNNAME+')) AS VARCHAR(8000)),''N'')  END END AS '+@ENDTDATECOLUMNNAME+'
+						FROM #TAB WHERE PARTICULARS=''Total Margin'' GROUP BY CLIENTID
+
+						UNION ALL
+
+						SELECT CLIENT,''Combined'' as Combined,''Additional Margin Reqd By Member as per RMS'' AS CombinedNAME,
+						--CASE WHEN (ISNULL(MIN_PRVDATE,0))=0 THEN NULL ELSE CASE WHEN ISNULL(MIN_PRVDATE,0)<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(MIN_PRVDATE) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(MIN_PRVDATE) AS VARCHAR(8000)),''N'')  END END AS feild,
+						--CASE WHEN (ISNULL(MIN_ONDATE,0))=0 THEN NULL ELSE CASE WHEN ISNULL(MIN_ONDATE,0)<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(MIN_ONDATE) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(MIN_ONDATE) AS VARCHAR(8000)),''N'')  END END AS feild1,
+						--CASE WHEN (ISNULL(MIN_ENDDATE,0))=0 THEN NULL ELSE CASE WHEN ISNULL(MIN_ENDDATE,0)<0 THEN ''-''+dbo.fn_FormatNumber(CAST(ABS(MIN_ENDDATE) AS VARCHAR(8000)),''N'') ELSE dbo.fn_FormatNumber(CAST(ABS(MIN_ENDDATE) AS VARCHAR(8000)),''N'')  END END AS feild2
+						''''AS feild,''''AS feild1,''''AS feild2
+						FROM #TT 
+
+
+						UNION ALL
+
+						SELECT CLIENT,''Combined'' as Combined,''Excess Margin Deposit'' AS CombinedNAME,
+						CASE WHEN (ISNULL(AMNT_PRVDATE,0))=0 THEN NULL ELSE CASE WHEN ISNULL(AMNT_PRVDATE,0)<0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(ABS(AMNT_PRVDATE) AS VARCHAR(8000)),''N'')  END END AS feild,
+						CASE WHEN (ISNULL(AMNT_ONDATE,0))=0 THEN NULL ELSE CASE WHEN ISNULL(AMNT_ONDATE,0)<0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(ABS(AMNT_ONDATE) AS VARCHAR(8000)),''N'')  END END AS feild1,
+						CASE WHEN (ISNULL(AMNT_ENDDATE,0))=0 THEN NULL ELSE CASE WHEN ISNULL(AMNT_ENDDATE,0)<0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(ABS(AMNT_ENDDATE) AS VARCHAR(8000)),''N'')  END END AS feild2
+						FROM #TT
+
+
+						UNION ALL
+
+						SELECT CLIENT,''Combined'' as Combined,''Shortfall (Margin Call)'' AS CombinedNAME,
+						CASE WHEN (ISNULL(AMNT_PRVDATE,0))=0 THEN NULL ELSE CASE WHEN ISNULL(AMNT_PRVDATE,0)>0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(ABS(AMNT_PRVDATE) AS VARCHAR(8000)),''N'')  END END AS feild,
+						CASE WHEN (ISNULL(AMNT_ONDATE,0))=0 THEN NULL ELSE CASE WHEN ISNULL(AMNT_ONDATE,0)>0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(ABS(AMNT_ONDATE) AS VARCHAR(8000)),''N'')  END END AS feild1,
+						CASE WHEN (ISNULL(AMNT_ENDDATE,0))=0 THEN NULL ELSE CASE WHEN ISNULL(AMNT_ENDDATE,0)>0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(ABS(AMNT_ENDDATE) AS VARCHAR(8000)),''N'')  END END AS feild2
+						FROM #TT
+						'
+						
+						EXEC(@SQL)
+						
+				END
+				ELSE
+				BEGIN
+						SELECT '0' AS CLIENTID
+						
+				END	
+		
+			DROP TABLE #TT
+			IF @CHKDETAILSEQURITY<>'UNCHK'
+				BEGIN
+							---------SCRIP NAME FETCH
+							update #MARGINSTOCKS1 set scripname=
+							(isnull(Equity_TickerSymbol,''))+' ['+ltrim(rtrim((isnull(Equity_Series,ISNULL(Equity_TICKERCODE,'')))))+']'
+							from master_equity where Equity_SeriesID=productid
+
+							-------ISIN NUMBER FETCH
+							update #MARGINSTOCKS1 set isinno=substring(isin_number,1,12)
+							from master_isin where
+							ISIN_ProductSeriesID=productid and isin_isactive='Y'
+							
+							-------------ALL DATA
+							SELECT Clientid,round(Stocksresult,2) as Stocksresult,
+							Quantity,closeprice,segmentname,productid,
+							varmargin,stocktype,scripname,isinno,
+							DPAccounts_ShortName,
+							rtrim(DPAccounts_dpid)+' / '+rtrim(DPAccounts_clientid) as dpcliid,
+							round(SUMRESULT,2) as SUMStocksresult,ROUND(SUMRESULT,0) AS SUMRESULT1
+							FROM #MARGINSTOCKS1,master_dpaccounts,
+							(SELECT SUM(ISNULL(Stocksresult,0)) AS SUMStocksresult,Clientid AS CUSTID,
+							segmentname AS SEG FROM #MARGINSTOCKS1 GROUP BY Clientid,segmentname) AS SEGWISESUMTB,
+							(SELECT SUM(ISNULL(Stocksresult,0)) AS SUMRESULT,Clientid AS CUSTID1
+							FROM #MARGINSTOCKS1 GROUP BY Clientid) AS TOTALSUMTB
+							where CUSTID=Clientid AND segmentname=SEG
+							AND CUSTID1=Clientid AND CUSTID=CUSTID1
+							AND DPAccounts_ID=accid AND DPAccounts_CompanyID=@CompanyID
+							AND ISNULL(Stocksresult,0)<>0
+							and IsPOA is NULL
+							
+							UNION ALL
+							
+							SELECT Clientid,round(Stocksresult,2) as Stocksresult,
+							Quantity,closeprice,segmentname,productid,
+							varmargin,stocktype,scripname,isinno,
+							segmentname,
+							accid as dpcliid,
+							round(SUMRESULT,2) as SUMStocksresult,ROUND(SUMRESULT,0) AS SUMRESULT1
+							FROM #MARGINSTOCKS1,
+							(SELECT SUM(ISNULL(Stocksresult,0)) AS SUMStocksresult,Clientid AS CUSTID,
+							segmentname AS SEG FROM #MARGINSTOCKS1 GROUP BY Clientid,segmentname) AS SEGWISESUMTB,
+							(SELECT SUM(ISNULL(Stocksresult,0)) AS SUMRESULT,Clientid AS CUSTID1
+							FROM #MARGINSTOCKS1 GROUP BY Clientid) AS TOTALSUMTB
+							where CUSTID=Clientid AND segmentname=SEG
+							AND CUSTID1=Clientid AND CUSTID=CUSTID1
+							AND ISNULL(Stocksresult,0)<>0
+							and IsPOA='Y'
+
+							order by segmentname,scripname
+
+							
+							
+				END
+			ELSE
+				BEGIN
+							-------------ALL DATA
+							SELECT '0' AS CLIENTID
+							
+				END
+				IF @CHKPRINT='UNCHK'
+					BEGIN
+						select top 1 ('Name: '+LTRIM(RTRIM(ISNULL(cnt_firstName,'')))+' '+LTRIM(RTRIM(ISNULL(cnt_middleName,'')))+' '+LTRIM(RTRIM(ISNULL(cnt_lastName,'')))) as Name,
+						('Address: '+ISNULL(add_address1,'')+','+isnull(add_address2,''))as Addr,(isnull(city_name,'')+'-'+isnull(add_pin,'')) as Pin,
+						'Phone: '+phf_phoneNumber as Phone,'Email: '+eml_email as Email from tbl_master_companyExchange,tbl_master_contact,
+						tbl_master_address,tbl_master_phonefax,tbl_master_email,tbl_master_city  
+						where exch_ComplianceOfficer=cnt_internalId and exch_ComplianceOfficer=add_cntId and exch_ComplianceOfficer=phf_cntId and add_city=city_id 
+						and exch_ComplianceOfficer=eml_cntId and exch_ComplianceOfficer=(select exch_ComplianceOfficer from tbl_master_companyExchange where exch_internalId=@segmentname)
+						
+					END
+					-----For email by devexpress control---newly develop
+					Create Table #DistinctClient(clientid varchar(max),clientwithemail varchar(max))
+					insert into #DistinctClient
+					select distinct CLIENTID,clientemail from #TAB1
+					select COUNT(clientid) from #DistinctClient
+					select COUNT(clientwithemail) from #DistinctClient where len(ltrim(rtrim(ISNULL(clientwithemail,''))))>0
+					
+					select count( distinct SignedDocuments_ContactBenID) from Trans_SignedDocuments
+					where SignedDocuments_DocumentType=99
+					and SignedDocuments_FinYear=@Finyear
+					and SignedDocuments_ForDate=@date
+					
+					create table #remaining (remainingclient varchar(max))
+					
+					insert into #remaining 
+					select CLIENTID from #TAB1 where len(ltrim(rtrim(ISNULL(clientemail,''))))>0
+					except
+					select SignedDocuments_ContactBenID from Trans_SignedDocuments
+					where SignedDocuments_DocumentType=99
+					and SignedDocuments_FinYear=@Finyear
+					and SignedDocuments_ForDate=@date
+					select COUNT(remainingclient) from #remaining
+					Declare @emailenableallclient varchar(max),@remainingclient varchar(max),@allclient varchar(max),@deliverclient varchar(max)
+					
+					 select @emailenableallclient=coalesce(@emailenableallclient+''',''','')+clientid 
+					 from #DistinctClient where len(ltrim(rtrim(ISNULL(clientwithemail,''))))>0
+					 set @emailenableallclient=''''+@emailenableallclient+''''
+					 select @emailenableallclient
+					 
+					 select @remainingclient=coalesce(@remainingclient+''',''','')+remainingclient 
+					 from #remaining --where len(ltrim(rtrim(ISNULL(clientemail,''))))>0
+					 set @remainingclient=''''+@remainingclient+''''
+					 select @remainingclient
+					 
+					 
+					 select @allclient=coalesce(@allclient+''',''','')+clientid
+					 from #DistinctClient --where len(ltrim(rtrim(ISNULL(clientemail,''))))>0
+					 set @allclient=''''+@allclient+''''
+					 select @allclient
+					 
+					 
+					 
+					 select @deliverclient=coalesce(@deliverclient+''',''', '') + Convert(varchar,SignedDocuments_ContactBenID) from 
+						(select distinct SignedDocuments_ContactBenID from Trans_SignedDocuments
+						where SignedDocuments_DocumentType=99
+						and SignedDocuments_FinYear=@Finyear
+						and SignedDocuments_ForDate=@date
+						) rr
+						 set @deliverclient=''''+@deliverclient+''''
+					     select @deliverclient
+					------------------------------------------------------------
+					
+					--Create Table #DistinctClientwithmailid(cientidonly varchar(max),clientwithemail varchar(max))
+					--insert into #DistinctClientwithmailid
+					--select distinct CLIENTID,clientemail from #TAB1
+			DROP TABLE #t
+			DROP TABLE #t1
+			DROP TABLE #TAB
+			Drop Table #TAB1
+			Drop Table #Client
+			DROP TABLE #TABSEGMENT
+			DROP TABLE #MARGINSTOCKS
+			DROP TABLE #MARGINSTOCKS1
+set nocount off
+END

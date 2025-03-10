@@ -1,0 +1,70 @@
+--------Replace Old Method---------------
+
+#region ShowClientFORMarginStocks
+
+else if (idlist[0] == "ClientsGroup")
+           {
+                if (Session["userlastsegment"].ToString() == "9" || Session["userlastsegment"].ToString() == "10")
+                {
+                    string WhichDP = Session["userlastsegment"].ToString() == "9" ? "NSDL" : "CDSL";
+                    string WhichCall_Indicator = WhichDP + "Client";
+                    if (idlist[1] == "ALL")
+                        DT = oGenericMethod.GetClient_NSDLCDSL("D", ref CombinedQuery, 10, "TextField,ValueField+'~" + WhichCall_Indicator + "',ContactID,BranchID,GPMID,GRPID,GType,GroupName,GDescription", "ContactID is not null and GType in ('" + idlist[2] + "') and TextField Like '%" + reqStr + "%'", 1, WhichDP);
+                    else
+                        DT = oGenericMethod.GetClient_NSDLCDSL("D", ref CombinedQuery, 10, "TextField,ValueField+'~" + WhichCall_Indicator + "',ContactID,BranchID,GPMID,GRPID,GType,GroupName,GDescription", "ContactID is not null and GPMID in (" + idlist[2] + ") and TextField Like '%" + reqStr + "%'", 1, WhichDP);
+
+                }
+                else
+                {
+                    if (idlist[1] == "ALL")
+                    {
+                        //  DT = oDBEngine.GetDataTable("tbl_master_contact", "top 10 isnull(rtrim(cnt_firstName),'')+' '+isnull(rtrim(cnt_middlename),'')+' '+isnull(rtrim(cnt_lastName),'')+' ['+isnull(rtrim(cnt_ucc),'')+']' ,cnt_internalID", " cnt_internalId like 'CL%' and (cnt_firstName like '" + reqStr + "%' or cnt_ucc like '" + reqStr + "%') and cnt_internalid in(select grp_contactid from tbl_trans_group where  grp_groupmaster in(select gpm_id from tbl_master_groupmaster where gpm_type='" + idlist[2] + "'))");
+                        DT = oDBEngine.GetDataTable("tbl_master_contact,tbl_master_branch ,tbl_master_contactexchange", "distinct top 10  isnull(rtrim(cnt_firstName),'')+' '+isnull(rtrim(cnt_middlename),'')+' '+isnull(rtrim(cnt_lastName),'')+' ['+isnull(rtrim(crg_tcode),'')+'] ['+isnull(rtrim( BRANCH_DESCRIPTION),'')+']' ,cnt_internalID ", " cnt_branchid=branch_id and crg_cntid=cnt_internalid  and cnt_internalid like 'CL%' AND CRG_COMPANY ='" + Session["LastCompany"].ToString() + "'  and CRG_EXCHANGE in ('" + SegmentName + "') AND (crg_tcode LIKE '" + reqStr + "%'  OR CNT_FIRSTNAME  LIKE '" + reqStr + "%') and cnt_internalid in(select grp_contactid from tbl_trans_group where  grp_groupmaster in(select gpm_id from tbl_master_groupmaster where gpm_type='" + idlist[2] + "'))");
+                    }
+                    else if (idlist[1] == "ProALL")
+                    {
+                        //  DT = oDBEngine.GetDataTable("tbl_master_contact", "top 10 isnull(rtrim(cnt_firstName),'')+' '+isnull(rtrim(cnt_middlename),'')+' '+isnull(rtrim(cnt_lastName),'')+' ['+isnull(rtrim(cnt_ucc),'')+']' ,cnt_internalID", " cnt_internalId like 'CL%' and (cnt_firstName like '" + reqStr + "%' or cnt_ucc like '" + reqStr + "%') and cnt_internalid in(select grp_contactid from tbl_trans_group where  grp_groupmaster in(select gpm_id from tbl_master_groupmaster where gpm_type='" + idlist[2] + "'))");
+                        DT = oDBEngine.GetDataTable("tbl_master_contact,tbl_master_branch ,tbl_master_contactexchange", "distinct top 10  isnull(rtrim(cnt_firstName),'')+' '+isnull(rtrim(cnt_middlename),'')+' '+isnull(rtrim(cnt_lastName),'')+' ['+isnull(rtrim(crg_tcode),'')+'] ['+isnull(rtrim( BRANCH_DESCRIPTION),'')+']' ,cnt_internalID ", " cnt_branchid=branch_id and crg_cntid=cnt_internalid  and cnt_internalid like 'CL%' AND CRG_COMPANY ='" + Session["LastCompany"].ToString() + "'  and CRG_EXCHANGE in ('" + SegmentName + "') AND (crg_tcode LIKE '" + reqStr + "%'  OR CNT_FIRSTNAME  LIKE '" + reqStr + "%') and cnt_clienttype like 'Pro%' and cnt_internalid in(select grp_contactid from tbl_trans_group where  grp_groupmaster in(select gpm_id from tbl_master_groupmaster where gpm_type='" + idlist[2] + "'))");
+                    }
+                    else if (idlist[1] == "ProSelected")
+                    {
+                        DT = oDBEngine.GetDataTable("tbl_master_contact,tbl_master_branch ,tbl_master_contactexchange", "distinct top 10  isnull(rtrim(cnt_firstName),'')+' '+isnull(rtrim(cnt_middlename),'')+' '+isnull(rtrim(cnt_lastName),'')+' ['+isnull(rtrim(crg_tcode),'')+'] ['+isnull(rtrim( BRANCH_DESCRIPTION),'')+']' ,cnt_internalID ", " cnt_branchid=branch_id and crg_cntid=cnt_internalid  and cnt_internalid like 'CL%' AND CRG_COMPANY ='" + Session["LastCompany"].ToString() + "'  and CRG_EXCHANGE in ('" + SegmentName + "') AND (crg_tcode LIKE '" + reqStr + "%'  OR CNT_FIRSTNAME  LIKE '" + reqStr + "%') and cnt_clienttype like 'Pro%' and cnt_internalid in(select grp_contactid from tbl_trans_group where grp_groupmaster in(" + idlist[2] + "))");
+                    }
+                    else
+                    {
+                        // DT = oDBEngine.GetDataTable("tbl_master_contact", "top 10 isnull(rtrim(cnt_firstName),'')+' '+isnull(rtrim(cnt_middlename),'')+' '+isnull(rtrim(cnt_lastName),'')+' ['+isnull(rtrim(cnt_ucc),'')+']' ,cnt_internalID", " cnt_internalId like 'CL%' and (cnt_firstName like '" + reqStr + "%' or cnt_ucc like '" + reqStr + "%') and cnt_internalid in(select grp_contactid from tbl_trans_group where grp_groupmaster in(" + idlist[2] + "))");
+                        DT = oDBEngine.GetDataTable("tbl_master_contact,tbl_master_branch ,tbl_master_contactexchange", "distinct top 10  isnull(rtrim(cnt_firstName),'')+' '+isnull(rtrim(cnt_middlename),'')+' '+isnull(rtrim(cnt_lastName),'')+' ['+isnull(rtrim(crg_tcode),'')+'] ['+isnull(rtrim( BRANCH_DESCRIPTION),'')+']' ,cnt_internalID ", " cnt_branchid=branch_id and crg_cntid=cnt_internalid  and cnt_internalid like 'CL%' AND CRG_COMPANY ='" + Session["LastCompany"].ToString() + "'  and CRG_EXCHANGE in ('" + SegmentName + "') AND (crg_tcode LIKE '" + reqStr + "%'  OR CNT_FIRSTNAME  LIKE '" + reqStr + "%') and cnt_internalid in(select grp_contactid from tbl_trans_group where grp_groupmaster in(" + idlist[2] + "))");
+                    }
+                }
+            }
+            else if (idlist[0] == "ClientsBranch")
+            {
+                if (Session["userlastsegment"].ToString() == "9" || Session["userlastsegment"].ToString() == "10")
+                {
+                    string WhichDP = Session["userlastsegment"].ToString() == "9" ? "NSDL" : "CDSL";
+                    string WhichCall_Indicator = WhichDP + "Client";
+                    if (idlist[1] == "ALL")
+                        DT = oGenericMethod.GetClient_NSDLCDSL("D", ref CombinedQuery, 10, "TextField,ValueField+'~" + WhichCall_Indicator + "',ContactID,BranchID,GPMID,GRPID,Gtype,GroupName,GDescription", "ContactID is not null and BranchID in (" + Session["userbranchHierarchy"].ToString() + ") and TextField Like '%" + reqStr + "%'", 1, WhichDP);
+                    else
+                        DT = oGenericMethod.GetClient_NSDLCDSL("D", ref CombinedQuery, 10, "TextField,ValueField+'~" + WhichCall_Indicator + "',ContactID,BranchID,GPMID,GRPID,Gtype,GroupName,GDescription", "ContactID is not null and BranchID in (" + idlist[2] + ") and TextField Like '%" + reqStr + "%'", 1, WhichDP);
+
+                }
+                else
+                {
+                    if (idlist[1] == "ALL")
+                    {
+                        // DT = oDBEngine.GetDataTable("tbl_master_contact,tbl_master_branch", "top 10 isnull(rtrim(cnt_firstName),'')+' '+isnull(rtrim(cnt_middlename),'')+' '+isnull(rtrim(cnt_lastName),'')+' ['+isnull(rtrim(cnt_ucc),'')+'] ['+isnull(rtrim(branch_code),'')+']' ,cnt_internalID", " cnt_internalId like 'CL%' and cnt_branchid=branch_id and (cnt_firstName like '" + reqStr + "%' or cnt_ucc like '" + reqStr + "%') and cnt_branchid in(" + Session["userbranchHierarchy"].ToString() + ")");
+                        DT = oDBEngine.GetDataTable("tbl_master_contact,tbl_master_branch ,tbl_master_contactexchange", "distinct top 10  isnull(rtrim(cnt_firstName),'')+' '+isnull(rtrim(cnt_middlename),'')+' '+isnull(rtrim(cnt_lastName),'')+' ['+isnull(rtrim(crg_tcode),'')+'] ['+isnull(rtrim( BRANCH_DESCRIPTION),'')+']' ,cnt_internalID ", " cnt_branchid=branch_id and crg_cntid=cnt_internalid  and cnt_internalid like 'CL%' AND CRG_COMPANY ='" + Session["LastCompany"].ToString() + "'  and CRG_EXCHANGE in ('" + SegmentName + "') AND (crg_tcode LIKE '" + reqStr + "%'  OR CNT_FIRSTNAME  LIKE '" + reqStr + "%') and branch_id in (" + Session["userbranchHierarchy"].ToString() + ")");
+                    }
+                    else if (idlist[1] == "ProSelected")
+                    {
+                        DT = oDBEngine.GetDataTable("tbl_master_contact,tbl_master_branch ,tbl_master_contactexchange", "distinct top 10  isnull(rtrim(cnt_firstName),'')+' '+isnull(rtrim(cnt_middlename),'')+' '+isnull(rtrim(cnt_lastName),'')+' ['+isnull(rtrim(crg_tcode),'')+'] ['+isnull(rtrim( BRANCH_DESCRIPTION),'')+']' ,cnt_internalID ", " cnt_branchid=branch_id and crg_cntid=cnt_internalid  and cnt_internalid like 'CL%' AND CRG_COMPANY ='" + Session["LastCompany"].ToString() + "'  and CRG_EXCHANGE in ('" + SegmentName + "') AND (crg_tcode LIKE '" + reqStr + "%'  OR CNT_FIRSTNAME  LIKE '" + reqStr + "%') and cnt_clienttype like 'Pro%' and branch_id in (" + idlist[2] + ")");
+                    }
+                    else
+                    {
+                        // DT = oDBEngine.GetDataTable("tbl_master_contact,tbl_master_branch", "top 10 isnull(rtrim(cnt_firstName),'')+' '+isnull(rtrim(cnt_middlename),'')+' '+isnull(rtrim(cnt_lastName),'')+' ['+isnull(rtrim(cnt_ucc),'')+'] ['+isnull(rtrim(branch_code),'')+']' ,cnt_internalID", " cnt_internalId like 'CL%' and cnt_branchid=branch_id and (cnt_firstName like '" + reqStr + "%' or cnt_ucc like '" + reqStr + "%') and cnt_branchid in(" + idlist[2] + ")");
+                        DT = oDBEngine.GetDataTable("tbl_master_contact,tbl_master_branch ,tbl_master_contactexchange", "distinct top 10  isnull(rtrim(cnt_firstName),'')+' '+isnull(rtrim(cnt_middlename),'')+' '+isnull(rtrim(cnt_lastName),'')+' ['+isnull(rtrim(crg_tcode),'')+'] ['+isnull(rtrim( BRANCH_DESCRIPTION),'')+']' ,cnt_internalID ", " cnt_branchid=branch_id and crg_cntid=cnt_internalid  and cnt_internalid like 'CL%' AND CRG_COMPANY ='" + Session["LastCompany"].ToString() + "'  and CRG_EXCHANGE in ('" + SegmentName + "') AND (crg_tcode LIKE '" + reqStr + "%'  OR CNT_FIRSTNAME  LIKE '" + reqStr + "%') and branch_id in (" + idlist[2] + ")");
+                    }
+
+                }
+            }

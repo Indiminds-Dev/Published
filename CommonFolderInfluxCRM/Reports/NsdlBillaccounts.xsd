@@ -1,0 +1,29 @@
+<?xml version="1.0" standalone="yes"?>
+<xs:schema id="NewDataSet" xmlns="" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+  <xs:element name="NewDataSet" msdata:IsDataSet="true" msdata:UseCurrentLocale="true">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="Table">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="benAccountnumber" type="xs:string" minOccurs="0" />
+              <xs:element name="Statusop" type="xs:string" minOccurs="0" />
+              <xs:element name="openingBalance" type="xs:string" minOccurs="0" />
+              <xs:element name="statusCheque" type="xs:string" minOccurs="0" />
+              <xs:element name="AccountsLedger_amountCr" type="xs:string" minOccurs="0" />
+              <xs:element name="statusAdj" type="xs:string" minOccurs="0" />
+              <xs:element name="Adjustment" type="xs:string" minOccurs="0" />
+              <xs:element name="AccountsLedger_InstrumentDate" type="xs:string" minOccurs="0" />
+              <xs:element name="AccountsLedger_InstrumentNumber" type="xs:string" minOccurs="0" />
+              <xs:element name="statusNetBill" type="xs:string" minOccurs="0" />
+              <xs:element name="netBillAmt" type="xs:string" minOccurs="0" />
+              <xs:element name="statusClosing" type="xs:string" minOccurs="0" />
+              <xs:element name="closingBalance" type="xs:string" minOccurs="0" />
+              <xs:element name="StartDate" type="xs:string" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

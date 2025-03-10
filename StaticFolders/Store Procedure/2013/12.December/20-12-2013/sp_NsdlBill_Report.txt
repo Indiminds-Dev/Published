@@ -1,0 +1,269 @@
+
+-- sp_NsdlBill_Report 'NSDL-APR-1011-','NA','NA','18','COR0000001','0.01','PinCode',0,0
+
+-- sp_NsdlBill_Report 'NSDL-APR-1011-','10002415','NA','18','COR0000001','0.01','PinCode',0,0
+
+-- sp_NsdlBill_Report1 'NSDL-APR-1011-','NA','1277','18','COR0000001','0.01','G'
+
+
+-- =============================================
+-- Author:		<Author,,Name>
+-- Create date: <Create Date,,>
+-- Description:	<Description,,>
+-- =============================================
+ALTER procedure [dbo].[sp_NsdlBill_Report]
+@billnumber varchar(50),
+@BenAccount varchar(8000),
+@group varchar(8000),
+@DPChargeMembers_SegmentID varchar(20),
+@DPChargeMembers_CompanyID varchar(20),
+@billamt varchar(50),
+@generationOrder varchar(50),
+@HeaderID int,
+@FooterID int,
+@isSinglepage varchar(1)=''
+
+as
+BEGIN
+	SET NOCOUNT ON;
+
+Declare @sql varchar(max), @sql1 varchar(max)
+
+Declare  @cmpname varchar(1000), @cmpaddress varchar(4000), @firstDay varchar(30), @lastDay varchar(20), @year varchar(20), @compPhone varchar(50)
+
+Declare @cmpStaxRegNo varchar(200), @cmpPan varchar(50)
+
+Declare @header nvarchar(max)
+Declare @footer nvarchar(max)
+
+select @header='',@footer=''
+
+if @HeaderID <> 0
+	select @header= Replace(HeaderFooter_Content, char(39),'`') from Master_HeaderFooter where HeaderFooter_ID = @HeaderID
+--	select @header= Replace(HeaderFooter_Content, char(39),'`') from Master_HeaderFooter where HeaderFooter_Type='H' and HeaderFooter_ShortName='CDSL Bill Header'
+
+if @FooterID <> 0
+	select @footer= Replace(HeaderFooter_Content, char(39),'`') from Master_HeaderFooter where HeaderFooter_ID = @FooterID
+--	select @footer= Replace(HeaderFooter_Content, char(39),'`') from Master_HeaderFooter where HeaderFooter_Type='F' and HeaderFooter_ShortName='CDSL Bill Footer'
+
+
+select @cmpname=isnull(cmp_Name,'') +' [ ' +isnull(exch_TMCode,'')+' ]'  ,@cmpaddress=
+  isnull(add_address1,'')+' '+isnull(add_address2,'')+' '+isnull(add_address3,'')+', '+isnull(city_name,'')+'-'+ isnull(add_pin,'')  ,@cmpStaxRegNo=isnull(cmp_serviceTaxNo,''),@cmpPan=isnull(cmp_panNo,''),
+@compPhone=isnull((Select phf_countryCode+'-'+phf_areaCode+'-'+phf_phoneNumber from tbl_master_phonefax where phf_cntId=@DPChargeMembers_CompanyID and phf_type='Office'),'')
+from  tbl_master_address,tbl_master_company,tbl_master_companyExchange, tbl_master_city  
+where
+exch_compId=cmp_internalid and cmp_internalid=add_cntId and add_city=city_id 
+and exch_compId=@DPChargeMembers_CompanyID and exch_membershipType='NSDL'
+
+select distinct @firstDay = StartDate from Report_NsdlBill
+where DPBillSummary_BillNumber like @billnumber+'%'
+
+Set @sql=''
+Set @sql1=''
+
+if @BenAccount<>'NA'
+Begin
+	Set @sql1=' and rpt.NsdlClients_BenAccountID in ('+@BenAccount+')'
+End
+
+if @group<>'NA' and @generationOrder='GroupCode'
+Begin
+			 
+ 	Select @sql1=' and rpt.MemberGroupCode  
+					 in ('+@group+') '
+End
+if @group<>'NA' and @generationOrder='G'
+Begin
+	Select @sql1=' and (NsdlClients_DPID+convert(varchar,client.NsdlClients_BenAccountID)) in 
+						(Select grp_contactId  from tbl_trans_group where grp_groupMaster   
+						in ( '+@group+') and len(grp_contactId)=16 )'
+End
+
+Select @sql1=@sql1+ ' and rpt.DPBillSummary_NetBillAmount>='+isnull(@billamt,0.00)  
+					+' order by GenOrderPin, GenOrder,rpt.NsdlClients_BenAccountID, NSDLISIN_CompanyName, 
+NSDLISIN_Number, NsdlTransaction_SettlementNumber, Transaction_Type,
+NsdlTransaction_Date, NsdlTransaction_DrCr '
+
+--Select @sql='Select  ' 
+Select @sql='Select ''' + @isSinglepage + ''' as singlepage, ' 
+
+if @generationOrder='PinCode'
+	Begin
+		Select @sql=@sql+' ltrim(rtrim(NsdlClients_FirstHolderPinCode)) as GenOrderPin, 
+					(Select rtrim(gpm_Description)+'+ char(39) + ' ['+ char(39) +'+rtrim(gpm_code)+'+ char(39) +']'+ char(39) +' from tbl_master_groupmaster
+							where gpm_id=(Select grp_groupMaster from tbl_trans_group
+							where grp_contactId= (NsdlClients_DPID+convert(varchar,client.NsdlClients_BenAccountID))
+							and grp_groupType = ''Family''))  as GenOrder,'+
+							char(39)+ ' Group: '+char(39)+' as DisplayGenerationOrder,'
+ 	End
+else
+	if @generationOrder='BranchID'
+		Begin
+ 
+ 			Select @sql=@sql+' null as GenOrderPin, (select rtrim(branch_description) +'+ char(39) + ' ['+ char(39) +'+rtrim(branch_code)+'+ char(39) +']'+ char(39) +' from tbl_master_branch where branch_id =NsdlClients_BranchID) as GenOrder,' + char(39) +'Branch: '+ char(39) +' as DisplayGenerationOrder, '
+		End
+	else
+		if @generationOrder='GroupCode'
+			Begin
+				Select @sql=@sql+' null as GenOrderPin, (Select rtrim(ChargeGroup_Name) +'+ char(39) + ' ['+ char(39) +'+rtrim(ChargeGroup_Code)+'+ char(39) +']'+ char(39) +' from Master_ChargeGroup where 
+																	ChargeGroup_Type=3 
+																	and ChargeGroup_Code=MemberGroupCode) as GenOrder ,' + char(39) +'Group: '+ char(39) +' as DisplayGenerationOrder, '
+			End
+	else
+		if @generationOrder='G'
+			Begin
+				Select @sql=@sql+' null as GenOrderPin, (Select rtrim(gpm_Description)+'+ char(39) + ' ['+ char(39) +'+rtrim(gpm_code)+'+ char(39) +']'+ char(39) +' from tbl_master_groupmaster
+							where gpm_id=(Select grp_groupMaster from tbl_trans_group
+							where grp_contactId= (NsdlClients_DPID+convert(varchar,client.NsdlClients_BenAccountID))
+							and grp_groupMaster in ('+@group+')))  as GenOrder, '+ char(39) +'Group: '+ char(39) +' as DisplayGenerationOrder,  '
+			End
+
+--if @group<>'NA'
+--Begin		
+--	Set @sql1=' and NsdlClients_BenAccountID in 
+--			(Select DPChargeMembers_BenAccountNumber  
+--			from Trans_DPChargeMembers 
+--			where DPChargeMembers_GroupCode in 
+--				(select ChargeGroup_Code from Master_ChargeGroup 
+--				where ChargeGroup_Name in ('+@group+') 
+--				and ChargeGroup_Type=3) 
+--			and DPChargeMembers_SegmentID='+ char(39) + @DPChargeMembers_SegmentID + char(39) +
+--			' and DPChargeMembers_CompanyID='+ char(39) + @DPChargeMembers_CompanyID + char(39) +')'
+--End
+
+--Set @sql1=@sql1+ ' and DPBillSummary_NetBillAmount>='+isnull(@billamt,0.00)+
+--' order by NsdlClients_BenAccountID, NSDLISIN_CompanyName, 
+--NSDLISIN_Number, NsdlTransaction_SettlementNumber, Transaction_Type,
+--NsdlTransaction_Date, NsdlTransaction_DrCr'
+
+
+Set @sql=@sql
+				+ char(39) +isnull(@cmpname,'') + char(39) + ' as cmpname,'
+				+ char(39) +isnull(@cmpaddress,'')+ 
+				', Phone:' +isnull(@compPhone,'')+ char(39) +' as cmpaddress,'
+				+ char(39) +isnull(@cmpStaxRegNo,'') + char(39) +' as cmpStaxRegNo,'
+				+ char(39) +isnull(@cmpPan,'') + char(39) +' as companyPan,
+
+				CONVERT(varchar,NsdlClients_ActivationDateTime,106) as NsdlClients_ActivationDate,
+
+				case when dbo.fn_BeneficiaryType(NsdlClients_BenType,NsdlClients_BenSubType)=''CM''
+					then ''Clearing Member''
+				else dbo.fn_BeneficiaryType(NsdlClients_BenType,NsdlClients_BenSubType)
+				end +
+				case when dbo.fn_BeneficiarySubType(NsdlClients_BenType,NsdlClients_BenSubType) is null
+					then ''''
+				else '' [ ''+ dbo.fn_BeneficiarySubType(NsdlClients_BenType,NsdlClients_BenSubType)+'' ] ''
+				end as BenTypeSubtype,
+
+				BenAccCategory=dbo.fn_BenAccCategory(NsdlClients_BenAccountCategory),
+
+				dbo.fn_BenStatus(NsdlClients_BeneficiaryStatus)as AccountStatus,
+
+				(select  convert(varchar,max(NsdlTransaction_Date),106) from Trans_NsdlTransaction 
+				where NsdlTransaction_BenAccountNumber = rpt.NsdlClients_BenAccountID
+				and NsdlTransaction_Date < convert(datetime,''' + @firstDay + '''))
+				as TransactionBeforeStartDate,
+
+				ltrim(rtrim(NsdlClients_BenFirstHolderName)) as name1,
+				ltrim(rtrim(NsdlClients_FirstHolderPAN)) as PAN,
+
+				ltrim(rtrim(NsdlClients_BenSecondHolderName)) +
+				case when len(ltrim(rtrim(NsdlClients_BenThirdHolderName))) = 0
+				then ''''
+				else '', '' + ltrim(rtrim(NsdlClients_BenThirdHolderName))
+				end as name2,  
+
+				ltrim(rtrim(NsdlClients_FirstHolderAdd1)) +
+				case when len(ltrim(rtrim(NsdlClients_FirstHolderAdd2))) > 0
+				then '', '' + ltrim(rtrim(NsdlClients_FirstHolderAdd2)) 
+				else '''' end 
+				as Address1,
+
+				case when len(ltrim(rtrim(NsdlClients_FirstHolderAdd3))) > 0
+				then ltrim(rtrim(NsdlClients_FirstHolderAdd3))
+				else '''' end +
+				case when len(ltrim(rtrim(NsdlClients_FristHolderAdd4))) > 0
+				then 
+					case when len(ltrim(rtrim(NsdlClients_FirstHolderAdd3))) > 0
+					then '', '' + ltrim(rtrim(NsdlClients_FristHolderAdd4))
+					else ltrim(rtrim(NsdlClients_FristHolderAdd4)) end
+				else '''' end 
+				as Address2,
+
+				case when len(ltrim(rtrim(NsdlClients_FirstHolderPinCode))) > 0
+				then ''Pin: '' + ltrim(rtrim(NsdlClients_FirstHolderPinCode))
+				else '''' end +
+				case when len(ltrim(rtrim(NsdlClients_FirstHolderMobile))) > 0
+				then '', Mobile: '' + ltrim(rtrim(NsdlClients_FirstHolderMobile))
+				when len(ltrim(rtrim(NsdlClients_FirstHolderPhone))) > 0
+				then '', Phone: '' + ltrim(rtrim(NsdlClients_FirstHolderPhone))
+				else '''' end
+				as PinCode,					
+
+				(select NSDLISIN_CompanyName from Master_NSDLISIN 
+				where NSDLISIN_Number = rpt.NSDLISIN_Number) as NSDLISIN_CompanyName,
+				
+				isnull((select NsdlStaticData_Description from Master_NsdlStaticDataCode, Master_NSDLISIN
+				where NSDLISIN_Number = rpt.NSDLISIN_Number
+				and NsdlIsin_SecurityType = NsdlStaticData_TypeCode
+				and NsdlStaticData_FieldName=''Security Type''
+				),''Other'') as SecurityType,
+
+				startDate,
+				endDate,
+				rpt.NsdlClients_BenAccountID,
+				NSDLISIN_Number,
+				NsdlTransaction_DPMTransactionReference,
+				NsdlTransaction_Date,
+				NsdlTransaction_SettlementNumber,
+				NsdlTransaction_Quantity,
+				Rate,
+				credit,
+				debit,
+				NsdlTransaction_Particulars,
+				openingbalance,
+				closingbalance,
+				Amount,
+				NsdlTransaction_DrCr,
+				NsdlTransaction_ID,
+				Transaction_Type,
+				DPBillSummary_BillNumber,
+				DPBillSummary_BillDate,
+				DPBillSummary_PaymentDueDate,
+				DPBillSummary_NetBillAmount,
+
+				''' + @header + ''' as header, 
+				''' + @footer + ''' as footer,
+				--NsdlClients_FirstHolderEmail,
+				case when len(NsdlClients_FirstHolderEmail)>1 then NsdlClients_FirstHolderEmail else ''abcdefgh''End as NsdlClients_FirstHolderEmail,
+				HoldingNarration, HoldingCharge
+
+			from Report_NsdlBill rpt, Master_NsdlClients client
+			where rpt.NsdlClients_BenAccountID = client.NsdlClients_BenAccountID
+			and DPBillSummary_BillNumber like '+ char(39) +@billnumber+'%'+ char(39) 
+
+--print (@sql+@sql1)
+exec (@sql+@sql1)
+
+
+END
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

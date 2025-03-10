@@ -1,0 +1,55 @@
+<?xml version="1.0" standalone="yes"?>
+<xs:schema id="NewDataSet" xmlns="" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+  <xs:element name="NewDataSet" msdata:IsDataSet="true" msdata:MainDataTable="Table" msdata:UseCurrentLocale="true">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="Table">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Tabid1" type="xs:string" minOccurs="0" />
+              <xs:element name="Tabid2" type="xs:string" minOccurs="0" />
+              <xs:element name="Asset" type="xs:string" minOccurs="0" />
+              <xs:element name="Instr.Type" type="xs:string" minOccurs="0" />
+              <xs:element name="Expiry" type="xs:string" minOccurs="0" />
+              <xs:element name="Strike" type="xs:string" minOccurs="0" />
+              <xs:element name="B_x002F_F_x0020_Qty" type="xs:string" minOccurs="0" />
+              <xs:element name="B_x002F_F_x0020_Avg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Buy_x0020_Qty" type="xs:string" minOccurs="0" />
+              <xs:element name="Buy_x0020_Avg" type="xs:string" minOccurs="0" />
+              <xs:element name="Sell_x0020_Qty" type="xs:string" minOccurs="0" />
+              <xs:element name="Sell_x0020_Avg" type="xs:string" minOccurs="0" />
+              <xs:element name="Booked_x0020_P_x002F_L" type="xs:string" minOccurs="0" />
+              <xs:element name="Premium" type="xs:string" minOccurs="0" />
+              <xs:element name="C_x002F_F_x0020_Qty" type="xs:string" minOccurs="0" />
+              <xs:element name="Avg." type="xs:string" minOccurs="0" />
+              <xs:element name="Close_x0028_Instr_x0029_" type="xs:string" minOccurs="0" />
+              <xs:element name="Mtm_x0028_Instr_x0029_" type="xs:string" minOccurs="0" />
+              <xs:element name="TotalP_x002F_L_x0028_Instr_x0029_" type="xs:string" minOccurs="0" />
+              <xs:element name="Exposure" type="xs:string" minOccurs="0" />
+              <xs:element name="CfBuyValue" type="xs:string" minOccurs="0" />
+              <xs:element name="CfSellValue" type="xs:string" minOccurs="0" />
+              <xs:element name="ClientName" type="xs:string" minOccurs="0" />
+              <xs:element name="Ucc" type="xs:string" minOccurs="0" />
+              <xs:element name="GroupName" type="xs:string" minOccurs="0" />
+              <xs:element name="DISTRIBUTION" type="xs:int" minOccurs="0" />
+              <xs:element name="cmppanno" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpphno" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpfax" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpemail" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpname" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpaddress" type="xs:string" minOccurs="0" />
+              <xs:element name="CLIENTADDRESS1" type="xs:string" minOccurs="0" />
+              <xs:element name="CLIENTADDRESS2" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpservicetax" type="xs:string" minOccurs="0" />
+              <xs:element name="DATE" type="xs:string" minOccurs="0" />
+              <xs:element name="BFQtyText" type="xs:string" minOccurs="0" />
+              <xs:element name="BFAvgText" type="xs:string" minOccurs="0" />
+              <xs:element name="PremiumText" type="xs:string" minOccurs="0" />
+              <xs:element name="Image" type="xs:base64Binary" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

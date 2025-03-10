@@ -1,0 +1,1660 @@
+
+
+ALTER procedure [dbo].[NetPositionFO]
+@fromdate  varchar(30),
+@todate  varchar(30),
+@segment varchar(10),
+@Finyear VARCHAR(150),
+@MasterSegment varchar(50),
+@Companyid varchar(30),
+@ClientsID varchar(max),
+@UNDERLYING varchar(max),
+@Expiry varchar(30),
+@Branch varchar(MAX),
+@GRPTYPE VARCHAR(20),
+@GRPID VARCHAR(MAX),
+@OPENFUT varchar(10),
+@OPENOPT varchar(10),
+@ChkCharge varchar(10),
+@Chksign varchar(10),
+@rptview varchar(10),
+@InstryType varchar(2),
+@ExposureBuyCall varchar(10),
+@ExposureBuyPut varchar(10),
+@ExposurePrice varchar(5),
+@Broker varchar(5),
+@NetOrMarketVal varchar(10)
+
+
+----declare @client varchar(max),@BRANCH varchar(max),@UNDERLYING varchar(max)
+----set @client='all'
+----set @BRANCH='1,2,32,4,5,6,7,8,9,10'
+----SET @UNDERLYING='17305,5119,5141,5547,6736,5132,5123,5083,5118,5154,5072,2867,2868,2868,5134'
+----exec [NetPositionFO] 'NA','2011-12-28','66','2011-2012','5','COR0000002',@client,@UNDERLYING,'ALL',@BRANCH,'BRANCH','ALL','CHK','CHK','CHK','CHK',1,'ALL'
+
+AS
+BEGIN
+SET NOCOUNT ON
+
+		If @rptview='3' set @Chksign='UNCHK' 
+
+	DECLARE @EFFECTDATE VARCHAR(30)
+	DECLARE @sql VARCHAR(MAX),@sql1 VARCHAR(MAX),@sql2 VARCHAR(MAX),@sql3 VARCHAR(MAX),
+			@sql4 VARCHAR(MAX),@sql5 VARCHAR(MAX),@sql6 VARCHAR(MAX),@sql7 VARCHAR(MAX),@sql8 VARCHAR(MAX),
+			@sqlinstrutype varchar(500)
+	IF @fromdate<>'NA'
+		BEGIN
+			SELECT @EFFECTDATE=@fromdate
+		END
+	ELSE
+		BEGIN
+			SELECT @EFFECTDATE=@todate
+			SELECT @fromdate=@todate
+		END
+
+			----------TEMP TABLE CREATE
+			CREATE TABLE #TAB (CUSTOMERID VARCHAR(50),PRODUCTID VARCHAR(50),
+							  CLIENTNAME VARCHAR(500),UCC VARCHAR(50),GRPID VARCHAR(50),GRPNAME VARCHAR(500),EMAIL VARCHAR(500),
+							  SYMBOL VARCHAR(500),FOIDENTIFIER VARCHAR(50),EXPIRYDATE DATETIME,
+							  BFQTY NUMERIC(28,0),BFSETTPRICE NUMERIC(28,2),BFVALUE NUMERIC(28,2),
+							  BUYQTY NUMERIC(28,0),SELLQTY NUMERIC(28,0),BUYAVG NUMERIC(28,4),
+							  BUYVALUE  NUMERIC(28,2),SELLVALUE  NUMERIC(28,2),SELLAVG NUMERIC(28,4),
+							  CFQTY NUMERIC(28,0),CFSETTPRICE NUMERIC(28,2),CFVALUE NUMERIC(28,2),
+							  EXCASNQTY NUMERIC(28,0),
+							  MTM NUMERIC(28,2),FINSETT NUMERIC(28,2),PRM NUMERIC(28,2),EXCASNVALUE NUMERIC(28,2),
+							  NETOBLIGATION NUMERIC(28,2),
+							  BFVALUESUM NUMERIC(28,0),CFVALUESUM NUMERIC(28,2),
+							  BUYQTYSUM NUMERIC(28,0),BUYVALUESUM  NUMERIC(28,2),BUYAVGSUM NUMERIC(28,4),
+							  SELLQTYSUM NUMERIC(28,0),SELLVALUESUM  NUMERIC(28,2),SELLAVGSUM NUMERIC(28,4),
+							  NETOBLIGATIONSUM NUMERIC(28,2),
+							  MTMSUM NUMERIC(28,2),FINSETTSUM NUMERIC(28,2),PRMSUM NUMERIC(28,2),EXCASNVALUESUM NUMERIC(28,2),
+							  BRKGID VARCHAR(50),TRANCHARGE NUMERIC(28,2),SRVTAXTRANCHARGE NUMERIC(28,2),
+							  STAMPCHARGE NUMERIC(28,2),STTAX NUMERIC(28,2),SEBICHARGE NUMERIC(28,2),
+							  BRKGCHARGE NUMERIC(28,2),BRKGMODE VARCHAR(20),
+							  NETOBLIGATIONCHARGE NUMERIC(28,2),CLEARINGCHARGE NUMERIC(28,2),SRVTAXCLEARINGCHARGE NUMERIC(28,2))
+
+			CREATE TABLE #TEMP_QTY(CUSTOMERID1 VARCHAR(50),PRODUCTID1 VARCHAR(50),
+								   CLIENTNAME1 VARCHAR(500),UCC1 VARCHAR(50),
+								   GRPID1 VARCHAR(50),GRPNAME1 VARCHAR(500),EMAIL1 VARCHAR(500),
+							       SYMBOL1 VARCHAR(50),FOIDENTIFIER1 VARCHAR(50),EXPIRYDATE1 DATETIME,
+								   QTY NUMERIC(28,0),AMNT NUMERIC(28,2))
+
+-----------------create table for All record fetch
+---------SELECT INSTRUMENT TYPE
+
+
+	CREATE TABLE #TEMP_ALL(CUSTOMERID1 VARCHAR(15),PRODUCTID1 VARCHAR(20),
+						   CLIENTNAME1 VARCHAR(200),UCC1 VARCHAR(20),
+						   GRPID1 VARCHAR(30),GRPNAME1 VARCHAR(500),EMAIL1 VARCHAR(500),
+						   SYMBOL1 VARCHAR(30),FOIDENTIFIER1 VARCHAR(50),EXPIRYDATE1 DATETIME,
+						   QTY NUMERIC(28,0),NetValue NUMERIC(28,2),TradeCategory varchar(20))
+
+	
+	SELECT @sql='
+	SELECT
+	customertrades_customerid AS CUSTOMERID,
+	customertrades_productseriesid AS PRODUCT,
+	CASE WHEN isnull(Equity_StrikePrice,0.0)=0.0 THEN 
+			  ISNULL(LTRIM(RTRIM(EQUITY_TICKERSYMBOL)),'' '')+'' ''+ISNULL(LTRIM(RTRIM(EQUITY_SERIES)),'' '')
+	ELSE 
+			  ISNULL(LTRIM(RTRIM(EQUITY_TICKERSYMBOL)),'''')+'' ''+
+				ISNULL(LTRIM(RTRIM(EQUITY_SERIES)),'' '')+'' ''+
+					cast(cast(round(Equity_StrikePrice,2) as numeric(28,2)) as varchar)
+	END AS SYMBOL,
+	SUBSTRING(EQUITY_FOIDENTIFIER,1,3) AS FOIDENTIFIER,
+	equity_effectuntil AS EXPIRY,
+	customertrades_unitpricequantity,'
+	IF(@NetOrMarketVal='NetVal')
+	BEGIN
+		Select @sql=@sql+'customertrades_netvalue,'
+	END
+	Else
+	BEGIN
+		Select @sql=@sql+'CustomerTrades_MarketValue,'
+	END
+	Select @sql=@sql+'case when CustomerTrades_TradeCategory in(''EXC'',''ASN'') then CustomerTrades_TradeCategory else null end,
+	isnull(rtrim(cnt_firstName),'' '') +'' ''+isnull(rtrim(cnt_middleName),'' '')+'' ''+isnull(rtrim(cnt_lastName),'' '') AS CLIENTNAME,
+	isnull(rtrim(cnt_UCC),'' '') as UCC , '
+	IF(@GRPTYPE='BRANCH' OR @GRPTYPE='BRANCHGROUP')
+	BEGIN
+			Select @sql=@sql+'branch_id as grpid,isnull(rtrim(branch_description),'+char(39)+''+char(39)+')+''[''+isnull(rtrim(branch_code),'+char(39)+''+char(39)+')+'']'' as grpname,branch_cpEmail as email'
+	END
+	ELSE 
+	BEGIN
+			Select @sql=@sql+'gpm_id as grpid,isnull(rtrim(GPM_DESCRIPTION),'+char(39)+''+char(39)+')+''[''+isnull(rtrim(GPM_CODE),'+char(39)+''+char(39)+')+'']'' as grpname,gpm_emailID as email'
+	END
+
+	IF @InstryType='1'
+	BEGIN
+		SELECT @sqlinstrutype=' (Equity_FOIdentifier=''FUTSTK'' or Equity_FOIdentifier=''OPTSTK'')'
+	END
+	IF @InstryType='2'
+	BEGIN
+		SELECT @sqlinstrutype=' Equity_FOIdentifier=''FUTSTK'''
+	END	
+	IF @InstryType='3'
+	BEGIN
+		SELECT @sqlinstrutype=' Equity_FOIdentifier=''OPTSTK'''
+	END	
+	IF @InstryType='4'
+	BEGIN
+		SELECT @sqlinstrutype=' (Equity_FOIdentifier=''FUTIDX'' or Equity_FOIdentifier=''OPTIDX'')'
+	END
+	IF @InstryType='5'
+	BEGIN
+		SELECT @sqlinstrutype=' Equity_FOIdentifier=''FUTIDX'''
+	END	
+	IF @InstryType='6'
+	BEGIN
+		SELECT @sqlinstrutype=' Equity_FOIdentifier=''OPTIDX'''
+	END
+	IF @InstryType='7'
+	BEGIN
+		SELECT @sqlinstrutype=' (Equity_FOIdentifier=''FUTIDX'' or Equity_FOIdentifier=''FUTSTK'')'
+	END
+	IF @InstryType='8'
+	BEGIN
+		SELECT @sqlinstrutype=' (Equity_FOIdentifier=''OPTIDX'' or Equity_FOIdentifier=''OPTSTK'')'
+	END
+
+	Select @sql=@sql+'
+	from master_equity,trans_customertrades,tbl_master_contact, '
+	IF(@GRPTYPE='BRANCH' OR @GRPTYPE='BRANCHGROUP')
+	BEGIN
+		Select @sql=@sql+ 'tbl_master_branch '
+	END
+	ELSE
+	BEGIN
+		Select @sql=@sql+'tbl_master_groupmaster,tbl_trans_group '
+	END
+
+	SELECT @sql2= 'where
+	equity_seriesid = customertrades_productseriesid 
+	AND CNT_INTERNALID=customertrades_customerid'
+	IF(@GRPTYPE='BRANCH')
+		BEGIN
+			Select @sql2=@sql2+ ' AND cnt_branchid=branch_id'
+			IF(@grpid<>'ALL')
+			BEGIN
+				Select @sql2=@sql2+' AND cnt_branchid IN ('+@GRPID+')'	
+			END
+		END
+	ELSE IF(@GRPTYPE='BRANCHGROUP')
+		BEGIN
+			Select @sql2=@sql2+ ' AND cnt_branchid=branch_id'
+			IF(@grpid<>'ALL')
+				BEGIN
+					Select @sql2=@sql2+' AND cnt_branchid IN (select distinct branchgroupmembers_branchid from trans_branchgroupmembers where branchgroupmembers_branchgroupid in('+@grpid+'))'	
+				END
+			ELSE
+				BEGIN
+					Select @sql2=@sql2+' AND cnt_branchid IN (select distinct branchgroupmembers_branchid from trans_branchgroupmembers)'		
+				END
+		END
+	ELSE
+		BEGIN
+			Select @sql2=@sql2+ '
+			AND cnt_internalid=grp_contactid
+			AND gpm_type='''+@GRPTYPE+'''
+			AND grp_groupmaster=gpm_id
+			AND GRP_GROUPTYPE='''+@GRPTYPE+''''
+			IF(@grpid<>'ALL')
+			BEGIN
+				Select @sql2=@sql2+' AND grp_groupmaster IN ('+@GRPID+')'	
+			END
+		END 
+	 IF @ClientsID<>'ALL'
+		BEGIN
+				Select @sql2=@sql2+ ' and customertrades_customerid IN ('+@ClientsID+')'	
+		END
+		if @Broker='NA'
+						Begin
+						Select @sql2=@sql2+' and customertrades_customerid like ''CL%''' --and cnt_branchid in ('+@BranchHierchy+')'
+						End
+						if @Broker='BO'
+						Begin
+						Select @sql2=@sql2+' and customertrades_customerid like ''BO%''' --and cnt_branchid in ('+@BranchHierchy+')'
+						End
+	  IF @Expiry<>'ALL'
+		BEGIN
+			Select @sql2=@sql2+ ' and Equity_EffectUntil='''+@Expiry+''''
+		END
+	  IF @InstryType<>'0'
+		BEGIN
+			Select @sql2=@sql2+ ' AND'+ @sqlinstrutype
+		END
+		Select @sql2=@sql2+ '
+		 AND cnt_branchid IN ('+@Branch+') and isnull(CustomerTrades_TradeCategory,''RRR'') not in(''ARS'',''ART'')
+		AND (Equity_EffectUntil>='''+@EFFECTDATE+''' OR Equity_EffectUntil IS NULL)
+		AND Equity_ProductID in (select products_id from master_products where (products_id in ('+@UNDERLYING+') or products_derivedfromid in ('+@UNDERLYING+')))
+		AND customertrades_tradedate  BETWEEN '''+@fromdate+''' AND '''+@todate+'''
+		AND customertrades_EXCHANGESEGMENT='''+@segment+'''
+		AND customertrades_COMPANYID='''+@companyid+''''
+
+								
+insert into #TEMP_ALL(CUSTOMERID1,PRODUCTID1,SYMBOL1,FOIDENTIFIER1,EXPIRYDATE1,QTY,NetValue,
+TradeCategory,CLIENTNAME1,UCC1,GRPID1,GRPNAME1,EMAIL1)exec (@sql+@sql2)
+
+						-------------------ALL RECORD FETCH(CLIENTID,[PRODUCTID-EX:SYMBOL,SERIES-(ALL)],BUYQTY,SELLQTY)
+									
+										INSERT INTO #TAB (CUSTOMERID,PRODUCTID,SYMBOL,FOIDENTIFIER,EXPIRYDATE,
+										GRPID,GRPNAME,EMAIL,CLIENTNAME,UCC,BUYQTY,SELLQTY,BUYVALUE,SELLVALUE,BUYAVG,SELLAVG)	
+	
+										 SELECT CASE WHEN BUYCUSTOMERID IS NULL THEN SELLCUSTOMERID ELSE BUYCUSTOMERID END AS CUSTOMERID,
+										 CASE WHEN BUYPRODUCT IS NULL THEN SELLPRODUCT ELSE BUYPRODUCT END AS PRODUCT,
+										 CASE WHEN BUYSYMBOL IS NULL THEN SELLSYMBOL ELSE BUYSYMBOL END AS TICKERSYMBOL,
+										 CASE WHEN BUYFOIDENTIFIER IS NULL THEN SELLFOIDENTIFIER ELSE BUYFOIDENTIFIER END AS FOIDENTIFIER,
+										 CASE WHEN BUYEXPIRY IS NULL THEN SELLEXPIRY ELSE BUYEXPIRY END AS EXPIRY,
+										 CASE WHEN buygrpid IS NULL THEN SELLgrpid ELSE buygrpid END AS grpid,
+										 CASE WHEN buygrpname IS NULL THEN SELLgrpname ELSE buygrpname END AS grpname,
+										 CASE WHEN buyemail IS NULL THEN SELLemail ELSE buyemail END AS email,
+										 CASE WHEN BUYCLIENTNAME IS NULL THEN SELLCLIENTNAME ELSE BUYCLIENTNAME END AS CLIENTNAME,
+										 CASE WHEN BUYUCC IS NULL THEN SELLUCC ELSE BUYUCC END AS UCC,
+										 BUYQTY,SELLQTY,BUYVAL,SELLVAL,ROUND(ISNULL(BUYVAL,0)/ISNULL(BUYQTY,1),4),
+										 ROUND(ISNULL(SELLVAL,0)/ISNULL(SELLQTY,1),4) 
+										FROM 
+							
+										(SELECT
+										CUSTOMERID1 AS BUYCUSTOMERID,
+										PRODUCTID1 AS BUYPRODUCT,
+										SYMBOL1 AS BUYSYMBOL,
+										FOIDENTIFIER1 AS BUYFOIDENTIFIER,
+										EXPIRYDATE1 AS BUYEXPIRY,
+										abs(sum(QTY)) AS BUYQTY,
+										abs(sum(NetValue)) AS BUYVAL,
+										CLIENTNAME1 AS BUYCLIENTNAME,
+										UCC1 as BUYUCC , 
+										GRPID1 as buygrpid,GRPNAME1 as buygrpname,EMAIL1 as buyemail
+										from #TEMP_ALL
+										where QTY<0 and TradeCategory is null 
+										group by SYMBOL1,EXPIRYDATE1,FOIDENTIFIER1,
+										CUSTOMERID1,PRODUCTID1,CLIENTNAME1,UCC1,GRPID1,GRPNAME1,EMAIL1) as tb
+
+										FULL OUTER JOIN
+
+										(SELECT
+										CUSTOMERID1 AS SELLCUSTOMERID,
+										PRODUCTID1 AS SELLPRODUCT,
+										SYMBOL1 AS SELLSYMBOL,
+										FOIDENTIFIER1 AS SELLFOIDENTIFIER,
+										EXPIRYDATE1 AS SELLEXPIRY,
+										abs(sum(QTY)) AS SELLQTY,
+										abs(sum(NetValue)) AS SELLVAL,
+										CLIENTNAME1 AS SELLCLIENTNAME,
+										UCC1 SELLUCC ,
+										GRPID1 as SELLgrpid,GRPNAME1 as SELLgrpname,EMAIL1 as SELLemail
+										from #TEMP_ALL
+										where QTY>0 and TradeCategory is null 
+										group by SYMBOL1,EXPIRYDATE1,FOIDENTIFIER1,
+										CUSTOMERID1,PRODUCTID1,CLIENTNAME1,UCC1,GRPID1,GRPNAME1,EMAIL1) AS SELLTAB
+
+											ON(BUYCUSTOMERID=SELLCUSTOMERID
+												AND BUYPRODUCT=SELLPRODUCT
+												  AND BUYSYMBOL=SELLSYMBOL
+													AND BUYFOIDENTIFIER=SELLFOIDENTIFIER
+													   AND BUYEXPIRY=SELLEXPIRY
+														 AND buygrpid=SELLgrpid
+															AND buygrpname=SELLgrpname
+															   AND buyemail=SELLemail
+																AND BUYUCC=SELLUCC
+																  AND BUYCLIENTNAME=SELLCLIENTNAME)
+
+							
+							
+							------------------EXC,ASN QTY AND VALUE
+							INSERT INTO #TEMP_QTY (CUSTOMERID1,PRODUCTID1,SYMBOL1,FOIDENTIFIER1,EXPIRYDATE1,
+													GRPID1,GRPNAME1,EMAIL1,CLIENTNAME1,UCC1,QTY,AMNT)
+
+										 SELECT CASE WHEN BUYCUSTOMERID IS NULL THEN SELLCUSTOMERID ELSE BUYCUSTOMERID END AS CUSTOMERID,
+										 CASE WHEN BUYPRODUCT IS NULL THEN SELLPRODUCT ELSE BUYPRODUCT END AS PRODUCT,
+										 CASE WHEN BUYSYMBOL IS NULL THEN SELLSYMBOL ELSE BUYSYMBOL END AS TICKERSYMBOL,
+										 CASE WHEN BUYFOIDENTIFIER IS NULL THEN SELLFOIDENTIFIER ELSE BUYFOIDENTIFIER END AS FOIDENTIFIER,
+										 CASE WHEN BUYEXPIRY IS NULL THEN SELLEXPIRY ELSE BUYEXPIRY END AS EXPIRY,
+										 CASE WHEN buygrpid IS NULL THEN SELLgrpid ELSE buygrpid END AS grpid,
+										 CASE WHEN buygrpname IS NULL THEN SELLgrpname ELSE buygrpname END AS grpname,
+										 CASE WHEN buyemail IS NULL THEN SELLemail ELSE buyemail END AS email,
+										 CASE WHEN BUYCLIENTNAME IS NULL THEN SELLCLIENTNAME ELSE BUYCLIENTNAME END AS CLIENTNAME,
+										 CASE WHEN BUYUCC IS NULL THEN SELLUCC ELSE BUYUCC END AS UCC,
+										 isnull(SELLQTY,0)-isnull(BUYQTY,0),
+										 ISNULL(SELLVALUE,0)-ISNULL(BUYVALUE,0)AS QTYVALUE FROM 
+							
+										(SELECT
+										CUSTOMERID1 AS BUYCUSTOMERID,
+										PRODUCTID1 AS BUYPRODUCT,
+										SYMBOL1 AS BUYSYMBOL,
+										FOIDENTIFIER1 AS BUYFOIDENTIFIER,
+										EXPIRYDATE1 AS BUYEXPIRY,
+										abs(sum(QTY)) AS BUYQTY,
+										abs(sum(NetValue)) AS BUYVALUE,
+										CLIENTNAME1 AS BUYCLIENTNAME,
+										UCC1 as BUYUCC , 
+										GRPID1 as buygrpid,GRPNAME1 as buygrpname,EMAIL1 as buyemail
+										from #TEMP_ALL
+										where QTY<0 and TradeCategory is not null 
+										group by SYMBOL1,EXPIRYDATE1,FOIDENTIFIER1,
+										CUSTOMERID1,PRODUCTID1,CLIENTNAME1,UCC1,GRPID1,GRPNAME1,EMAIL1) as tb
+
+										FULL OUTER JOIN
+
+										(SELECT
+										CUSTOMERID1 AS SELLCUSTOMERID,
+										PRODUCTID1 AS SELLPRODUCT,
+										SYMBOL1 AS SELLSYMBOL,
+										FOIDENTIFIER1 AS SELLFOIDENTIFIER,
+										EXPIRYDATE1 AS SELLEXPIRY,
+										abs(sum(QTY)) AS SELLQTY,
+										abs(sum(NetValue)) AS SELLVALUE,
+										CLIENTNAME1 AS SELLCLIENTNAME,
+										UCC1 SELLUCC ,
+										GRPID1 as SELLgrpid,GRPNAME1 as SELLgrpname,EMAIL1 as SELLemail
+										from #TEMP_ALL
+										where QTY>0 and TradeCategory is not null 
+										group by SYMBOL1,EXPIRYDATE1,FOIDENTIFIER1,
+										CUSTOMERID1,PRODUCTID1,CLIENTNAME1,UCC1,GRPID1,GRPNAME1,EMAIL1) AS SELLTAB
+
+											ON(BUYCUSTOMERID=SELLCUSTOMERID
+												AND BUYPRODUCT=SELLPRODUCT
+												  AND BUYSYMBOL=SELLSYMBOL
+													AND BUYFOIDENTIFIER=SELLFOIDENTIFIER
+													   AND BUYEXPIRY=SELLEXPIRY
+														 AND buygrpid=SELLgrpid
+															AND buygrpname=SELLgrpname
+															   AND buyemail=SELLemail
+																AND BUYUCC=SELLUCC
+																  AND BUYCLIENTNAME=SELLCLIENTNAME)
+
+												
+							UPDATE #TAB SET CUSTOMERID=CUSTOMERID1,PRODUCTID=PRODUCTID1,
+											EXCASNQTY=CASE WHEN ISNULL(QTY,0)=0.0 THEN NULL ELSE QTY END,
+											EXCASNVALUE=CASE WHEN ISNULL(AMNT,0)=0.0 THEN NULL ELSE AMNT END,
+											SYMBOL=SYMBOL1,FOIDENTIFIER=FOIDENTIFIER1,EXPIRYDATE=EXPIRYDATE1,
+											GRPID=GRPID1,GRPNAME=GRPNAME1,EMAIL=EMAIL1,CLIENTNAME=CLIENTNAME1,
+											UCC=UCC1
+							FROM #TEMP_QTY
+							WHERE (CUSTOMERID1=CUSTOMERID and  PRODUCTID1=PRODUCTID)
+
+							INSERT INTO #TAB (CUSTOMERID,PRODUCTID,SYMBOL,FOIDENTIFIER,EXPIRYDATE,
+													GRPID,GRPNAME,EMAIL,CLIENTNAME,UCC,EXCASNQTY,EXCASNVALUE)
+							SELECT CUSTOMERID1,PRODUCTID1,SYMBOL1,FOIDENTIFIER1,EXPIRYDATE1,GRPID1,GRPNAME1,EMAIL1,CLIENTNAME1,UCC1,
+								   CASE WHEN ISNULL(QTY,0)=0.0 THEN NULL ELSE QTY END,
+								   CASE WHEN ISNULL(AMNT,0)=0.0 THEN NULL ELSE AMNT END
+							FROM #TEMP_QTY
+							WHERE NOT EXISTS (SELECT 1 FROM #TAB WHERE CUSTOMERID1=CUSTOMERID and  PRODUCTID1=PRODUCTID)
+
+							DELETE FROM #TEMP_QTY
+
+							-----------------------------------UPDATE BF/QTY 
+							SELECT @sql='',@sql1='',@sql2='',@sql3='',@sql4='',@sql5='',@sql6=''
+							IF(@GRPTYPE='BRANCH' OR @GRPTYPE='BRANCHGROUP')
+											BEGIN
+												Select @sql7='tbl_master_branch '
+												SELECT @sql8= 'branch_id,branch_description,branch_code,branch_cpEmail'
+											END
+										ELSE
+											BEGIN
+												Select @sql7='tbl_master_groupmaster,tbl_trans_group '
+												SELECT @sql8= 'gpm_id,GPM_DESCRIPTION,GPM_CODE,gpm_emailID'
+											END
+
+							SELECT @sql='SELECT  CUSTOMERID,PRODUCT,TICKERSYMBOL,FOIDENTIFIER,EXPIRY,
+												 grpid,grpname,email,CLIENTNAME,UCC,BFQTY
+										 FROM
+										 (
+										 SELECT CASE WHEN BUYCUSTOMERID IS NULL THEN SELLCUSTOMERID ELSE BUYCUSTOMERID END AS CUSTOMERID,
+										 CASE WHEN BUYPRODUCT IS NULL THEN SELLPRODUCT ELSE BUYPRODUCT END AS PRODUCT,
+										 CASE WHEN BUYSYMBOL IS NULL THEN SELLSYMBOL ELSE BUYSYMBOL END AS TICKERSYMBOL,
+										 CASE WHEN BUYFOIDENTIFIER IS NULL THEN SELLFOIDENTIFIER ELSE BUYFOIDENTIFIER END AS FOIDENTIFIER,
+										 CASE WHEN BUYEXPIRY IS NULL THEN SELLEXPIRY ELSE BUYEXPIRY END AS EXPIRY,
+										 CASE WHEN buygrpid IS NULL THEN SELLgrpid ELSE buygrpid END AS grpid,
+										 CASE WHEN buygrpname IS NULL THEN SELLgrpname ELSE buygrpname END AS grpname,
+										 CASE WHEN buyemail IS NULL THEN SELLemail ELSE buyemail END AS email,
+										 CASE WHEN BUYCLIENTNAME IS NULL THEN SELLCLIENTNAME ELSE BUYCLIENTNAME END AS CLIENTNAME,
+										 CASE WHEN BUYUCC IS NULL THEN SELLUCC ELSE BUYUCC END AS UCC,
+										 ISNULL(SELLQTY,0)-ISNULL(BUYQTY,0)AS BFQTY FROM '
+							SELECT @sql1='
+										(SELECT
+										customertrades_customerid AS BUYCUSTOMERID,
+										customertrades_productseriesid AS BUYPRODUCT,
+										CASE WHEN isnull(Equity_StrikePrice,0.0)=0.0 THEN 
+												  ISNULL(LTRIM(RTRIM(EQUITY_TICKERSYMBOL)),'' '')+'' ''+ISNULL(LTRIM(RTRIM(EQUITY_SERIES)),'' '')
+										ELSE 
+												  ISNULL(LTRIM(RTRIM(EQUITY_TICKERSYMBOL)),'''')+'' ''+
+													ISNULL(LTRIM(RTRIM(EQUITY_SERIES)),'' '')+'' ''+
+														cast(cast(round(Equity_StrikePrice,2) as numeric(28,2)) as varchar)
+										END AS BUYSYMBOL,
+										SUBSTRING(EQUITY_FOIDENTIFIER,1,3) AS BUYFOIDENTIFIER,
+										equity_effectuntil AS BUYEXPIRY,
+										abs(sum(customertrades_unitpricequantity)) AS BUYQTY,
+										isnull(rtrim(cnt_firstName),'' '') +'' ''+isnull(rtrim(cnt_middleName),'' '')+'' ''+isnull(rtrim(cnt_lastName),'' '') AS BUYCLIENTNAME,
+										isnull(rtrim(cnt_UCC),'' '') BUYUCC , '
+										IF(@GRPTYPE='BRANCH' OR @GRPTYPE='BRANCHGROUP')
+												BEGIN
+													Select @sql1=@sql1+'branch_id as buygrpid,isnull(rtrim(branch_description),'+char(39)+''+char(39)+')+''[''+isnull(rtrim(branch_code),'+char(39)+''+char(39)+')+'']'' as buygrpname,branch_cpEmail as buyemail'
+												END
+										ELSE 
+											BEGIN
+													Select @sql1=@sql1+'gpm_id as buygrpid,isnull(rtrim(GPM_DESCRIPTION),'+char(39)+''+char(39)+')+''[''+isnull(rtrim(GPM_CODE),'+char(39)+''+char(39)+')+'']'' as buygrpname,gpm_emailID as buyemail'
+											END
+										Select @sql1=@sql1+'
+										from master_equity,trans_customertrades,tbl_master_contact, '
+										
+										SELECT @sql1= @sql1+@sql7+ 'where
+										equity_seriesid = customertrades_productseriesid and isnull(CustomerTrades_TradeCategory,''RRR'') not in(''ARS'',''ART'')
+										AND CNT_INTERNALID=customertrades_customerid
+										AND customertrades_unitpricequantity<0'
+
+							
+										IF(@GRPTYPE='BRANCH')
+											BEGIN
+												Select @sql2=' AND cnt_branchid=branch_id'
+												IF(@grpid<>'ALL')
+												BEGIN
+													Select @sql2=@sql2+' AND cnt_branchid IN ('+@GRPID+')'	
+												END
+											END
+										ELSE IF(@GRPTYPE='BRANCHGROUP')
+											BEGIN
+												Select @sql2=' AND cnt_branchid=branch_id'
+												IF(@grpid<>'ALL')
+													BEGIN
+														Select @sql2=@sql2+' AND cnt_branchid IN (select distinct branchgroupmembers_branchid from trans_branchgroupmembers where branchgroupmembers_branchgroupid in('+@grpid+'))'	
+													END
+												ELSE
+													BEGIN
+														Select @sql2=@sql2+' AND cnt_branchid IN (select distinct branchgroupmembers_branchid from trans_branchgroupmembers)'		
+													END
+											END
+										ELSE
+											BEGIN
+												Select @sql2='
+												AND cnt_internalid=grp_contactid
+												AND gpm_type='''+@GRPTYPE+'''
+												AND grp_groupmaster=gpm_id
+												AND GRP_GROUPTYPE='''+@GRPTYPE+''''
+												IF(@grpid<>'ALL')
+												BEGIN
+													Select @sql2=@sql2+' AND grp_groupmaster IN ('+@GRPID+')'	
+												END
+											END 
+										 IF @ClientsID<>'ALL'
+											BEGIN
+													Select @sql2=@sql2+ ' and customertrades_customerid IN ('+@ClientsID+')'	
+											END
+											if @Broker='NA'
+						Begin
+						Select @sql2=@sql2+' and customertrades_customerid like ''CL%''' --and cnt_branchid in ('+@BranchHierchy+')'
+						End
+						if @Broker='BO'
+						Begin
+						Select @sql2=@sql2+' and customertrades_customerid like ''BO%''' --and cnt_branchid in ('+@BranchHierchy+')'
+						End
+										  IF @Expiry<>'ALL'
+											BEGIN
+												Select @sql2=@sql2+ ' and Equity_EffectUntil='''+@Expiry+''''
+											END
+										  IF @InstryType<>'0'
+											BEGIN
+												Select @sql2=@sql2+ ' AND'+ @sqlinstrutype
+											END
+											Select @sql2=@sql2+ '
+											AND cnt_branchid IN ('+@Branch+') 
+											AND (Equity_EffectUntil>='''+@EFFECTDATE+''' OR Equity_EffectUntil IS NULL)
+											AND Equity_ProductID in (select products_id from master_products where (products_id in ('+@UNDERLYING+') or products_derivedfromid in ('+@UNDERLYING+')))
+											AND customertrades_tradedate<'''+@fromdate+'''
+											AND customertrades_EXCHANGESEGMENT='''+@segment+'''
+											AND customertrades_COMPANYID='''+@companyid+''''
+							SELECT @sqL3='
+										group by EQUITY_TICKERSYMBOL,EQUITY_FOIDENTIFIER,EQUITY_STRIKEPRICE,EQUITY_SERIES,equity_effectuntil,
+										customertrades_customerid,customertrades_productseriesid,cnt_firstName,cnt_middleName,
+										cnt_lastName,cnt_UCC,'+@sql8+' ) AS BUYTAB '
+
+							SELECT @sqL4='FULL OUTER JOIN
+										(SELECT
+										customertrades_customerid AS SELLCUSTOMERID,
+										customertrades_productseriesid AS SELLPRODUCT,
+										CASE WHEN isnull(Equity_StrikePrice,0.0)=0.0 THEN 
+												  ISNULL(LTRIM(RTRIM(EQUITY_TICKERSYMBOL)),'' '')+'' ''+ISNULL(LTRIM(RTRIM(EQUITY_SERIES)),'' '')
+										ELSE 
+												  ISNULL(LTRIM(RTRIM(EQUITY_TICKERSYMBOL)),'''')+'' ''+
+													ISNULL(LTRIM(RTRIM(EQUITY_SERIES)),'' '')+'' ''+
+														cast(cast(round(Equity_StrikePrice,2) as numeric(28,2)) as varchar)
+										END AS SELLSYMBOL,
+										SUBSTRING(EQUITY_FOIDENTIFIER,1,3) AS SELLFOIDENTIFIER,
+										equity_effectuntil AS SELLEXPIRY,
+										abs(sum(customertrades_unitpricequantity)) AS SELLQTY,
+										isnull(rtrim(cnt_firstName),'' '') +'' ''+isnull(rtrim(cnt_middleName),'' '')+'' ''+isnull(rtrim(cnt_lastName),'' '') AS SELLCLIENTNAME,
+										isnull(rtrim(cnt_UCC),'' '') SELLUCC , '
+										IF(@GRPTYPE='BRANCH' OR @GRPTYPE='BRANCHGROUP')
+												BEGIN
+													Select @sqL4=@sqL4+'branch_id as SELLgrpid,isnull(rtrim(branch_description),'+char(39)+''+char(39)+')+''[''+isnull(rtrim(branch_code),'+char(39)+''+char(39)+')+'']'' as SELLgrpname,branch_cpEmail as SELLemail'
+												END
+										ELSE 
+											BEGIN
+													Select @sqL4=@sqL4+'gpm_id as SELLgrpid,isnull(rtrim(GPM_DESCRIPTION),'+char(39)+''+char(39)+')+''[''+isnull(rtrim(GPM_CODE),'+char(39)+''+char(39)+')+'']'' as SELLgrpname,gpm_emailID as SELLemail'
+											END
+										Select @sqL4=@sqL4+'
+										from master_equity,trans_customertrades,tbl_master_contact ,'
+
+										SELECT @sqL4= @sqL4+@sql7+ ' where
+										equity_seriesid = customertrades_productseriesid and isnull(CustomerTrades_TradeCategory,''RRR'') not in(''ARS'',''ART'')
+										AND CNT_INTERNALID=customertrades_customerid
+										AND customertrades_unitpricequantity>0'
+
+							SELECT @sqL5='group by EQUITY_TICKERSYMBOL,EQUITY_FOIDENTIFIER,EQUITY_STRIKEPRICE,EQUITY_SERIES,equity_effectuntil,
+										customertrades_customerid,customertrades_productseriesid,cnt_firstName,cnt_middleName,
+										cnt_lastName,cnt_UCC,'+@sql8+' ) AS SELLTAB'
+
+							SELECT @sql6=' ON(BUYCUSTOMERID=SELLCUSTOMERID
+												AND BUYPRODUCT=SELLPRODUCT
+												  AND BUYSYMBOL=SELLSYMBOL
+													AND BUYFOIDENTIFIER=SELLFOIDENTIFIER
+													   AND BUYEXPIRY=SELLEXPIRY
+														 AND buygrpid=SELLgrpid
+															AND buygrpname=SELLgrpname
+															   AND buyemail=SELLemail
+																AND BUYUCC=SELLUCC
+																  AND BUYCLIENTNAME=SELLCLIENTNAME)
+											) AS KK
+										WHERE ISNULL(BFQTY,0)<>0'
+
+				
+							INSERT INTO #TEMP_QTY (CUSTOMERID1,PRODUCTID1,SYMBOL1,FOIDENTIFIER1,EXPIRYDATE1,
+													GRPID1,GRPNAME1,EMAIL1,CLIENTNAME1,UCC1,QTY)
+							EXEC(@sql+@sql1+@sql2+@sql3+@sql4+@sql2+@sql5+@sql6)
+					
+							UPDATE #TAB SET CUSTOMERID=CUSTOMERID1,PRODUCTID=PRODUCTID1,
+											BFQTY=CASE WHEN ISNULL(QTY,0)=0.0 THEN NULL ELSE QTY END,
+											SYMBOL=SYMBOL1,FOIDENTIFIER=FOIDENTIFIER1,EXPIRYDATE=EXPIRYDATE1,
+											GRPID=GRPID1,GRPNAME=GRPNAME1,EMAIL=EMAIL1,CLIENTNAME=CLIENTNAME1,UCC=UCC1
+							FROM #TEMP_QTY
+							WHERE (CUSTOMERID1=CUSTOMERID and  PRODUCTID1=PRODUCTID)
+
+							INSERT INTO #TAB (CUSTOMERID,PRODUCTID,SYMBOL,FOIDENTIFIER,EXPIRYDATE,
+													GRPID,GRPNAME,EMAIL,CLIENTNAME,UCC,BFQTY)
+							SELECT CUSTOMERID1,PRODUCTID1,SYMBOL1,FOIDENTIFIER1,EXPIRYDATE1,GRPID1,GRPNAME1,EMAIL1,CLIENTNAME1,UCC1,
+								   CASE WHEN ISNULL(QTY,0)=0.0 THEN NULL ELSE QTY END
+							FROM #TEMP_QTY
+							WHERE NOT EXISTS (SELECT 1 FROM #TAB WHERE CUSTOMERID1=CUSTOMERID and  PRODUCTID1=PRODUCTID)
+
+
+							DELETE FROM #TEMP_QTY
+							-----------------------------------UPDATE CF/QTY 
+							
+							UPDATE #TAB SET CFQTY=isnull(BFQTY,0)+abs(isnull(SELLQTY,0))-abs(isnull(BUYQTY,0))
+						
+							-----------FETCH  SettlementPrice FOR BF QTY
+								UPDATE #TAB set BFSETTPRICE=DailyStat_SettlementPrice,
+												BFVALUE=DailyStat_SettlementPrice*ISNULL(BFQTY,0)
+								FROM Trans_DailyStatistics,
+																	(
+																		select max(DailyStat_DateTime) AS DATE,
+																			   DailyStat_ProductSeriesID AS PRID
+																		from Trans_DailyStatistics,#TAB
+																		where DailyStat_DateTime<@fromdate
+																		AND ISNULL(BFQTY ,0)<>0.00
+																		AND DailyStat_ProductSeriesID=PRODUCTID
+																		group by DailyStat_ProductSeriesID
+																	) AS KK
+								WHERE ISNULL(BFQTY ,0)<>0.00
+								AND DailyStat_ProductSeriesID=PRODUCTID
+								AND DailyStat_ProductSeriesID=PRID
+								AND PRID=PRODUCTID
+								AND DailyStat_DateTime=DATE
+								-----------FETCH  SettlementPrice FOR CF QTY
+								UPDATE #TAB set CFSETTPRICE=
+								Case When @rptview='3' and @ExposurePrice='1' Then DailyStat_Assetprice 
+									 When @rptview='3' and @ExposurePrice='2' and FOIDENTIFIER='OPT' Then DailyStat_SettlementPrice 
+									 When @rptview='3' and @ExposurePrice='2' and FOIDENTIFIER='FUT' Then DailyStat_SettlementPrice 
+								Else DailyStat_SettlementPrice End ,
+												CFVALUE=
+								Case When @rptview='3' and @ExposurePrice='1' Then DailyStat_Assetprice*ISNULL(CFQTY,0) 
+									 When @rptview='3' and @ExposurePrice='2' and FOIDENTIFIER='OPT' Then DailyStat_SettlementPrice*ISNULL(CFQTY,0)
+									 When @rptview='3' and @ExposurePrice='2' and FOIDENTIFIER='FUT' Then DailyStat_SettlementPrice*ISNULL(CFQTY,0) 
+								Else DailyStat_SettlementPrice*ISNULL(CFQTY,0) End
+								FROM Trans_DailyStatistics
+								WHERE ISNULL(CFQTY ,0)<>0.00
+								AND DailyStat_ProductSeriesID=PRODUCTID
+								AND DailyStat_DateTime=@todate
+
+								------------CALCULATE PRM,FINSETT,MTM
+								UPDATE #TAB SET PRM=isnull(SELLVALUE,0.0)-isnull(BUYVALUE,0.0) WHERE FOIDENTIFIER='OPT'
+								UPDATE #TAB SET MTM=CASE WHEN
+														   EXPIRYDATE<>cast(@todate as datetime) then isnull(SELLVALUE,0.0)-isnull(BUYVALUE,0.0)
+																									  +isnull(BFVALUE,0.0)-isnull(CFVALUE,0.0)
+													ELSE NULL END,
+											FINSETT=CASE WHEN
+														   EXPIRYDATE=cast(@todate as datetime) then isnull(SELLVALUE,0.0)-isnull(BUYVALUE,0.0)
+																									  +isnull(BFVALUE,0.0)-isnull(CFVALUE,0.0)
+													ELSE NULL END
+								WHERE FOIDENTIFIER='FUT'
+								UPDATE #TAB SET NETOBLIGATION=isnull(PRM,0.0)+isnull(MTM,0.0)+isnull(FINSETT,0.0)+isnull(EXCASNVALUE,0.0)
+
+								--------------NET OBLIGATION SUM
+								UPDATE #TAB SET NETOBLIGATIONSUM=RESULT,
+												BFVALUESUM=BFVALUE_RESULT,CFVALUESUM=CFVALUE_RESULT,
+												BUYQTYSUM=BUYQTY_RESULT,BUYVALUESUM=BUYVALUE_RESULT,BUYAVGSUM=BUYAVG_RESULT,
+												SELLQTYSUM=SELLQTY_RESULT,SELLVALUESUM=SELLVALUE_RESULT,SELLAVGSUM=SELLAVG_RESULT,
+												MTMSUM=MTM_RESULT,FINSETTSUM=FINSETT_RESULT,PRMSUM=PRM_RESULT,EXCASNVALUESUM=EXCASNVALUE_RESULT
+								FROM
+													(SELECT SUM(ISNULL(NETOBLIGATION,0)) AS RESULT,CustomerID AS CLIENT,
+													 SUM(ISNULL(BFVALUE,0)) AS BFVALUE_RESULT,SUM(ISNULL(CFVALUE,0)) AS CFVALUE_RESULT,
+													 SUM(ISNULL(MTM,0)) AS MTM_RESULT,SUM(ISNULL(FINSETT,0)) AS FINSETT_RESULT,
+													 SUM(ISNULL(PRM,0)) AS PRM_RESULT,SUM(ISNULL(EXCASNVALUE,0)) AS EXCASNVALUE_RESULT,
+													 SUM(ISNULL(BUYQTY,0)) AS BUYQTY_RESULT,SUM(ISNULL(BUYVALUE,0)) AS BUYVALUE_RESULT,
+													 NULL AS BUYAVG_RESULT,SUM(ISNULL(SELLQTY,0)) AS SELLQTY_RESULT,
+													 SUM(ISNULL(SELLVALUE,0)) AS SELLVALUE_RESULT,NULL AS SELLAVG_RESULT
+													 FROM #TAB GROUP BY CustomerID) AS JJ
+								WHERE CustomerID=CLIENT AND @rptview='0'--------CLIENT WISE REPORT Or Only Open Position With Exposure
+
+								UPDATE #TAB SET NETOBLIGATIONSUM=RESULT,
+												BFVALUESUM=BFVALUE_RESULT,CFVALUESUM=CFVALUE_RESULT,
+												BUYQTYSUM=BUYQTY_RESULT,BUYVALUESUM=BUYVALUE_RESULT,BUYAVGSUM=BUYAVG_RESULT,
+												SELLQTYSUM=SELLQTY_RESULT,SELLVALUESUM=SELLVALUE_RESULT,SELLAVGSUM=SELLAVG_RESULT,
+												MTMSUM=MTM_RESULT,FINSETTSUM=FINSETT_RESULT,PRMSUM=PRM_RESULT,EXCASNVALUESUM=EXCASNVALUE_RESULT
+								FROM
+													(SELECT SUM(ISNULL(NETOBLIGATION,0)) AS RESULT,PRODUCTID AS PRID,
+													 SUM(ISNULL(BFVALUE,0)) AS BFVALUE_RESULT,SUM(ISNULL(CFVALUE,0)) AS CFVALUE_RESULT,
+													 SUM(ISNULL(MTM,0)) AS MTM_RESULT,SUM(ISNULL(FINSETT,0)) AS FINSETT_RESULT,
+													 SUM(ISNULL(PRM,0)) AS PRM_RESULT,SUM(ISNULL(EXCASNVALUE,0)) AS EXCASNVALUE_RESULT,
+													 SUM(ISNULL(BUYQTY,0)) AS BUYQTY_RESULT,SUM(ISNULL(BUYVALUE,0)) AS BUYVALUE_RESULT,
+													 SUM(ISNULL(BUYAVG,0)) AS BUYAVG_RESULT,SUM(ISNULL(SELLQTY,0)) AS SELLQTY_RESULT,
+													 SUM(ISNULL(SELLVALUE,0)) AS SELLVALUE_RESULT,SUM(ISNULL(SELLAVG,0)) AS SELLAVG_RESULT
+													 FROM #TAB GROUP BY PRODUCTID) AS JJ
+								WHERE PRODUCTID=PRID AND @rptview='1'--------SHARE WISE REPORT
+								
+								IF @rptview='0'-------CLIENT WISE BEGIN
+								BEGIN
+												------------FOR CHARGES
+												 CREATE TABLE #Charges (Temp_Clientsid varchar(50),BRKGCHARGESETUP VARCHAR(30),
+																		Temp_BrokerageId varchar(50),Temp_GroupCode varchar(50))
+
+															insert into #Charges (Temp_Clientsid,Temp_BrokerageId)
+															 SELECT DISTINCT CustomerID,BrokerageMain_ID  
+															 FROM Trans_ChargeGroupMembers,Config_BrokerageMain,#TAB
+															 WHERE ChargeGroupMembers_GroupCode=BrokerageMain_CustomerID 
+															 AND cast(@fromdate as datetime) between cast(CONVERT(VARCHAR(11),BrokerageMain_FromDate,106) as datetime) 
+															 AND cast(CONVERT(VARCHAR(11),isnull(BrokerageMain_UntilDate,'2100-01-01 00:00:00.000'),106) as datetime)
+															 AND BrokerageMain_SegmentID=@segment 
+															 AND BrokerageMain_CompanyID=@companyid 
+															 AND CUSTOMERID=ChargeGroupMembers_CustomerID
+															 AND cast(@fromdate as datetime) between cast(CONVERT(VARCHAR(11),ChargeGroupMembers_FromDate,106) as datetime)
+															 AND cast(CONVERT(VARCHAR(11),isnull(ChargeGroupMembers_UntilDate,'2100-01-01 00:00:00.000'),106) as datetime)
+															 AND ChargeGroupMembers_SegmentID=@segment 
+															 AND ChargeGroupMembers_CompanyID=@companyid
+
+												IF @ChkCharge='CHK'-------------CHARGES CALCULATION BEGIN
+												BEGIN
+															
+														IF (@fromdate=@todate) ----IF DATE RANGE NO CHARGES IS CALCULATED
+														BEGIN
+															-------------CALCULATE CHARGES
+
+															---------------STTTAX
+																	UPDATE #TAB SET STTAX =exchstttax FROM 
+																	(SELECT sum(isnull(SttaxSummary_NetSTT,0.0)) as exchstttax,SttaxSummary_CustomerID
+																	 from Trans_SttaxSummary where
+																	 SttaxSummary_Type='Prov'
+																	 and SttaxSummary_CustomerID IN (SELECT DISTINCT CUSTOMERID FROM #TAB)
+																	 and SttaxSummary_STTDate=cast(@fromdate as datetime)
+																	 and SttaxSummary_SegmentID=@segment
+																	 and SttaxSummary_CompanyID=@companyid
+																	 group by SttaxSummary_CustomerID) AS KK
+																	WHERE SttaxSummary_CustomerID=CustomerID
+
+															DECLARE @TRANCHARGES VARCHAR(50),@STAMPCHARGES VARCHAR(50),@SEBICHARGES VARCHAR(50)
+															SELECT @TRANCHARGES='N'
+															SELECT @TRANCHARGES='Y' FROM Config_TranCharge WHERE TranCharge_COMPANYID=@companyid AND TranCharge_EXCHANGESEGMENTID=@segment AND cast(@fromdate as datetime) BETWEEN TranCharge_DATEFROM AND isnull(TranCharge_DATETO,'2100-01-01 00:00:00.000')
+															SELECT @STAMPCHARGES='N'
+															SELECT @STAMPCHARGES='Y' FROM Config_StampDuty WHERE StampDuty_COMPANYID=@companyid AND StampDuty_EXCHANGESEGMENTID=@segment AND cast(@fromdate as datetime) BETWEEN StampDuty_DATEFROM AND isnull(StampDuty_DATETO,'2100-01-01 00:00:00.000') 
+															SELECT @SEBICHARGES='N'
+															SELECT @SEBICHARGES='Y' FROM Config_sebifee WHERE sebifee_COMPANYID=@companyid AND sebifee_EXCHANGESEGMENTID=@segment AND cast(@fromdate as datetime) BETWEEN sebifee_DATEFROM AND isnull(sebifee_DATETO,'2100-01-01 00:00:00.000') and sebifee_Applicablefor not in('None','NA') 
+															
+															DECLARE @CLEARINGCHARGES VARCHAR(50)
+															SELECT @CLEARINGCHARGES='N'
+															SELECT @CLEARINGCHARGES='Y' FROM Config_ClearingCharge WHERE ClearingCharge_CompanyID=@companyid AND ClearingCharge_EXCHANGESEGMENTID=@segment AND cast(@fromdate as datetime) BETWEEN ClearingCharge_DATEFROM AND isnull(ClearingCharge_DATETO,'2100-01-01 00:00:00.000')
+															
+															
+														IF((@TRANCHARGES='Y') OR (@STAMPCHARGES='Y') OR (@SEBICHARGES='Y'))
+														BEGIN
+
+			 -------ALTER COLUMN IN TEMP TABLE
+					ALTER TABLE #Charges ADD 
+					Temp_FUTSTKMkt numeric(28,6),Temp_FUTIDXMkt numeric(28,6),Temp_OPTSTKMkt numeric(28,6),
+					Temp_OPTIDXMkt numeric(28,6),Temp_FUTEXPMkt numeric(28,6),Temp_OPTSTKEXCASNMkt numeric(28,6),
+					Temp_OPTIDXEXCASNMkt numeric(28,6),
+					Temp_FUTSTKQTYMkt numeric(28,6),Temp_FUTIDXQTYMkt numeric(28,6),Temp_OPTSTKQTYMkt numeric(28,6),
+					Temp_OPTIDXQTYMkt numeric(28,6),Temp_FUTEXPQTYMkt numeric(28,6),Temp_OPTSTKEXCASNQTYMkt numeric(28,6),
+					Temp_OPTIDXEXCASNQTYMkt numeric(28,6),
+					--- For Passive orders in BSE-FO	
+					Temp_FUTSTKMktPO numeric(28,6),Temp_FUTIDXMktPO numeric(28,6),Temp_OPTSTKMktPO numeric(28,6),
+					Temp_OPTIDXMktPO numeric(28,6),Temp_FUTEXPMktPO numeric(28,6),Temp_OPTSTKEXCASNMktPO numeric(28,6),
+					Temp_OPTIDXEXCASNMktPO numeric(28,6),
+					Temp_FUTSTKQTYMktPO numeric(28,6),Temp_FUTIDXQTYMktPO numeric(28,6),Temp_OPTSTKQTYMktPO numeric(28,6),
+					Temp_OPTIDXQTYMktPO numeric(28,6),Temp_FUTEXPQTYMktPO numeric(28,6),Temp_OPTSTKEXCASNQTYMktPO numeric(28,6),
+					Temp_OPTIDXEXCASNQTYMktPO numeric(28,6),
+					--- For Passive orders in BSE-FO	
+
+					Temp_TranChargeRateFut numeric(8,6),
+					--- For Passive orders in BSE-FO	
+					Temp_TranChargeRateFutPO numeric(8,6),
+					--- For Passive orders in BSE-FO	
+					Temp_ServiceTax numeric(8,6),Temp_ServTaxEduCess numeric(8,6),Temp_ServTaxHgrEduCess numeric(8,6),
+					Temp_ChargeBasis int,Temp_STApplicable char(3),
+					
+					Temp_TotalTrancharge numeric(28,6),Temp_TranChargeFUTSTK numeric(28,6),
+					Temp_TranChargeFUTIDX numeric(28,6),Temp_TranChargeOPTSTK numeric(28,6),
+					Temp_TranChargeOPTIDX numeric(28,6),Temp_TranChargeFUTEXP numeric(28,6),
+					Temp_TranChargeOPTSTKEXCASN numeric(28,6),Temp_TranChargeOPTIDXEXCASN numeric(28,6),
+					
+					--- For Passive orders in BSE-FO	
+					Temp_TotalTranchargePO numeric(28,6),Temp_TranChargeFUTSTKPO numeric(28,6),
+					Temp_TranChargeFUTIDXPO numeric(28,6),Temp_TranChargeOPTSTKPO numeric(28,6),
+					Temp_TranChargeOPTIDXPO numeric(28,6),Temp_TranChargeFUTEXPPO numeric(28,6),
+					Temp_TranChargeOPTSTKEXCASNPO numeric(28,6),Temp_TranChargeOPTIDXEXCASNPO numeric(28,6),
+					--- For Passive orders in BSE-FO	
+					
+					Temp_ServiceTaxOnTranCharge numeric(28,6),Temp_EduCessOnTranCharge numeric(28,6),Temp_HgrEduCessOnTranCharge numeric(28,6),
+
+					Temp_RateFutStk numeric(28,6),Temp_RateFutIdx numeric(28,6),Temp_RateOpt numeric(28,6),
+					Temp_RateOptStk numeric(28,6),Temp_RateOptIdx numeric(28,6),Temp_RateFutExp numeric(28,6),
+					Temp_RateOptFS numeric(28,6),Temp_RateOptStkFS numeric(28,6),Temp_RateOptIdxFS numeric(28,6),
+
+					--- For Passive orders in BSE-FO	
+					Temp_RateFutStkPO numeric(28,6),Temp_RateFutIdxPO numeric(28,6),Temp_RateOptPO numeric(28,6),
+					Temp_RateOptStkPO numeric(28,6),Temp_RateOptIdxPO numeric(28,6),Temp_RateFutExpPO numeric(28,6),
+					Temp_RateOptFSPO numeric(28,6),Temp_RateOptStkFSPO numeric(28,6),Temp_RateOptIdxFSPO numeric(28,6),
+					--- For Passive orders in BSE-FO	
+
+					Temp_State int,CalBasis varchar(50),CLIENTTYPE VARCHAR(50),
+					RateCLFut numeric(28,6),RateCLOpt numeric(28,6),RateCLFS numeric(28,6),
+					CntrSlabMultiple numeric(28,0),MinCntr numeric(28,6),SlabAmount numeric(28,6),
+					MaxCntr numeric(28,6),
+					Temp_FUTStamduty numeric(28,6),Temp_OPTStamduty numeric(28,6),Temp_FSStamduty numeric(28,6),
+					Temp_EXPStamduty numeric(28,6),Temp_TotalStamduty numeric(28,6),OPTBasis VARCHAR(50),			
+					Temp_sebifeerate numeric(28,6),Temp_applicabel varchar(20),Temp_sebifee numeric(28,6),
+					
+					----For Clearing Charges--------------------
+					Temp_ClearingChargeRateFut numeric(8,6),					
+					Temp_ClearingChargeRateFutPO numeric(8,6),
+					Temp_ClearingSTApplicable char(3),					
+					Temp_TotalClearingcharge numeric(28,6),Temp_ClearingChargeFUTSTK numeric(28,6),
+					Temp_ClearingChargeFUTIDX numeric(28,6),Temp_ClearingChargeOPTSTK numeric(28,6),
+					Temp_ClearingChargeOPTIDX numeric(28,6),Temp_ClearingChargeFUTEXP numeric(28,6),
+					Temp_ClearingChargeOPTSTKEXCASN numeric(28,6),Temp_ClearingChargeOPTIDXEXCASN numeric(28,6),
+					
+					Temp_TotalClearingchargePO numeric(28,6),Temp_ClearingChargeFUTSTKPO numeric(28,6),
+					Temp_ClearingChargeFUTIDXPO numeric(28,6),Temp_ClearingChargeOPTSTKPO numeric(28,6),
+					Temp_ClearingChargeOPTIDXPO numeric(28,6),Temp_ClearingChargeFUTEXPPO numeric(28,6),
+					Temp_ClearingChargeOPTSTKEXCASNPO numeric(28,6),Temp_ClearingChargeOPTIDXEXCASNPO numeric(28,6),
+					
+					Temp_ServiceTaxOnClearingCharge numeric(28,6),Temp_EduCessOnClearingCharge numeric(28,6),Temp_HgrEduCessOnClearingCharge numeric(28,6),
+					
+					Temp_ClearingRateFutStk numeric(28,6),Temp_ClearingRateFutIdx numeric(28,6),Temp_ClearingRateOpt numeric(28,6),
+					Temp_ClearingRateOptStk numeric(28,6),Temp_ClearingRateOptIdx numeric(28,6),Temp_ClearingRateFutExp numeric(28,6),
+					Temp_ClearingRateOptFS numeric(28,6),Temp_ClearingRateOptStkFS numeric(28,6),Temp_ClearingRateOptIdxFS numeric(28,6),
+					
+					Temp_ClearingRateFutStkPO numeric(28,6),Temp_ClearingRateFutIdxPO numeric(28,6),Temp_ClearingRateOptPO numeric(28,6),
+					Temp_ClearingRateOptStkPO numeric(28,6),Temp_ClearingRateOptIdxPO numeric(28,6),Temp_ClearingRateFutExpPO numeric(28,6),
+					Temp_ClearingRateOptFSPO numeric(28,6),Temp_ClearingRateOptStkFSPO numeric(28,6),Temp_ClearingRateOptIdxFSPO numeric(28,6)
+					
+					
+					
+					
+																
+																								
+
+					 SELECT * INTO #TEMPCHARGE FROM
+					 (select  ExchangeTrades_ProductSeriesID AS PRODUCTSERIESID,ExchangeTrades_CustomerID AS CustomerID,
+							 Equity_FOIdentifier AS FOIdentifier,ExchangeTrades_TradeCategory AS TradeCategory,
+							 ExchangeTrades_MarketValue AS MarketValue,
+							 (isnull(ExchangeTrades_StrikePrice,isnull(ExchangeTrades_SecurityStrikePrice,0))*abs(isnull(ExchangeTrades_UnitPriceQuantity,0))) AS QTY,
+							 isnull(ExchangeTrades_ActivePassive,0) As ActivePassive	
+					 from Trans_ExchangeTrades,Master_Equity
+					 where ExchangeTrades_CustomerID IN (SELECT DISTINCT CUSTOMERID FROM #TAB)
+					 and Equity_SeriesID=ExchangeTrades_ProductSeriesID
+					 and isnull(ExchangeTrades_TradeCategory,'RRR') not in('ARS','ART')
+					 and Equity_ExchSegmentID=@MasterSegment
+					 and ExchangeTrades_Segment=@Segment
+					 and ExchangeTrades_TradeDate=@fromdate
+					 and ExchangeTrades_CompanyID=@Companyid) AS KK
+																
+																 
+					 ----------FUTSTK ACTIVE------
+					 update #Charges set Temp_FUTSTKMkt=summkt,Temp_FUTSTKQTYMkt=Quantity from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt,SUM(ISNULL(QTY,0)) AS Quantity,
+					 CustomerID
+					 from #TEMPCHARGE where TradeCategory is null
+					 and FOIdentifier='FUTSTK' and ActivePassive=0
+					 group by CustomerID) as tb
+					 where CustomerID=Temp_Clientsid 
+
+					 ----------FUTSTK PASSIVE------
+					 update #Charges set Temp_FUTSTKMktPO=summkt,Temp_FUTSTKQTYMktPO=Quantity from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt,SUM(ISNULL(QTY,0)) AS Quantity,
+					 CustomerID
+					 from #TEMPCHARGE where TradeCategory is null
+					 and FOIdentifier='FUTSTK' and ActivePassive=1
+					 group by CustomerID) as tb
+					 where CustomerID=Temp_Clientsid 
+
+					 ----------FUTIDX ACTIVE------
+					 update #Charges set Temp_FUTIDXMkt=summkt,Temp_FUTIDXQTYMkt=Quantity from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					 CustomerID 
+					 from #TEMPCHARGE where TradeCategory is null
+					 and FOIdentifier='FUTIDX' and ActivePassive=0
+					 group by CustomerID) as tb
+					 where CustomerID=Temp_Clientsid 
+
+					 ----------FUTIDX PASSIVE------
+					 update #Charges set Temp_FUTIDXMktPO=summkt,Temp_FUTIDXQTYMktPO=Quantity from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					 CustomerID 
+					 from #TEMPCHARGE where TradeCategory is null
+					 and FOIdentifier='FUTIDX' and ActivePassive=1
+					 group by CustomerID) as tb
+					 where CustomerID=Temp_Clientsid 
+					 ----------OPTSTK ACTIVE------
+					 update #Charges set Temp_OPTSTKMkt=summkt,Temp_OPTSTKQTYMkt=Quantity from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					 CustomerID from #TEMPCHARGE where TradeCategory is null
+					 and FOIdentifier='OPTSTK' and ActivePassive=0
+					 group by CustomerID) as tb
+					 where CustomerID=Temp_Clientsid 
+													           
+					 ----------OPTSTK PASSIVE------
+					 update #Charges set Temp_OPTSTKMktPO=summkt,Temp_OPTSTKQTYMktPO=Quantity from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					 CustomerID from #TEMPCHARGE where TradeCategory is null
+					 and FOIdentifier='OPTSTK' and ActivePassive=1
+					 group by CustomerID) as tb
+					 where CustomerID=Temp_Clientsid 
+					 ----------OPTIDX ACTIVE------
+					 update #Charges set Temp_OPTIDXMkt=summkt,Temp_OPTIDXQTYMkt=Quantity from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					 CustomerID  from #TEMPCHARGE where TradeCategory is null
+					 and FOIdentifier='OPTIDX' and ActivePassive=0
+					 group by CustomerID) as tb
+					 where CustomerID=Temp_Clientsid 
+					 ----------OPTIDX PASSIVE------
+					 update #Charges set Temp_OPTIDXMktPO=summkt,Temp_OPTIDXQTYMktPO=Quantity from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					 CustomerID  from #TEMPCHARGE where TradeCategory is null
+					 and FOIdentifier='OPTIDX' and ActivePassive=1
+					 group by CustomerID) as tb
+					 where CustomerID=Temp_Clientsid 
+
+					 ----------FUT(EXP) ACTIVE------
+					 update #Charges set Temp_FUTEXPMkt=summkt,Temp_FUTEXPQTYMkt=Quantity from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					 CustomerID  from #TEMPCHARGE where TradeCategory='EXP'
+					 and SUBSTRING(FOIdentifier,1,3)='FUT' and ActivePassive=0
+					 group by CustomerID) as tb
+					 where CustomerID=Temp_Clientsid 
+					 ----------FUT(EXP) PASSIVE------
+					 update #Charges set Temp_FUTEXPMktPO=summkt,Temp_FUTEXPQTYMktPO=Quantity from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					 CustomerID  from #TEMPCHARGE where TradeCategory='EXP'
+					 and SUBSTRING(FOIdentifier,1,3)='FUT' and ActivePassive=1
+					 group by CustomerID) as tb
+					 where CustomerID=Temp_Clientsid 
+
+					 ----------OPT(EXC,ASN) ACTIVE------
+					 update #Charges set Temp_OPTSTKEXCASNMkt=summkt,Temp_OPTSTKEXCASNQTYMkt=Quantity from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					 CustomerID  from #TEMPCHARGE where TradeCategory in('EXC','ASN')
+					 and FOIdentifier='OPTSTK' and ActivePassive=0
+					 group by CustomerID) as tb
+					 where CustomerID=Temp_Clientsid 
+
+					 ----------OPT(EXC,ASN) PASSIVE------
+					 update #Charges set Temp_OPTSTKEXCASNMktPO=summkt,Temp_OPTSTKEXCASNQTYMktPO=Quantity from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					 CustomerID  from #TEMPCHARGE where TradeCategory in('EXC','ASN')
+					 and FOIdentifier='OPTSTK' and ActivePassive=1
+					 group by CustomerID) as tb
+					 where CustomerID=Temp_Clientsid 
+
+					  ----------OPT(EXC,ASN) ACTIVE------
+					 update #Charges set Temp_OPTIDXEXCASNMkt=summkt,Temp_OPTIDXEXCASNQTYMkt=Quantity from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					 CustomerID  from #TEMPCHARGE where TradeCategory in('EXC','ASN')
+					 and FOIdentifier='OPTIDX' and ActivePassive=0
+					 group by CustomerID) as tb
+					 where CustomerID=Temp_Clientsid 
+
+					  ----------OPT(EXC,ASN) PASSIVE------
+					 update #Charges set Temp_OPTIDXEXCASNMktPO=summkt,Temp_OPTIDXEXCASNQTYMktPO=Quantity from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					 CustomerID  from #TEMPCHARGE where TradeCategory in('EXC','ASN')
+					 and FOIdentifier='OPTIDX' and ActivePassive=1
+					 group by CustomerID) as tb
+					 where CustomerID=Temp_Clientsid 
+
+					-------CALCULATION FOR TRANSACTION CHARGE
+					IF @TRANCHARGES='Y'
+					BEGIN
+							update #Charges SET
+							Temp_TranChargeRateFut=TranCharge_RateFut,
+							Temp_TranChargeRateFutPO=TranCharge_RateFutPO,
+							Temp_ChargeBasis =ChargeSetup_ChargeBasis,
+							Temp_STApplicable =TranCharge_STApplicable,
+							Temp_RateFutStk=TranCharge_RateFutStk,
+							Temp_RateFutIdx=TranCharge_RateFutIdx,
+							Temp_RateOpt=TranCharge_RateOpt,
+							Temp_RateOptStk=TranCharge_RateOptStk,
+							Temp_RateOptIdx=TranCharge_RateOptIdx,
+							Temp_RateFutExp=TranCharge_RateFutExp,
+							Temp_RateOptFS=TranCharge_RateOptFS,
+							Temp_RateOptStkFS=TranCharge_RateOptStkFS,
+							Temp_RateOptIdxFS=TranCharge_RateOptIdxFS,
+							Temp_RateFutStkPO=TranCharge_RateFutStkPO,
+							Temp_RateFutIdxPO=TranCharge_RateFutIdxPO,
+							Temp_RateOptPO=TranCharge_RateOptPO,
+							Temp_RateOptStkPO=TranCharge_RateOptStkPO,
+							Temp_RateOptIdxPO=TranCharge_RateOptIdxPO,
+							Temp_RateFutExpPO=TranCharge_RateFutExpPO,
+							Temp_RateOptFSPO=TranCharge_RateOptFSPO,
+							Temp_RateOptStkFSPO=TranCharge_RateOptStkFSPO,
+							Temp_RateOptIdxFSPO=TranCharge_RateOptIdxFSPO,
+							Temp_GroupCode=ChargeSetup_ChargeGroup
+							from Config_TranCharge,Config_ChargeSetup
+							WHERE ChargeSetup_ChargeType='TX' AND ChargeSetup_ChargeBasis=2
+							AND ChargeSetup_MainID=Temp_BrokerageId
+							AND TranCharge_ChargeGroupID=ChargeSetup_ChargeGroup
+							AND cast(@fromdate as datetime) between cast(CONVERT(VARCHAR(11),TranCharge_DateFrom,106) as datetime) 
+							AND cast(CONVERT(VARCHAR(11),isnull(TranCharge_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+							AND TranCharge_ExchangeSegmentID=@segment
+							AND TranCharge_CompanyID=@companyid
+
+
+							update #Charges set			  Temp_ServiceTax=ServTax_Rate,
+														  Temp_ServTaxEduCess = ServTax_EduCess,
+														  Temp_ServTaxHgrEduCess =ServTax_HgrEduCess
+							FROM Config_ServTax
+							WHERE ServTax_ChargeGroupID=Temp_GroupCode
+							AND cast(@fromdate as datetime) between cast(CONVERT(VARCHAR(11),ServTax_DateFrom,106) as datetime)
+							AND cast(CONVERT(VARCHAR(11),isnull(ServTax_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+							AND ServTax_ExchangeSegmentID=@segment
+							AND ServTax_CompanyID=@companyid
+
+							----------------Calculate Transaction Charge FOR FUTSTK ACTIVE------------------
+							update #Charges set Temp_TranChargeFUTSTK=
+								   case when ISNULL(Temp_RateFutStk,0)>0.0 
+								   then ((Temp_FUTSTKMkt*Temp_RateFutStk) /100)
+								   else ((Temp_FUTSTKMkt*Temp_TranChargeRateFut) /100)
+								   end
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Transaction Charge FOR FUTSTK PASSIVE------------------
+							update #Charges set Temp_TranChargeFUTSTKPO=
+								   case when ISNULL(Temp_RateFutStkPO,0)>0.0 
+								   then ((Temp_FUTSTKMktPO*Temp_RateFutStkPO) /100)
+								   else ((Temp_FUTSTKMktPO*Temp_TranChargeRateFutPO) /100)
+								   end
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Transaction Charge FOR FUTIDX ACTIVE------------------
+							update #Charges set Temp_TranChargeFUTIDX=
+								  case when ISNULL(Temp_RateFutIdx,0)>0.0 
+									   then ((Temp_FUTIDXMkt*Temp_RateFutIdx) /100)
+									   else ((Temp_FUTIDXMkt*Temp_TranChargeRateFut) /100)
+									   end
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Transaction Charge FOR FUTIDX PASSIVE------------------
+							update #Charges set Temp_TranChargeFUTIDXPO=
+								  case when ISNULL(Temp_RateFutIdxPO,0)>0.0 
+									   then ((Temp_FUTIDXMktPO*Temp_RateFutIdxPO) /100)
+									   else ((Temp_FUTIDXMktPO*Temp_TranChargeRateFutPO) /100)
+									   end
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Transaction Charge FOR FUT(EXP) ACTIVE------------------
+							update #Charges set Temp_TranChargeFUTEXP=(Temp_FUTEXPMkt*Temp_RateFutExp /100)
+							----------------Calculate Transaction Charge FOR FUT(EXP) PASSIVE------------------
+							update #Charges set Temp_TranChargeFUTEXPPO=(Temp_FUTEXPMktPO*Temp_RateFutExpPO /100)
+
+							----------------Calculate Transaction Charge FOR OPTSTK ACTIVE------------------
+							update #Charges set Temp_TranChargeOPTSTK=
+									  case when ISNULL(Temp_RateOptStk,0)>0.0 
+										   then ((Temp_OPTSTKMkt*Temp_RateOptStk) /100)
+										   else ((Temp_OPTSTKMkt*Temp_RateOpt) /100)
+										   end
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Transaction Charge FOR OPTSTK PASSIVE------------------
+							update #Charges set Temp_TranChargeOPTSTKPO=
+									  case when ISNULL(Temp_RateOptStkPO,0)>0.0 
+										   then ((Temp_OPTSTKMktPO*Temp_RateOptStkPO) /100)
+										   else ((Temp_OPTSTKMktPO*Temp_RateOptPO) /100)
+										   end
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Transaction Charge FOR OPTIDX ACTIVE------------------
+							update #Charges set Temp_TranChargeOPTIDX=
+									  case when ISNULL(Temp_RateOptIdx,0)>0.0 
+										   then ((Temp_OPTIDXMkt*Temp_RateOptIdx) /100)
+										   else ((Temp_OPTIDXMkt*Temp_RateOpt) /100)
+										   end
+									WHERE Temp_ChargeBasis='2'
+							----------------Calculate Transaction Charge FOR OPTIDX PASSIVE------------------
+							update #Charges set Temp_TranChargeOPTIDXPO=
+									  case when ISNULL(Temp_RateOptIdxPO,0)>0.0 
+										   then ((Temp_OPTIDXMktPO*Temp_RateOptIdxPO) /100)
+										   else ((Temp_OPTIDXMktPO*Temp_RateOptPO) /100)
+										   end
+									WHERE Temp_ChargeBasis='2'
+							----------------Calculate Transaction Charge FOR OPTSTK(EXC/ASN) ACTIVE------------------
+							update #Charges set Temp_TranChargeOPTSTKEXCASN=
+								  case when ISNULL(Temp_RateOptStkFS,0)>0.0 
+									   then ((Temp_OPTSTKEXCASNMkt*Temp_RateOptStkFS) /100)
+									   else ((Temp_OPTSTKEXCASNMkt*Temp_RateOptFS) /100)
+									   end	
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Transaction Charge FOR OPTSTK(EXC/ASN) PASSIVE------------------
+							update #Charges set Temp_TranChargeOPTSTKEXCASNPO=
+								  case when ISNULL(Temp_RateOptStkFSPO,0)>0.0 
+									   then ((Temp_OPTSTKEXCASNMktPO*Temp_RateOptStkFSPO) /100)
+									   else ((Temp_OPTSTKEXCASNMktPO*Temp_RateOptFSPO) /100)
+									   end	
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Transaction Charge FOR OPTIDX(EXC/ASN) ACTIVE------------------
+							update #Charges set Temp_TranChargeOPTIDXEXCASN=
+								  case when ISNULL(Temp_RateOptIdxFS,0)>0.0 
+									   then ((Temp_OPTIDXEXCASNMkt*Temp_RateOptIdxFS) /100)
+									   else ((Temp_OPTIDXEXCASNMkt*Temp_RateOptFS) /100)
+									   end	
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Transaction Charge FOR OPTIDX(EXC/ASN) PASSIVE------------------
+							update #Charges set Temp_TranChargeOPTIDXEXCASNPO=
+								  case when ISNULL(Temp_RateOptIdxFSPO,0)>0.0 
+									   then ((Temp_OPTIDXEXCASNMktPO*Temp_RateOptIdxFSPO) /100)
+									   else ((Temp_OPTIDXEXCASNMktPO*Temp_RateOptFSPO) /100)
+									   end	
+							WHERE Temp_ChargeBasis='2'
+					-----------------Calculate Service Tax Of Transaction charge----
+					update #Charges set Temp_TotalTrancharge=round((ISNULL(Temp_TranChargeFUTSTK,0)+ISNULL(Temp_TranChargeFUTIDX,0) +
+															  ISNULL(Temp_TranChargeOPTSTK,0)+ISNULL(Temp_TranChargeOPTIDX,0)+
+															  ISNULL(Temp_TranChargeFUTEXP,0)+ISNULL(Temp_TranChargeOPTSTKEXCASN,0)+
+															  ISNULL(Temp_TranChargeOPTIDXEXCASN,0)+
+															  ISNULL(Temp_TranChargeFUTSTKPO,0)+ISNULL(Temp_TranChargeFUTIDXPO,0) +
+															  ISNULL(Temp_TranChargeOPTSTKPO,0)+ISNULL(Temp_TranChargeOPTIDXPO,0)+
+															  ISNULL(Temp_TranChargeFUTEXPPO,0)+ISNULL(Temp_TranChargeOPTSTKEXCASNPO,0)+
+															  ISNULL(Temp_TranChargeOPTIDXEXCASNPO,0)),2)
+
+					update #Charges set Temp_ServiceTaxOnTranCharge=
+																case when 
+																		 Temp_ChargeBasis='2' 
+																		 and Temp_STApplicable='Yes' 
+																then 
+																		 round(((Temp_Totaltrancharge*Temp_ServiceTax)/100),2) 
+																else 
+																		 0.0
+																end
+
+					update #Charges set Temp_EduCessOnTranCharge=
+																case when 
+																			Temp_ChargeBasis='2' 
+																			and Temp_STApplicable='Yes' 
+																then 
+																			round(((Temp_ServiceTaxOnTranCharge*Temp_ServTaxEduCess)/100),2) 
+																else 
+																			0.0
+																end,
+
+										Temp_HgrEduCessOnTranCharge=
+																case when 
+																			Temp_ChargeBasis='2' 
+																			and Temp_STApplicable='Yes' 
+																then 
+																			round(((Temp_ServiceTaxOnTranCharge*Temp_ServTaxHgrEduCess)/100),2) 
+																else 
+																			0.0
+																end
+										UPDATE #TAB SET TRANCHARGE=Temp_TotalTrancharge,
+																	SRVTAXTRANCHARGE=ISNULL(Temp_ServiceTaxOnTranCharge,0)+
+																					 ISNULL(Temp_EduCessOnTranCharge,0)+
+																					 ISNULL(Temp_HgrEduCessOnTranCharge,0)
+													FROM #Charges	WHERE CustomerID=Temp_Clientsid 
+											END
+						-------CALCULATION FOR STAMP DUTY
+											IF @STAMPCHARGES='Y'
+											BEGIN
+													IF EXISTS(SELECT 'Y' FROM Config_StampDuty WHERE StampDuty_COMPANYID=@companyid AND StampDuty_ApplicableState<>0 AND StampDuty_EXCHANGESEGMENTID=@segment AND cast(@fromdate as datetime) BETWEEN StampDuty_DATEFROM AND isnull(StampDuty_DATETO,'2100-01-01 00:00:00.000')) 
+													BEGIN
+														 
+														 UPDATE #Charges SET Temp_State=isnull(add_state,0)
+														 FROM tbl_master_address
+														 WHERE add_cntID=Temp_Clientsid AND add_entity='Customer/Client' AND 
+														 add_addressType=(select top 1 add_addressType from 
+																						(select add_addressType,
+																								case when rtrim(ltrim(add_addressType))='Registered' then 1
+																								when rtrim(ltrim(add_addressType))='Correspondence' then 2
+																								when rtrim(ltrim(add_addressType))='Residence' then 3
+																								else 4 end as addreorder
+																							from tbl_master_address where 
+																							add_cntID=Temp_Clientsid
+																							and add_entity='Customer/Client') tb
+																							order by addreorder)
+													END
+													UPDATE #Charges SET Temp_State=isnull(Temp_State,0)
+
+													update #Charges set 
+													CLIENTTYPE=ISNULL(CNT_CLIENTTYPE,'Retail'),
+													CalBasis=StampDuty_CalBasis,
+													RateCLFut=StampDuty_RateCLFut,
+													RateCLOpt=StampDuty_RateCLOpt,
+													RateCLFS=StampDuty_RateCLFS,
+													CntrSlabMultiple=StampDuty_CntrSlabMultiple,
+													SlabAmount=StampDuty_SlabAmount,
+													MinCntr=StampDuty_MinCntr,
+													MaxCntr=StampDuty_MaxCntr,
+													OPTBasis=StampDuty_OPTBasis
+													from Config_StampDuty,Config_ChargeSetup,TBL_MASTER_CONTACT
+													WHERE ChargeSetup_ChargeType='SD' 
+													AND CNT_INTERNALID=Temp_Clientsid
+													AND StampDuty_ApplicableState=isnull(Temp_State,0)
+													AND ChargeSetup_ChargeBasis=2
+													AND ChargeSetup_MainID=Temp_BrokerageId
+													AND StampDuty_ChargeGroupID=ChargeSetup_ChargeGroup
+													AND cast(@fromdate as datetime) between cast(CONVERT(VARCHAR(11),StampDuty_DateFrom,106) as datetime) 
+													AND cast(CONVERT(VARCHAR(11),isnull(StampDuty_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+													AND StampDuty_ExchangeSegmentID=@segment
+													AND StampDuty_CompanyID=@companyid
+
+													update #Charges set  
+													CLIENTTYPE=ISNULL(CNT_CLIENTTYPE,'Retail'),
+													CalBasis=StampDuty_CalBasis,
+													RateCLFut=StampDuty_RateCLFut,
+													RateCLOpt=StampDuty_RateCLOpt,
+													RateCLFS=StampDuty_RateCLFS,
+													CntrSlabMultiple=StampDuty_CntrSlabMultiple,
+													SlabAmount=StampDuty_SlabAmount,
+													MinCntr=StampDuty_MinCntr,
+													MaxCntr=StampDuty_MaxCntr,
+													OPTBasis=StampDuty_OPTBasis
+													from Config_StampDuty,Config_ChargeSetup,TBL_MASTER_CONTACT
+													WHERE ChargeSetup_ChargeType='SD' 
+													AND CNT_INTERNALID=Temp_Clientsid AND StampDuty_ApplicableState=0 AND RateCLFut IS NULL
+													AND ChargeSetup_ChargeBasis=2
+													AND ChargeSetup_MainID=Temp_BrokerageId
+													AND StampDuty_ChargeGroupID=ChargeSetup_ChargeGroup
+													AND cast(@fromdate as datetime) between cast(CONVERT(VARCHAR(11),StampDuty_DateFrom,106) as datetime) 
+													AND cast(CONVERT(VARCHAR(11),isnull(StampDuty_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+													AND StampDuty_ExchangeSegmentID=@segment
+													AND StampDuty_CompanyID=@companyid
+
+						Update #Charges Set 
+						Temp_FUTStamduty =round((((ISNULL(Temp_FUTSTKMkt,0)+ISNULL(Temp_FUTIDXMkt,0)+ISNULL(Temp_FUTSTKMktPO,0)+ISNULL(Temp_FUTIDXMktPO,0))*RateCLFut) /100),2),
+						Temp_OPTStamduty  =round((((ISNULL(Temp_OPTSTKMkt,0) +ISNULL(Temp_OPTIDXMkt,0)+ISNULL(Temp_OPTSTKMktPO,0)+ISNULL(Temp_OPTIDXMktPO,0))*RateCLOpt)  /100),2),
+						Temp_FSStamduty  =round((((ISNULL(Temp_OPTSTKEXCASNMkt,0) +ISNULL(Temp_OPTIDXEXCASNMkt,0))*RateCLFS ) /100),2),
+						Temp_EXPStamduty=round((((ISNULL(Temp_FUTEXPMkt,0))*RateCLFS ) /100),2)
+						Where CLIENTTYPE<>'Pro Trading'  and CalBasis='Market Turnover' AND OPTBasis='Premium'
+
+						Update #Charges Set 
+						Temp_FUTStamduty =round((((ISNULL(Temp_FUTSTKQTYMkt,0)+ISNULL(Temp_FUTIDXQTYMkt,0)+ISNULL(Temp_FUTSTKQTYMktPO,0)+ISNULL(Temp_FUTIDXQTYMktPO,0))*RateCLFut )/100),2),
+						Temp_OPTStamduty  =round((((ISNULL(Temp_OPTSTKQTYMkt,0) +ISNULL(Temp_OPTIDXQTYMkt,0)+ISNULL(Temp_OPTSTKQTYMktPO,0)+ISNULL(Temp_OPTIDXQTYMktPO,0) )*RateCLOpt ) /100),2),
+						Temp_FSStamduty  =round((((ISNULL(Temp_OPTSTKEXCASNQTYMkt,0) +ISNULL(Temp_OPTIDXEXCASNQTYMkt,0) )*RateCLFS ) /100),2),
+						Temp_EXPStamduty=round((((ISNULL(Temp_FUTEXPQTYMkt,0))*RateCLFS ) /100),2)
+						Where CLIENTTYPE<>'Pro Trading'  and CalBasis='Market Turnover' AND OPTBasis='Strike'
+
+						Update #Charges Set 
+						Temp_FUTStamduty =round((((ISNULL(Temp_FUTSTKMkt,0)+ISNULL(Temp_FUTIDXMkt,0)+ISNULL(Temp_FUTSTKQTYMkt,0)+ISNULL(Temp_FUTIDXQTYMkt,0)+ISNULL(Temp_FUTSTKMktPO,0)+ISNULL(Temp_FUTIDXMktPO,0)+ISNULL(Temp_FUTSTKQTYMktPO,0)+ISNULL(Temp_FUTIDXQTYMktPO,0))*RateCLFut) /100),2),
+						Temp_OPTStamduty  =round((((ISNULL(Temp_OPTSTKMkt,0) +ISNULL(Temp_OPTIDXMkt,0)+ISNULL(Temp_OPTSTKQTYMkt,0) +ISNULL(Temp_OPTIDXQTYMkt,0)+ISNULL(Temp_OPTSTKMktPO,0) +ISNULL(Temp_OPTIDXMktPO,0)+ISNULL(Temp_OPTSTKQTYMktPO,0) +ISNULL(Temp_OPTIDXQTYMktPO,0))*RateCLOpt ) /100),2),
+						Temp_FSStamduty  =round((((ISNULL(Temp_OPTSTKEXCASNMkt,0) +ISNULL(Temp_OPTIDXEXCASNMkt,0)+ISNULL(Temp_OPTSTKEXCASNQTYMkt,0)+ISNULL(Temp_OPTIDXEXCASNQTYMkt,0) )*RateCLFS)  /100),2),
+						Temp_EXPStamduty=round((((ISNULL(Temp_FUTEXPMkt,0)+ISNULL(Temp_FUTEXPQTYMkt,0))*RateCLFS)  /100),2)
+						Where CLIENTTYPE<>'Pro Trading'  and CalBasis='Market Turnover' AND OPTBasis='Premium And Strike'
+
+						Update #Charges Set Temp_TotalStamduty=(ISNULL(Temp_FUTStamduty,0)+ISNULL(Temp_OPTStamduty,0)+ISNULL(Temp_FSStamduty,0)+ISNULL(Temp_EXPStamduty,0))
+						Where CalBasis='Market Turnover' 
+						------***********************
+						Update #Charges Set Temp_TotalStamduty=(ISNULL(Temp_FUTSTKMkt,0)+ISNULL(Temp_FUTIDXMkt,0) +
+																ISNULL(Temp_OPTSTKMkt,0) +ISNULL(Temp_OPTIDXMkt,0) +
+																ISNULL(Temp_FUTSTKMktPO,0)+ISNULL(Temp_FUTIDXMktPO,0) +
+																ISNULL(Temp_OPTSTKMktPO,0) +ISNULL(Temp_OPTIDXMktPO,0) +
+																ISNULL(Temp_OPTSTKEXCASNMkt,0) +ISNULL(Temp_OPTIDXEXCASNMkt,0)+
+																ISNULL(Temp_FUTEXPMkt,0) )
+						Where CalBasis='Contract Value' AND OPTBasis='Premium'
+
+						Update #Charges Set Temp_TotalStamduty=(ISNULL(Temp_FUTSTKQTYMkt,0)+ISNULL(Temp_FUTIDXQTYMkt,0) +ISNULL(Temp_FUTSTKMkt,0)+ISNULL(Temp_FUTIDXMkt,0)+
+																ISNULL(Temp_OPTSTKQTYMkt,0) +ISNULL(Temp_OPTIDXQTYMkt,0) +ISNULL(Temp_OPTSTKMkt,0) +ISNULL(Temp_OPTIDXMkt,0) +
+																ISNULL(Temp_FUTSTKQTYMktPO,0)+ISNULL(Temp_FUTIDXQTYMktPO,0) +ISNULL(Temp_FUTSTKMktPO,0)+ISNULL(Temp_FUTIDXMktPO,0)+
+																ISNULL(Temp_OPTSTKQTYMktPO,0) +ISNULL(Temp_OPTIDXQTYMktPO,0) +ISNULL(Temp_OPTSTKMktPO,0) +ISNULL(Temp_OPTIDXMktPO,0) +
+																ISNULL(Temp_OPTSTKEXCASNQTYMkt,0) +ISNULL(Temp_OPTIDXEXCASNQTYMkt,0)+ISNULL(Temp_OPTSTKEXCASNMkt,0) +ISNULL(Temp_OPTIDXEXCASNMkt,0)+
+																ISNULL(Temp_FUTEXPQTYMkt,0)+ISNULL(Temp_FUTEXPMkt,0) )
+						Where CalBasis='Contract Value' AND OPTBasis='Premium And Strike'
+
+						Update #Charges Set Temp_TotalStamduty=(ISNULL(Temp_FUTSTKQTYMkt,0)+ISNULL(Temp_FUTIDXQTYMkt,0) +
+																ISNULL(Temp_OPTSTKQTYMkt,0) +ISNULL(Temp_OPTIDXQTYMkt,0) +
+																ISNULL(Temp_FUTSTKQTYMktPO,0)+ISNULL(Temp_FUTIDXQTYMktPO,0) +
+																ISNULL(Temp_OPTSTKQTYMktPO,0) +ISNULL(Temp_OPTIDXQTYMktPO,0) +
+																ISNULL(Temp_OPTSTKEXCASNQTYMkt,0) +ISNULL(Temp_OPTIDXEXCASNQTYMkt,0)+
+																ISNULL(Temp_FUTEXPQTYMkt,0) )
+						Where CalBasis='Contract Value' AND OPTBasis='Strike'
+
+							update #Charges set Temp_TotalStamduty=case when MinCntr>[dbo].[fn_NSECMChargesRoundOffFORNETAMOUNT]
+							(3,((Temp_TotalStamduty*SlabAmount)/CntrSlabMultiple)) and MinCntr<>0 then MinCntr
+
+							when MaxCntr<[dbo].[fn_NSECMChargesRoundOffFORNETAMOUNT]
+							(3,((Temp_TotalStamduty*SlabAmount)/CntrSlabMultiple))  and MaxCntr<>0 then MaxCntr 
+
+							else [dbo].[fn_NSECMChargesRoundOffFORNETAMOUNT]
+							(3,((Temp_TotalStamduty*SlabAmount)/CntrSlabMultiple)) end
+
+							where CLIENTTYPE<>'Pro Trading'  and CalBasis='Contract Value'  AND isnull(Temp_TotalStamduty,0)<>0
+
+
+							UPDATE #TAB SET STAMPCHARGE=Temp_TotalStamduty
+							FROM #Charges WHERE CustomerID=Temp_Clientsid 			
+					END
+																
+							---------------CALCULATE SEBI FEE
+							IF @SEBICHARGES='Y'
+							BEGIN
+										update #Charges set Temp_sebifeerate=sebifee_rate,
+															Temp_applicabel=sebifee_Applicablefor,
+															Temp_Chargebasis=ChargeSetup_ChargeBasis
+
+										from config_sebifee,Config_ChargeSetup
+										where ChargeSetup_ChargeType='SF'
+										and sebifee_Applicablefor not in('None','NA')
+										and ChargeSetup_MainID=Temp_BrokerageId
+										and sebifee_ChargeGroupID=ChargeSetup_ChargeGroup
+										and cast(@fromdate as datetime) between cast(CONVERT(VARCHAR(11),sebifee_DateFrom,106) as datetime)
+										and cast(CONVERT(VARCHAR(11),isnull(sebifee_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+										and sebifee_ExchangeSegmentID=@segment
+										and sebifee_CompanyID=@companyid
+
+										
+							Update #Charges Set Temp_sebifee=round((   ((
+																		isnull(Temp_FUTSTKMkt,0.0)+
+																		isnull(Temp_FUTIDXMkt,0.0)+
+																		isnull(Temp_OPTSTKMkt,0.0)+
+																		isnull(Temp_OPTIDXMkt,0.0)+
+																		isnull(Temp_FUTSTKMktPO,0.0)+
+																		isnull(Temp_FUTIDXMktPO,0.0)+
+																		isnull(Temp_OPTSTKMktPO,0.0)+
+																		isnull(Temp_OPTIDXMktPO,0.0)+
+																		isnull(Temp_FUTEXPMkt,0.0)+
+																		isnull(Temp_OPTSTKEXCASNQTYMkt,0.0)+
+																		isnull(Temp_OPTIDXEXCASNQTYMkt,0.0)
+																		)
+																	*Temp_sebifeerate) /100),2)
+										where Temp_Chargebasis='2'
+								
+										UPDATE #TAB SET SEBICHARGE=Temp_sebifee
+										FROM #Charges WHERE CustomerID=Temp_Clientsid 
+							END
+					
+					-------CALCULATION FOR TRANSACTION CHARGE
+					IF @CLEARINGCHARGES='Y'
+						BEGIN
+							update #Charges SET
+									Temp_ClearingChargeRateFut=ClearingCharge_RateFut,
+									Temp_ClearingChargeRateFutPO=ClearingCharge_RateFutPO,
+									Temp_ChargeBasis =ChargeSetup_ChargeBasis,
+									Temp_ClearingSTApplicable =ClearingCharge_STApplicable,
+									Temp_ClearingRateFutStk=ClearingCharge_RateFutStk,
+									Temp_ClearingRateFutIdx=ClearingCharge_RateFutIdx,
+									Temp_ClearingRateOpt=ClearingCharge_RateOpt,
+									Temp_ClearingRateOptStk=ClearingCharge_RateOptStk,
+									Temp_ClearingRateOptIdx=ClearingCharge_RateOptIdx,
+									Temp_ClearingRateFutExp=ClearingCharge_RateFutExp,
+									Temp_ClearingRateOptFS=ClearingCharge_RateOptFS,
+									Temp_ClearingRateOptStkFS=ClearingCharge_RateOptStkFS,
+									Temp_ClearingRateOptIdxFS=ClearingCharge_RateOptIdxFS,
+									Temp_ClearingRateFutStkPO=ClearingCharge_RateFutStkPO,
+									Temp_ClearingRateFutIdxPO=ClearingCharge_RateFutIdxPO,
+									Temp_ClearingRateOptPO=ClearingCharge_RateOptPO,
+									Temp_ClearingRateOptStkPO=ClearingCharge_RateOptStkPO,
+									Temp_ClearingRateOptIdxPO=ClearingCharge_RateOptIdxPO,
+									Temp_ClearingRateFutExpPO=ClearingCharge_RateFutExpPO,
+									Temp_ClearingRateOptFSPO=ClearingCharge_RateOptFSPO,
+									Temp_ClearingRateOptStkFSPO=ClearingCharge_RateOptStkFSPO,
+									Temp_ClearingRateOptIdxFSPO=ClearingCharge_RateOptIdxFSPO,
+									Temp_GroupCode=ChargeSetup_ChargeGroup
+							from Config_ClearingCharge,Config_ChargeSetup
+							WHERE ChargeSetup_ChargeType='CL' AND ChargeSetup_ChargeBasis=2
+							AND ChargeSetup_MainID=Temp_BrokerageId
+							AND ClearingCharge_ChargeGroupID=ChargeSetup_ChargeGroup
+							AND cast(@fromdate as datetime) between cast(CONVERT(VARCHAR(11),ClearingCharge_DateFrom,106) as datetime) 
+							AND cast(CONVERT(VARCHAR(11),isnull(ClearingCharge_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+							AND ClearingCharge_ExchangeSegmentID=@segment
+							AND ClearingCharge_CompanyID=@companyid
+
+
+							--update #Charges set			  Temp_ServiceTax=ServTax_Rate,
+							--							  Temp_ServTaxEduCess = ServTax_EduCess,
+							--							  Temp_ServTaxHgrEduCess =ServTax_HgrEduCess
+							--FROM Config_ServTax
+							--WHERE ServTax_ChargeGroupID=Temp_GroupCode
+							--AND cast(@fromdate as datetime) between cast(CONVERT(VARCHAR(11),ServTax_DateFrom,106) as datetime)
+							--AND cast(CONVERT(VARCHAR(11),isnull(ServTax_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+							--AND ServTax_ExchangeSegmentID=@segment
+							--AND ServTax_CompanyID=@companyid
+
+							----------------Calculate Clearing Charge FOR FUTSTK ACTIVE------------------
+							update #Charges set Temp_ClearingChargeFUTSTK=
+								   case when ISNULL(Temp_ClearingRateFutStk,0)>0.0 
+								   then ((Temp_FUTSTKMkt*Temp_ClearingRateFutStk) /100)
+								   else ((Temp_FUTSTKMkt*Temp_ClearingChargeRateFut) /100)
+								   end
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Clearing Charge FOR FUTSTK PASSIVE------------------
+							update #Charges set Temp_ClearingChargeFUTSTKPO=
+								   case when ISNULL(Temp_ClearingRateFutStkPO,0)>0.0 
+								   then ((Temp_FUTSTKMktPO*Temp_ClearingRateFutStkPO) /100)
+								   else ((Temp_FUTSTKMktPO*Temp_ClearingChargeRateFutPO) /100)
+								   end
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Clearing Charge FOR FUTIDX ACTIVE------------------
+							update #Charges set Temp_ClearingChargeFUTIDX=
+								  case when ISNULL(Temp_ClearingRateFutIdx,0)>0.0 
+									   then ((Temp_FUTIDXMkt*Temp_ClearingRateFutIdx) /100)
+									   else ((Temp_FUTIDXMkt*Temp_ClearingChargeRateFut) /100)
+									   end
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Clearing Charge FOR FUTIDX PASSIVE------------------
+							update #Charges set Temp_ClearingChargeFUTIDXPO=
+								  case when ISNULL(Temp_ClearingRateFutIdxPO,0)>0.0 
+									   then ((Temp_FUTIDXMktPO*Temp_ClearingRateFutIdxPO) /100)
+									   else ((Temp_FUTIDXMktPO*Temp_ClearingChargeRateFutPO) /100)
+									   end
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Clearing Charge FOR FUT(EXP) ACTIVE------------------
+							update #Charges set Temp_ClearingChargeFUTEXP=(Temp_FUTEXPMkt*Temp_ClearingRateFutExp /100)
+							----------------Calculate Transaction Charge FOR FUT(EXP) PASSIVE------------------
+							update #Charges set Temp_ClearingChargeFUTEXPPO=(Temp_FUTEXPMktPO*Temp_ClearingRateFutExpPO /100)
+
+							----------------Calculate Clearing Charge FOR OPTSTK ACTIVE------------------
+							update #Charges set Temp_ClearingChargeOPTSTK=
+									  case when ISNULL(Temp_ClearingRateOptStk,0)>0.0 
+										   then ((Temp_OPTSTKMkt*Temp_ClearingRateOptStk) /100)
+										   else ((Temp_OPTSTKMkt*Temp_ClearingRateOpt) /100)
+										   end
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Clearing Charge FOR OPTSTK PASSIVE------------------
+							update #Charges set Temp_ClearingChargeOPTSTKPO=
+									  case when ISNULL(Temp_ClearingRateOptStkPO,0)>0.0 
+										   then ((Temp_OPTSTKMktPO*Temp_ClearingRateOptStkPO) /100)
+										   else ((Temp_OPTSTKMktPO*Temp_ClearingRateOptPO) /100)
+										   end
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Clearing Charge FOR OPTIDX ACTIVE------------------
+							update #Charges set Temp_ClearingChargeOPTIDX=
+									  case when ISNULL(Temp_ClearingRateOptIdx,0)>0.0 
+										   then ((Temp_OPTIDXMkt*Temp_ClearingRateOptIdx) /100)
+										   else ((Temp_OPTIDXMkt*Temp_ClearingRateOpt) /100)
+										   end
+									WHERE Temp_ChargeBasis='2'
+							----------------Calculate Clearing Charge FOR OPTIDX PASSIVE------------------
+							update #Charges set Temp_ClearingChargeOPTIDXPO=
+									  case when ISNULL(Temp_ClearingRateOptIdxPO,0)>0.0 
+										   then ((Temp_OPTIDXMktPO*Temp_ClearingRateOptIdxPO) /100)
+										   else ((Temp_OPTIDXMktPO*Temp_ClearingRateOptPO) /100)
+										   end
+									WHERE Temp_ChargeBasis='2'
+							----------------Calculate Clearing Charge FOR OPTSTK(EXC/ASN) ACTIVE------------------
+							update #Charges set Temp_ClearingChargeOPTSTKEXCASN=
+								  case when ISNULL(Temp_ClearingRateOptStkFS,0)>0.0 
+									   then ((Temp_OPTSTKEXCASNMkt*Temp_ClearingRateOptStkFS) /100)
+									   else ((Temp_OPTSTKEXCASNMkt*Temp_ClearingRateOptFS) /100)
+									   end	
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Clearing Charge FOR OPTSTK(EXC/ASN) PASSIVE------------------
+							update #Charges set Temp_ClearingChargeOPTSTKEXCASNPO=
+								  case when ISNULL(Temp_ClearingRateOptStkFSPO,0)>0.0 
+									   then ((Temp_OPTSTKEXCASNMktPO*Temp_ClearingRateOptStkFSPO) /100)
+									   else ((Temp_OPTSTKEXCASNMktPO*Temp_ClearingRateOptFSPO) /100)
+									   end	
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Clearing Charge FOR OPTIDX(EXC/ASN) ACTIVE------------------
+							update #Charges set Temp_ClearingChargeOPTIDXEXCASN=
+								  case when ISNULL(Temp_ClearingRateOptIdxFS,0)>0.0 
+									   then ((Temp_OPTIDXEXCASNMkt*Temp_ClearingRateOptIdxFS) /100)
+									   else ((Temp_OPTIDXEXCASNMkt*Temp_ClearingRateOptFS) /100)
+									   end	
+							WHERE Temp_ChargeBasis='2'
+							----------------Calculate Clearing Charge FOR OPTIDX(EXC/ASN) PASSIVE------------------
+							update #Charges set Temp_ClearingChargeOPTIDXEXCASNPO=
+								  case when ISNULL(Temp_ClearingRateOptIdxFSPO,0)>0.0 
+									   then ((Temp_OPTIDXEXCASNMktPO*Temp_ClearingRateOptIdxFSPO) /100)
+									   else ((Temp_OPTIDXEXCASNMktPO*Temp_ClearingRateOptFSPO) /100)
+									   end	
+							WHERE Temp_ChargeBasis='2'
+					-----------------Calculate Service Tax Of Transaction charge----
+					update #Charges set Temp_TotalClearingcharge=round((ISNULL(Temp_ClearingChargeFUTSTK,0)+ISNULL(Temp_ClearingChargeFUTIDX,0) +
+															  ISNULL(Temp_ClearingChargeOPTSTK,0)+ISNULL(Temp_ClearingChargeOPTIDX,0)+
+															  ISNULL(Temp_ClearingChargeFUTEXP,0)+ISNULL(Temp_ClearingChargeOPTSTKEXCASN,0)+
+															  ISNULL(Temp_ClearingChargeOPTIDXEXCASN,0)+
+															  ISNULL(Temp_ClearingChargeFUTSTKPO,0)+ISNULL(Temp_ClearingChargeFUTIDXPO,0) +
+															  ISNULL(Temp_ClearingChargeOPTSTKPO,0)+ISNULL(Temp_ClearingChargeOPTIDXPO,0)+
+															  ISNULL(Temp_ClearingChargeFUTEXPPO,0)+ISNULL(Temp_ClearingChargeOPTSTKEXCASNPO,0)+
+															  ISNULL(Temp_ClearingChargeOPTIDXEXCASNPO,0)),2)
+
+					update #Charges set Temp_ServiceTaxOnClearingCharge=
+																case when 
+																		 Temp_ChargeBasis='2' 
+																		 and Temp_ClearingSTApplicable='Yes' 
+																then 
+																		 round(((Temp_TotalClearingcharge*Temp_ServiceTax)/100),2) 
+																else 
+																		 0.0
+																end
+
+					update #Charges set Temp_EduCessOnClearingCharge=
+																case when 
+																			Temp_ChargeBasis='2' 
+																			and Temp_ClearingSTApplicable='Yes' 
+																then 
+																			round(((Temp_ServiceTaxOnClearingCharge*Temp_ServTaxEduCess)/100),2) 
+																else 
+																			0.0
+																end,
+
+										Temp_HgrEduCessOnClearingCharge=
+																case when 
+																			Temp_ChargeBasis='2' 
+																			and Temp_ClearingSTApplicable='Yes' 
+																then 
+																			round(((Temp_ServiceTaxOnClearingCharge*Temp_ServTaxHgrEduCess)/100),2) 
+																else 
+																			0.0
+																end
+										UPDATE #TAB SET CLEARINGCHARGE=Temp_TotalClearingcharge,
+																	SRVTAXCLEARINGCHARGE=ISNULL(Temp_ServiceTaxOnClearingCharge,0)+
+																						 ISNULL(Temp_EduCessOnClearingCharge,0)+
+																						 ISNULL(Temp_HgrEduCessOnClearingCharge,0)
+													FROM #Charges	WHERE CustomerID=Temp_Clientsid 
+											END		
+					
+				DROP TABLE #TEMPCHARGE 	
+			END
+								END---------------DATE RANGE CHECKING
+										
+						 END
+
+								------------BRKG FETCH
+								update #Charges set BRKGCHARGESETUP=CASE WHEN ChargeSetup_ChargeBasis='2' THEN 'E'
+																		 WHEN ChargeSetup_ChargeBasis='1' THEN 'I'
+																ELSE NULL END
+								from Config_ChargeSetup 
+								where ChargeSetup_MainID=Temp_BrokerageId and  ChargeSetup_ChargeType='ST'
+
+								UPDATE #TAB SET BRKGMODE=BRKGCHARGESETUP FROM #Charges WHERE CustomerID=Temp_Clientsid 
+						
+						DROP TABLE #Charges
+											
+									--------------------CHARGES CALCULATION END
+							select @sql=''
+							select @sql='UPDATE #TAB SET BRKGCHARGE=Servicetaxonbrkg FROM
+
+												(select (sum(abs(isnull(CustomerTrades_ServiceTaxOnBrkg,0.0)))+
+														sum(abs(isnull(CustomerTrades_EduCessOnBrkg,0.0)))+
+														sum(abs(isnull(CustomerTrades_HgrEduCessOnBrkg,0.0)))) as Servicetaxonbrkg,
+												CustomerTrades_CustomerID AS CLIENT
+					                   
+												from Trans_CustomerTrades where 
+												customertrades_BRANCHID IN ('+@Branch+')
+												AND CustomerTrades_ProductSeriesID IN (SELECT DISTINCT PRODUCTID FROM #TAB)
+												AND CustomerTrades_CustomerID IN (SELECT DISTINCT CUSTOMERID FROM #TAB)
+												AND customertrades_tradedate  BETWEEN '''+@fromdate+''' AND '''+@todate+'''
+												AND customertrades_EXCHANGESEGMENT='''+@segment+'''
+												AND customertrades_COMPANYID='''+@companyid+'''
+												AND CustomerTrades_FINYEAR='''+@Finyear+'''
+												GROUP BY CustomerTrades_CustomerID) AS KK
+										WHERE CUSTOMERID=CLIENT'
+							EXEC(@sql)
+							UPDATE #TAB SET NETOBLIGATIONCHARGE= CASE WHEN BRKGMODE='E' THEN 	ISNULL(NETOBLIGATIONSUM,0)-
+																								(ISNULL(TRANCHARGE,0)+ISNULL(SRVTAXTRANCHARGE,0)+ISNULL(STAMPCHARGE,0)+
+																								 ISNULL(STTAX,0)+ISNULL(SEBICHARGE,0)+ISNULL(BRKGCHARGE,0)+ISNULL(CLEARINGCHARGE,0)+ISNULL(SRVTAXCLEARINGCHARGE,0))
+																ELSE  ISNULL(NETOBLIGATIONSUM,0)-
+																		(ISNULL(TRANCHARGE,0)+ISNULL(SRVTAXTRANCHARGE,0)+ISNULL(STAMPCHARGE,0)+
+																		 ISNULL(STTAX,0)+ISNULL(SEBICHARGE,0)+ISNULL(CLEARINGCHARGE,0)+ISNULL(SRVTAXCLEARINGCHARGE,0))
+																END	
+
+			END -------CLIENT WISE END
+
+							DELETE FROM #TAB WHERE @OPENFUT='CHK' AND FOIDENTIFIER='FUT' AND ISNULL(BFQTY,0)=0 AND ISNULL(CFQTY,0)=0
+							DELETE FROM #TAB WHERE @OPENFUT='CHK' AND FOIDENTIFIER='OPT' AND ISNULL(BFQTY,0)=0 AND ISNULL(CFQTY,0)=0
+							-------------IF SIGN IS CHECK
+							UPDATE #TAB SET BFQTY=CASE WHEN ISNULL(BFQTY,0)<0 THEN 	ABS(ISNULL(BFQTY,0)) ELSE (-1)*ISNULL(BFQTY,0) END,
+											CFQTY=CASE WHEN ISNULL(CFQTY,0)<0 THEN 	ABS(ISNULL(CFQTY,0)) ELSE (-1)*ISNULL(CFQTY,0) END
+							WHERE @Chksign='CHK'
+							----------RESULT FETCH
+							IF @rptview='3'-------Only Open Position With Exposure
+							BEGIN
+								   DELETE From #TAB Where ISNULL(CFQTY,0)=0
+
+								   Create Table #CFTab(ClientName varchar(150),Symbol varchar(150),ExpiryDate Datetime,
+								   Identifier varchar(15),Series varchar(20),Productid varchar(20),
+								   PurchaseOpen numeric(28,0),SalePosition numeric(28,0),CFSETTPRICE numeric(28,4),
+								   PurchaseOpenValue numeric(28,2),SaleOpenValue numeric(28,2),StatusOrder int)
+
+								   --------Main Record Insert
+								   Insert Into  #CFTab(ClientName,Symbol,ExpiryDate,Identifier,
+								   PurchaseOpen,SalePosition,CFSETTPRICE,PurchaseOpenValue,SaleOpenValue,StatusOrder,Productid)
+								   Select CLIENTNAME+'['+UCC+']',SYMBOL+' '+CONVERT(VARCHAR(9),isnull(EXPIRYDATE,''),6),
+								   EXPIRYDATE,FOIDENTIFIER,
+								   Case When isnull(CFQTY,0)<0 Then Abs(isnull(CFQTY,0)) Else 0  End ,
+								   Case When isnull(CFQTY,0)>0 Then Abs(isnull(CFQTY,0)) Else 0 End,
+								   CFSETTPRICE,
+								   Case When isnull(CFVALUE,0)<0 Then Abs(isnull(CFVALUE,0)) Else 0  End ,
+								   Case When isnull(CFVALUE,0)>0 Then Abs(isnull(CFVALUE,0)) Else 0 End,
+								   1,PRODUCTID FROM #TAB
+									
+								   ----Series Update 
+								   Update #CFTab Set Series=left(equity_series,1) From master_Equity 
+								   where Equity_Seriesid=Productid and Equity_series is not null
+
+								   Update #CFTab Set PurchaseOpenValue=0 Where Identifier='Opt' and Series='C' and @ExposureBuyCall='UNCHK'
+								   Update #CFTab Set PurchaseOpenValue=0 Where Identifier='Opt' and Series='P' and @ExposureBuyPut='UNCHK'
+
+								   --------Sum Insert For Client
+								   Insert Into  #CFTab(ClientName,Symbol,PurchaseOpen,SalePosition,PurchaseOpenValue,SaleOpenValue,StatusOrder)
+								   Select ClientName,'Total :',abs(Sum(isnull(PurchaseOpen,0))),abs(Sum(isnull(SalePosition,0))),
+								   abs(Sum(isnull(PurchaseOpenValue,0))),abs(Sum(isnull(SaleOpenValue,0))),
+								   3 FROM #CFTab Group By ClientName
+
+								   --------Sum Insert For Client
+								   Insert Into  #CFTab(ClientName,Symbol,SaleOpenValue,StatusOrder)
+								   Select ClientName ,'Overall Exposure :',
+								   isnull(PurchaseOpenValue,0)+isnull(SaleOpenValue,0),4 
+								   FROM #CFTab Where Symbol='Total :'
+
+								   --------Client Name Insert
+								   Insert Into  #CFTab(ClientName,Symbol,PurchaseOpen,StatusOrder)
+								   Select Distinct ClientName,ClientName,999999999999999,0 FROM #CFTab
+								   Union All
+								   Select 'ZZZZ',null,0,5
+                                   
+								   --------Grand Total
+								   Insert Into  #CFTab(ClientName,Symbol,PurchaseOpen,SalePosition,PurchaseOpenValue,SaleOpenValue,StatusOrder)
+								   Select 'ZZZZ','Grand Total :',
+								   Sum(isnull(PurchaseOpen,0)),Sum(isnull(SalePosition,0)),
+								   Sum(isnull(PurchaseOpenValue,0)),Sum(isnull(SaleOpenValue,0)),
+								   6 FROM #CFTab Where Symbol='Total :'
+
+								   --------Grand Total
+								   Insert Into  #CFTab(ClientName,Symbol,SaleOpenValue,StatusOrder)
+								   Select 'ZZZZ','Overall Exposure Of All Clients :',
+								   Sum(isnull(PurchaseOpenValue,0))+Sum(isnull(SaleOpenValue,0)),
+								   7 FROM #CFTab Where Symbol='Grand Total :'
+
+								   ------------Record Display
+								   SELECT Symbol as [Instrument Name],
+								   Case When isnull(PurchaseOpen,0)=999999999999999 Then 'Test' WHEN ISNULL(PurchaseOpen,0)=0 THEN NULL Else dbo.fn_FormatNumber(CAST(ABS(PurchaseOpen) AS VARCHAR(8000)),'N') END AS [Buy Position],
+								   CASE WHEN ISNULL(SalePosition,0)=0 THEN NULL Else dbo.fn_FormatNumber(CAST(ABS(SalePosition) AS VARCHAR(8000)),'N') END AS [Sell Position],
+								   CASE WHEN ISNULL(CFSETTPRICE,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(CFSETTPRICE AS VARCHAR(8000)),'N') END AS [Closing Price],
+								   CASE WHEN ISNULL(PurchaseOpenValue,0)=0 THEN NULL Else dbo.fn_FormatNumber(CAST(ABS(PurchaseOpenValue) AS VARCHAR(8000)),'N') END AS [Buy Exposure],
+								   CASE WHEN ISNULL(SaleOpenValue,0)=0 THEN NULL Else dbo.fn_FormatNumber(CAST(ABS(SaleOpenValue) AS VARCHAR(8000)),'N') END AS [Sell Exposure]
+								   FROM #CFTab
+								   ORDER BY ClientName,StatusOrder,Identifier,Symbol,ExpiryDate
+									
+								   Drop Table #CFTab
+								End
+								Else
+								BEGIN
+									   SELECT CUSTOMERID,PRODUCTID,CLIENTNAME,UCC,GRPID,GRPNAME ,EMAIL,BRKGMODE,
+									   SYMBOL,FOIDENTIFIER,CONVERT(VARCHAR(9),EXPIRYDATE,6) AS EXPIRY,
+									   SYMBOL+' '+CONVERT(VARCHAR(9),isnull(EXPIRYDATE,''),6) AS TICKERSYMBOL,
+									   CASE WHEN ISNULL(BFQTY,0)=0 THEN NULL WHEN BFQTY<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(BFQTY) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(BFQTY) AS VARCHAR(8000)),'N') END AS BFQTY,
+									   CASE WHEN ISNULL(BFSETTPRICE,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(BFSETTPRICE AS VARCHAR(8000)),'N') END AS BFSETTPRICE,
+									   CASE WHEN ISNULL(BFVALUE,0)=0 THEN NULL WHEN BFVALUE<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(BFVALUE)AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(BFVALUE)AS VARCHAR(8000)),'N') END AS BFVALUE,
+									   CASE WHEN ISNULL(CFQTY,0)=0 THEN NULL WHEN CFQTY<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(CFQTY) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CFQTY) AS VARCHAR(8000)),'N') END AS CFQTY,
+									   CASE WHEN ISNULL(CFSETTPRICE,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(CFSETTPRICE AS VARCHAR(8000)),'N') END AS CFSETTPRICE,
+									   CASE WHEN ISNULL(CFVALUE,0)=0 THEN NULL WHEN CFVALUE<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(CFVALUE)AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CFVALUE)AS VARCHAR(8000)),'N') END AS CFVALUE,
+									   CASE WHEN ISNULL(BUYQTY,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(BUYQTY AS VARCHAR(8000)),'N') END AS BUYQTY,
+									   CASE WHEN ISNULL(BUYVALUE,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(BUYVALUE AS VARCHAR(8000)),'N') END AS BUYVALUE,
+									   CASE WHEN ISNULL(BUYAVG,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(BUYAVG AS VARCHAR(8000)),'N') END AS BUYAVG,
+									   CASE WHEN ISNULL(SELLQTY,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(SELLQTY AS VARCHAR(8000)),'N') END AS SELLQTY,
+									   CASE WHEN ISNULL(SELLVALUE,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(SELLVALUE AS VARCHAR(8000)),'N') END AS SELLVALUE,
+									   CASE WHEN ISNULL(SELLAVG,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(SELLAVG AS VARCHAR(8000)),'N') END AS SELLAVG,
+									   CASE WHEN ISNULL(EXCASNQTY,0)=0 THEN NULL WHEN EXCASNQTY<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(EXCASNQTY) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(EXCASNQTY) AS VARCHAR(8000)),'N') END AS EXCASNQTY,
+									   CASE WHEN ISNULL(MTM,0)=0 THEN NULL WHEN MTM<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(MTM) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(MTM) AS VARCHAR(8000)),'N') END AS MTM,
+									   CASE WHEN ISNULL(FINSETT,0)=0 THEN NULL WHEN FINSETT<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(FINSETT) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(FINSETT) AS VARCHAR(8000)),'N') END AS FINSETT,
+									   CASE WHEN ISNULL(PRM,0)=0 THEN NULL WHEN PRM<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(PRM) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(PRM) AS VARCHAR(8000)),'N') END AS PRM,
+									   CASE WHEN ISNULL(EXCASNVALUE,0)=0 THEN NULL WHEN EXCASNVALUE<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(EXCASNVALUE) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(EXCASNVALUE) AS VARCHAR(8000)),'N') END AS EXCASNVALUE,
+									   CASE WHEN ISNULL(NETOBLIGATION,0)=0 THEN NULL WHEN NETOBLIGATION<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(NETOBLIGATION) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(NETOBLIGATION) AS VARCHAR(8000)),'N') END AS NETOBLIGATION,
+									   CASE WHEN ISNULL(NETOBLIGATIONSUM,0)=0 THEN NULL WHEN NETOBLIGATIONSUM<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(NETOBLIGATIONSUM) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(NETOBLIGATIONSUM) AS VARCHAR(8000)),'N') END AS NETOBLIGATIONSUM,
+									   CASE WHEN ISNULL(BFVALUESUM,0)=0 THEN NULL WHEN BFVALUESUM<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(BFVALUESUM)AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(BFVALUESUM)AS VARCHAR(8000)),'N') END AS BFVALUESUM,
+									   CASE WHEN ISNULL(BUYQTYSUM,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(BUYQTYSUM AS VARCHAR(8000)),'N') END AS BUYQTYSUM,
+									   CASE WHEN ISNULL(BUYVALUESUM,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(BUYVALUESUM AS VARCHAR(8000)),'N') END AS BUYVALUESUM,
+									   CASE WHEN ISNULL(BUYAVGSUM,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(BUYAVGSUM AS VARCHAR(8000)),'N') END AS BUYAVGSUM,
+									   CASE WHEN ISNULL(SELLQTYSUM,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(SELLQTYSUM AS VARCHAR(8000)),'N') END AS SELLQTYSUM,
+									   CASE WHEN ISNULL(SELLVALUESUM,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(SELLVALUESUM AS VARCHAR(8000)),'N') END AS SELLVALUESUM,
+									   CASE WHEN ISNULL(SELLAVGSUM,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(SELLAVGSUM AS VARCHAR(8000)),'N') END AS SELLAVGSUM,
+									   CASE WHEN ISNULL(CFVALUESUM,0)=0 THEN NULL WHEN CFVALUESUM<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(CFVALUESUM)AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(CFVALUESUM)AS VARCHAR(8000)),'N') END AS CFVALUESUM,
+									   CASE WHEN ISNULL(MTMSUM,0)=0 THEN NULL WHEN MTMSUM<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(MTMSUM) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(MTMSUM) AS VARCHAR(8000)),'N') END AS MTMSUM,
+									   CASE WHEN ISNULL(PRMSUM,0)=0 THEN NULL WHEN PRMSUM<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(PRMSUM) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(PRMSUM) AS VARCHAR(8000)),'N') END AS PRMSUM,
+									   CASE WHEN ISNULL(FINSETTSUM,0)=0 THEN NULL WHEN FINSETTSUM<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(FINSETTSUM) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(FINSETTSUM) AS VARCHAR(8000)),'N') END AS FINSETTSUM,
+									   CASE WHEN ISNULL(PRMSUM,0)=0 THEN NULL WHEN EXCASNVALUESUM<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(EXCASNVALUESUM) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(EXCASNVALUESUM) AS VARCHAR(8000)),'N') END AS EXCASNVALUESUM,
+									   CASE WHEN ISNULL(BRKGCHARGE,0)=0 THEN NULL ELSE CASE WHEN BRKGMODE='I' THEN 'STax On Brkg[Inclusive]:' WHEN BRKGMODE='E' THEN 'STax On Brkg[Exclusive]:' ELSE 'STax On Brkg[Not Apll.]:' END END AS BRKGCHARGE_NAME,
+									   CASE WHEN ISNULL(BRKGCHARGE,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(BRKGCHARGE AS VARCHAR(8000)),'N') END AS BRKGCHARGE,
+									   CASE WHEN ISNULL(TRANCHARGE,0)=0 THEN NULL ELSE 'Transaction Charges :' END AS TRANCHARGE_NAME,
+									   CASE WHEN ISNULL(TRANCHARGE,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(TRANCHARGE AS VARCHAR(8000)),'N') END AS TRANCHARGE,
+									   CASE WHEN ISNULL(SRVTAXTRANCHARGE,0)=0 THEN NULL ELSE 'STax On Trn.Charges :' END AS SRVTAXTRANCHARGE_NAME,
+									   CASE WHEN ISNULL(SRVTAXTRANCHARGE,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(SRVTAXTRANCHARGE AS VARCHAR(8000)),'N') END AS SRVTAXTRANCHARGE,
+									   CASE WHEN ISNULL(STAMPCHARGE,0)=0 THEN NULL ELSE 'Stamp Duty :' END AS STAMPCHARGE_NAME,
+									   CASE WHEN ISNULL(STAMPCHARGE,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(STAMPCHARGE AS VARCHAR(8000)),'N') END AS STAMPCHARGE,
+									   CASE WHEN ISNULL(STTAX,0)=0 THEN NULL ELSE 'STT Tax :' END AS STTAX_NAME,
+									   CASE WHEN ISNULL(STTAX,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(STTAX AS VARCHAR(8000)),'N') END AS STTAX,
+									   CASE WHEN ISNULL(SEBICHARGE,0)=0 THEN NULL ELSE 'SEBI Fee :' END AS SEBICHARGE_NAME,		 
+									   CASE WHEN ISNULL(SEBICHARGE,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(SEBICHARGE AS VARCHAR(8000)),'N') END AS SEBICHARGE,		 
+									   CASE WHEN ISNULL(CLEARINGCHARGE,0)=0 THEN NULL ELSE 'Clearing Charges :' END AS CLEARINGCHARGE_NAME,
+									   CASE WHEN ISNULL(CLEARINGCHARGE,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(CLEARINGCHARGE AS VARCHAR(8000)),'N') END AS CLEARINGCHARGE,
+									   CASE WHEN ISNULL(SRVTAXCLEARINGCHARGE,0)=0 THEN NULL ELSE 'STax On Clearing Charges :' END AS SRVTAXCLEARINGCHARGE_NAME,
+									   CASE WHEN ISNULL(SRVTAXCLEARINGCHARGE,0)=0 THEN NULL ELSE dbo.fn_FormatNumber(CAST(SRVTAXCLEARINGCHARGE AS VARCHAR(8000)),'N') END AS SRVTAXCLEARINGCHARGE,
+									   CASE WHEN ISNULL(NETOBLIGATIONCHARGE,0)=0 THEN NULL ELSE 'Net Total :' END AS NETOBLIGATIONCHARGE_NAME,		 
+									   CASE WHEN ISNULL(NETOBLIGATIONCHARGE,0)=0 THEN NULL WHEN NETOBLIGATIONCHARGE<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(NETOBLIGATIONCHARGE) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(ABS(NETOBLIGATIONCHARGE) AS VARCHAR(8000)),'N') END AS NETOBLIGATIONCHARGE
+									   FROM #TAB
+									   ORDER BY GRPNAME,CLIENTNAME,FOIDENTIFIER,SYMBOL,EXPIRYDATE
+								  End
+			
+drop table #TEMP_ALL			
+DROP TABLE #TEMP_QTY
+DROP TABLE #TAB
+END
+
+
+
+
+
+
+
+

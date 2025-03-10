@@ -1,0 +1,199 @@
+
+ALTER procedure [dbo].[Export_ClientContractNotes]
+@Companyid varchar(10),
+@Finyear varchar(10),
+@Segment varchar(5),
+@SettlementNumber varchar(7),
+@ForDate varchar(15),
+@GroupBy varchar(15),
+@GroupByID varchar(Max),
+@GroupByType varchar(50),
+@ContractType varchar(1)
+
+AS
+BEGIN
+SET NOCOUNT ON 
+		--Select col1 from dbo.GenericTableValueFunction('CLIENT',@GroupBy+'~'+@GroupByID+'~'+@GroupByType)
+		
+		if OBJECT_ID('tempdb..#DisplayTable') is not null
+			Drop Table #DisplayTable		
+		Create table #DisplayTable(Display_CustomerID varchar(10),Display_RecordType char(1),Display_Tcode Varchar(10),Display_1 varchar(40),Display_2 varchar(40), Display_3 varchar(40),Display_4 varchar(40)
+								  ,Display_5 varchar(40),Display_6 varchar(40),Display_7 varchar(40),Display_8  varchar(40),Display_9 varchar(40),Display_10 varchar(40))
+		
+	
+		
+		if OBJECT_ID('tempdb..#TmpTrade') is not null
+			Drop Table #TmpTrade		
+		Create table #TmpTrade(Trade_CustomerID varchar(10),Trade_RecordType char(1),Trade_Tcode Varchar(10),Trade_ContractNoteNumber varchar(40),Trade_TransType char(1),Trade_ISIN varchar(12)
+								,Trade_Quantity int,Trade_ScripRate numeric(15,2),Trade_BrkgRate numeric(20,2),Trade_TransAmnt numeric(16,2))
+				
+	
+		if(@ContractType='P')
+			Begin
+					Insert Into #TmpTrade
+					Select  CustomerTrades_CustomerID,'T',null --TCode
+							,CustomerTrades_ContractNoteNumber		
+							,'P' 
+							,ISIN_Number
+							,isnull(Abs(CustomerTrades_UnitPriceQuantity),0)
+							,isnull(Abs(CustomerTrades_UnitPrice),0)
+							,isnull(Abs(CustomerTrades_UnitBrokerage),0)
+							,isnull(Abs(CustomerTrades_NetValue),0)					
+					From Trans_CustomerTrades,Master_ISIN
+					Where CustomerTrades_ExchangeSegment=@Segment
+							and CustomerTrades_FinYear=@Finyear
+							and CustomerTrades_SettlementNumber=@SettlementNumber
+							and CustomerTrades_TradeDate=@ForDate
+							and ISIN_ProductSeriesID=CustomerTrades_ProductSeriesID
+							and CustomerTrades_CustomerID in (Select col1 from dbo.GenericTableValueFunction('CLIENT',@GroupBy+'~'+@GroupByID+'~'+@GroupByType))
+							and CustomerTrades_UnitPriceQuantity<0
+			End
+		Else
+			Begin
+					Insert Into #TmpTrade
+					Select  CustomerTrades_CustomerID,'T',null --TCode
+							,CustomerTrades_ContractNoteNumber		
+							,'S'
+							,ISIN_Number
+							,isnull(Abs(CustomerTrades_UnitPriceQuantity),0)
+							,isnull(Abs(CustomerTrades_UnitPrice),0)
+							,isnull(Abs(CustomerTrades_UnitBrokerage),0)
+							,isnull(Abs(CustomerTrades_NetValue),0)					
+					From Trans_CustomerTrades,Master_ISIN
+					Where CustomerTrades_ExchangeSegment=@Segment
+							and CustomerTrades_FinYear=@Finyear
+							and CustomerTrades_SettlementNumber=@SettlementNumber
+							and CustomerTrades_TradeDate=@ForDate
+							and ISIN_ProductSeriesID=CustomerTrades_ProductSeriesID
+							and CustomerTrades_CustomerID in (Select col1 from dbo.GenericTableValueFunction('CLIENT',@GroupBy+'~'+@GroupByID+'~'+@GroupByType))
+							and CustomerTrades_UnitPriceQuantity>0
+				
+			End	
+		
+		
+		if OBJECT_ID('tempdb..#TmpCntrNote') is not null
+			Drop Table #TmpCntrNote		
+		Create table #TmpCntrNote(CntrNote_CustomerID varchar(10),CntrNote_RecordType char(1),CntrNote_Tcode Varchar(10),CntrNote_TradeDate varchar(8),CntrNote_ContractNoteNumber varchar(40), CntrNote_ServiceTax numeric(10,2),CntrNote_EduCess numeric(10,2)
+								  ,CntrNote_ExchangeLevy numeric(10,2),CntrNote_STT  numeric(10,2),CntrNote_StampDuty  numeric(10,2),CntrNote_Others  numeric(10,2),CntrNote_TransNo int,CntrNote_NetAmount numeric(15,2))
+		
+		
+		Insert Into #TmpCntrNote
+		Select ContractNotes_CustomerID,'H',null,CONVERT(VARCHAR(8), cast(ContractNotes_TradeDate as datetime), 112),ContractNotes_Number
+			--Service Tax Amount----			
+			,isnull(ContractNotes_TotalServiceTax,0)					
+			----Education Cess Amount----	
+			,(isnull(ContractNotes_TotalEduCess,0)+isnull(ContractNotes_TotalHgrEduCess,0))					
+			----Exchange Levy----		
+			,isnull(ContractNotes_TransactionCharges,0)
+			-----STT-------------		
+			,isnull(ContractNotes_STTAmount,0)
+			----Stamp Duty-------		
+			,isnull(ContractNotes_StampDuty,0)
+			----Other Charges-----
+			,(isnull(ContractNotes_SEBIFee,0)
+			+isnull(ContractNotes_DeliveryCharges,0)
+			+isnull(ContractNotes_OtherCharges,0)		
+			+isnull(ContractNotes_ClearingCharges,0)
+			+isnull(ContractNotes_CNFCharges,0)
+			+isnull(ContractNotes_DLVCharges,0)
+			+isnull(ContractNotes_DLVHoldingCharges,0)
+			+isnull(ContractNotes_TOTCharges,0)
+			+isnull(ContractNotes_SalesTax,0)
+			+isnull(ContractNotes_VAT,0))
+			----Number Of Transactions----		
+			,null			
+			----Total Contract Note Amount----		
+			,isnull(Abs(ContractNotes_NetAmount),0)					
+		From Trans_ContractNotes 
+		Where ContractNotes_SegmentID=@Segment
+				and ContractNotes_FinYear=@Finyear
+				and ContractNotes_SettlementNumber=@SettlementNumber
+				and ContractNotes_TradeDate=@ForDate
+				and ContractNotes_CustomerID in (Select col1 from dbo.GenericTableValueFunction('CLIENT',@GroupBy+'~'+@GroupByID+'~'+@GroupByType))
+				and ContractNotes_Number in (Select Distinct Trade_ContractNoteNumber from #TmpTrade)			
+		
+		
+		
+		
+		
+						
+		if OBJECT_ID('tempdb..#DistinctCustomer') is not null
+			Drop Table #DistinctCustomer	
+		Create table #DistinctCustomer(AutoCustomerID int Identity(1,1),Customer varchar(10)) 		
+		
+		Insert into #DistinctCustomer
+		Select Distinct CntrNote_CustomerID From #TmpCntrNote
+		
+		Declare @maxCustomerCount int,@minCustomerCount int,@CustomerID varchar(10)
+		
+		Set @minCustomerCount=1
+		Select @maxCustomerCount=COUNT(*) from #DistinctCustomer
+		While (@maxCustomerCount>=@minCustomerCount)
+			Begin
+				Select @CustomerID=Customer from #DistinctCustomer where AutoCustomerID=@minCustomerCount
+				
+				if OBJECT_ID('tempdb..#DistinctContractNo') is not null
+						Drop Table #DistinctContractNo	
+				Create table #DistinctContractNo(AutoContractNoID int Identity(1,1),ContractNo int)	
+				
+				Insert into #DistinctContractNo
+				Select Distinct CntrNote_ContractNoteNumber From #TmpCntrNote				
+				Declare @maxContractNo int,@minContractNo int,@ContractNo varchar(40)
+								
+				Set @minContractNo=1
+				Select @maxContractNo=COUNT(*) from #DistinctContractNo
+				While (@maxContractNo>=@minContractNo)
+					Begin
+						Select @ContractNo=ContractNo from #DistinctContractNo where AutoContractNoID=@minContractNo
+						
+						Insert into #DisplayTable
+						Select * From #TmpCntrNote Where CntrNote_CustomerID=@CustomerID 
+															and CntrNote_ContractNoteNumber=@ContractNo
+						
+						Insert Into #DisplayTable(Display_CustomerID,Display_RecordType,Display_Tcode,Display_1,Display_2, Display_3,Display_4,Display_5,Display_6,Display_7)
+						Select * From #TmpTrade Where Trade_CustomerID=@CustomerID
+														and Trade_ContractNoteNumber=@ContractNo						
+						
+						
+						Update #DisplayTable Set Display_9=(Select COUNT(*) From #TmpTrade 
+															 Where Trade_CustomerID=@CustomerID
+																	and Trade_ContractNoteNumber=@ContractNo)
+						Where Display_CustomerID=@CustomerID and Display_2=@ContractNo and Display_RecordType='H'										
+						
+						Set @minContractNo=@minContractNo+1						
+					End	
+					
+				Set @minCustomerCount=@minCustomerCount+1
+			End	
+		
+		 Declare @SegName varchar(30)
+		 Select @SegName= exh_shortName+' - '+exch_segmentId 
+		 From (Select Ltrim(Rtrim(Exch_CompID)) as CompanyID,
+					 (Select Ltrim(RTrim(Cmp_Name)) from Tbl_Master_Company Where Cmp_InternalID=Exch_CompID) as Company,
+										(Select ExchangeSegment_ID From Master_ExchangeSegments Where ExchangeSegment_ExchangeID=Exchange_ID and ExchangeSegment_Code=Exch_SegmentID) as [Session_ExchangeSegmentID],
+										Exch_InternalID as [Session_UserSegID],Exh_ShortName,Exch_SegmentID from
+										(Select Exch_CompID,Exch_InternalID,Exh_ShortName,Exch_SegmentID from Tbl_Master_Exchange,Tbl_Master_CompanyExchange 
+										Where Exh_CntId=Exch_ExchID) as T1,Master_Exchange
+										Where Exchange_ShortName=Exh_ShortName) as T1 
+		 Where CompanyID=@Companyid and Session_UserSegID=@Segment	
+
+		
+		Update #DisplayTable set Display_Tcode=ltrim(rtrim(crg_TCode)) from tbl_master_contactExchange
+		where Display_CustomerID=crg_cntID and crg_exchange=@SegName
+		
+				
+		Select Display_RecordType,Display_Tcode,Display_1,Display_2, Display_3,Display_4
+			   ,Display_5,Display_6,Display_7,Display_8,Display_9,Display_10 
+		from #DisplayTable	
+		
+		Select (substring(ltrim(rtrim(dbo.fnSplit(@SegName,'-',1))),1,3)
+		+case When @ContractType='P' Then '1' Else '2' End+'_'+CONVERT(VARCHAR(8), cast(@ForDate as datetime), 112) ) as FileName
+		
+		----Delete all temp tables---
+		Drop table #DistinctContractNo
+		Drop table #DistinctCustomer
+		Drop table #TmpTrade
+		Drop table #TmpCntrNote
+		Drop table #DisplayTable
+		
+End		

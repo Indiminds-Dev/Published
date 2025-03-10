@@ -1,0 +1,90 @@
+function DevE_CheckForFinYearWithoutAlert(DateObject,FinYearStartDate,FinYearEndDate,LastFinYearDate)    
+{    
+    var SelectedDate = new Date(DateObject.GetDate());
+    var monthnumber = SelectedDate.getMonth();
+    var monthday    = SelectedDate.getDate();
+    var year        = SelectedDate.getYear();
+    
+    var SelectedDateValue=new Date(year, monthnumber, monthday);
+    ///Date Should Between Current Fin Year StartDate and EndDate
+    var FYS =FinYearStartDate;
+    var FYE =FinYearEndDate;
+    var LFY =LastFinYearDate;
+    var FinYearStartDate = new Date(FYS);
+    var FinYearEndDate = new Date(FYE);
+    var LastFinYearDate=new Date(LFY);
+    
+    monthnumber = FinYearStartDate.getMonth();
+    monthday    = FinYearStartDate.getDate();
+    year        = FinYearStartDate.getYear();
+    var FinYearStartDateValue=new Date(year, monthnumber, monthday);
+    
+  
+    monthnumber = FinYearEndDate.getMonth();
+    monthday    = FinYearEndDate.getDate();
+    year        = FinYearEndDate.getYear();
+    var FinYearEndDateValue=new Date(year, monthnumber, monthday);
+    
+//                alert('SelectedDateValue :'+SelectedDateValue.getTime()+
+//                '\nFinYearStartDateValue :'+FinYearStartDateValue.getTime()+
+//                '\nFinYearEndDateValue :'+FinYearEndDateValue.getTime());
+    
+    var SelectedDateNumericValue=SelectedDateValue.getTime();
+    var FinYearStartDateNumericValue=FinYearStartDateValue.getTime();
+    var FinYearEndDatNumbericValue=FinYearEndDateValue.getTime();
+    if(SelectedDateNumericValue>=FinYearStartDateNumericValue && SelectedDateNumericValue<=FinYearEndDatNumbericValue)
+    {
+//                   alert('Between');
+    }
+    else
+    {
+       
+       if(SelectedDateNumericValue<FinYearStartDateNumericValue)
+       {
+            DateObject.SetDate(new Date(FinYearStartDate));
+       }
+       if(SelectedDateNumericValue>FinYearEndDatNumbericValue)
+       {
+            DateObject.SetDate(new Date(FinYearEndDate));
+       }
+       DateObject.Focus();
+    }
+    ///End OF Date Should Between Current Fin Year StartDate and EndDate
+}
+
+
+function DevE_SetFirstLastDay(DateObjSource,DateObjFirstDayTarget,DateObjLastDayTarget)
+{
+        var datefor= new Date(DateObjSource.GetDate());
+        var monthnumber = datefor.getMonth();
+        var monthday    = datefor.getDate()-datefor.getDate()+1;
+        var year        = datefor.getYear();
+        
+        var ExpireDateValue=new Date(year, monthnumber, monthday);
+        var lastday=new Date(year,monthnumber+1,0);
+        DateObjFirstDayTarget.SetDate(ExpireDateValue);
+        DateObjLastDayTarget.SetDate(lastday);
+
+}
+
+function DevE_SetFirstDayOfMonth(DateObjSource,DateObjFirstDayTarget)
+{
+        var datefor= new Date(DateObjSource.GetDate());
+        var monthnumber = datefor.getMonth();
+        var monthday    = datefor.getDate()-datefor.getDate()+1;
+        var year        = datefor.getYear();        
+        var ExpireDateValue=new Date(year, monthnumber, monthday);
+        DateObjFirstDayTarget.SetDate(ExpireDateValue);
+
+}
+function DevE_SetLastDayOfMonth(DateObjSource,DateObjLastDayTarget)
+{
+        var datefor= new Date(DateObjSource.GetDate());
+        var monthnumber = datefor.getMonth();
+        var monthday    = datefor.getDate()-datefor.getDate()+1;
+        var year        = datefor.getYear();
+        var lastday=new Date(year,monthnumber+1,0);
+        DateObjLastDayTarget.SetDate(lastday);
+
+}
+

@@ -1,0 +1,81 @@
+
+ALTER PROCEDURE [dbo].[sp_NsdlTransaction_FetchTypeSubtype_totaltrans]
+@stdate varchar(30),
+@eddate varchar(30),
+@BenAccNo varchar(30),
+@BenType tinyint
+
+AS
+BEGIN
+	SET NOCOUNT ON;
+
+if (@BenType <> 6) 
+	begin
+			select foo1.*, foo2.* from
+				(select 
+						(case when dbo.fn_BeneficiaryType(NsdlClients_BenType,NsdlClients_BenSubType)='CM'
+									then 'Clearing Member'
+									else dbo.fn_BeneficiaryType(NsdlClients_BenType,NsdlClients_BenSubType)
+								end +
+						 case when dbo.fn_BeneficiarySubType(NsdlClients_BenType,NsdlClients_BenSubType) is null
+									then ''
+									else ' [ '+ dbo.fn_BeneficiarySubType(NsdlClients_BenType,NsdlClients_BenSubType)+' ] '
+								end
+						) as TypeSubtype
+					from Master_NsdlClients
+					where NsdlClients_BenAccountID = @BenAccNo
+				)foo1,
+				(select count(NsdlTransaction_ID)  as totaltrans 
+				 from Trans_NsdlTransaction t, Master_NSDLISIN isin
+				 where t.NsdlTransaction_ISIN = isin.NSDLISIN_Number
+						and t.NsdlTransaction_Date between @stdate and @eddate
+						and  t.NsdlTransaction_BenAccountNumber=@BenAccNo
+						and NsdlTransaction_BookingNarrationCode not in(41,51,10501,61,202,11110,11108,11109) ---(41,51,61,202)
+				)foo2
+	end
+
+else 
+	begin
+			select foo1.*, foo2.* from
+				(select 
+					(case when dbo.fn_BeneficiaryType(NsdlClients_BenType,NsdlClients_BenSubType)='CM'
+						  then 'Clearing Member'
+						  else dbo.fn_BeneficiaryType(NsdlClients_BenType,NsdlClients_BenSubType)
+					 end +
+					case when dbo.fn_BeneficiarySubType(NsdlClients_BenType,NsdlClients_BenSubType) is null
+						 then ''
+						 else ' [ '+ dbo.fn_BeneficiarySubType(NsdlClients_BenType,NsdlClients_BenSubType)+' ] '
+					 end
+					) as TypeSubtype
+				 from Master_NsdlClients
+				 where NsdlClients_BenAccountID = @BenAccNo
+				)foo1,
+				(select  count(NsdlTransaction_ID)  as totaltrans 
+				 from Trans_NsdlTransaction t, Master_NSDLISIN isin
+				 where t.NsdlTransaction_ISIN = isin.NSDLISIN_Number
+						and t.NsdlTransaction_Date between @stdate and @eddate
+						and  t.NsdlTransaction_BenAccountNumber=@BenAccNo
+						and NsdlTransaction_BenCategory=3
+						----Modified-------
+						and (NsdlTransaction_BookingType in(1,2,11,14)
+								and ((NsdlTransaction_BenAccountType = 20  
+											and NsdlTransaction_BenAccountType_new is NULL)
+									 or
+									 (NsdlTransaction_BenAccountType_new = 20  
+											and NsdlTransaction_BenAccountType_new is not NULL)
+									)
+							)	
+						--and NsdlTransaction_BenAccountType=20 
+						--and (NsdlTransaction_BookingType = 11 or NsdlTransaction_BookingType = 14)
+				)foo2
+	end
+
+END
+
+
+
+
+
+
+
+

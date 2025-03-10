@@ -1,0 +1,1130 @@
+
+ALTER procedure [dbo].[Insert_TradeEntry]
+@PersonXML nVarchar(Max),
+@Company varchar(30),
+@SegmentID varchar(20),
+@ExchangeSegment VARCHAR(50),
+@FinYear varchar(50),
+@SettNo VARCHAR(50),
+@SettType VARCHAR(50),
+@SettDate varchar(50),
+@User varchar(30)
+As
+Begin
+    DECLARE @BUYCLIENTEXCHID varchar(50),@SELLCLIENTEXCHID varchar(50)
+	
+	DECLARE @XMLDoc int
+	DECLARE @InsertIntoPerson Varchar(max)
+	EXEC SP_XML_PREPAREDOCUMENT @XMLDoc OUTPUT,@PersonXML
+	Select * into #PersonXMLTable
+	from OPENXML (@XMLDoc,'/NewDataSet/person',2)
+	WITH (RowID int,OrderNoD varchar(30), TradeNoD varchar(30), InstrumentD varchar(30), QuantityD numeric(18,4), MarketRateD numeric(18,4), 
+	BoughtFromD varchar(30), BoughtFromClientD varchar(30),BoughtFromClientTCodeD varchar(30), SoldToD varchar(30),
+	SoldToClientD varchar(30),SoldToClientTCodeD varchar(30),BrokerageD varchar(30), TradeCategoryD varchar(30),
+	BoughtFromClientHiddenValueD varchar(10),SoldToClientHiddenValueD varchar(10),InstrumentHiddenValue int ,EntryType varchar(2),EntryMode varchar(2),TransExchangeTradesID1 int,TransExchangeTradesID2 int)
+	
+	Select * from #PersonXMLTable
+  if (@ExchangeSegment=1 or @ExchangeSegment=4 or @ExchangeSegment=2 or @ExchangeSegment=5 or @ExchangeSegment=19 or @ExchangeSegment=20)
+	 Begin
+	   --select ExchangeTrades_CustTransactionID from Trans_ExchangeTrades where ExchangeTrades_ID in(Select isnull(TransExchangeTradesID1,0)from #PersonXMLTable where EntryMode='D') 
+	   Delete from Trans_CustomerTrades WHERE CustomerTrades_ID in(select ExchangeTrades_CustTransactionID from Trans_ExchangeTrades  where ExchangeTrades_ID in(Select isnull(TransExchangeTradesID1,0)from #PersonXMLTable where EntryMode='D'))
+	   Delete from Trans_CustomerTrades WHERE CustomerTrades_ID in(select ExchangeTrades_CustTransactionID from Trans_ExchangeTrades  where ExchangeTrades_ID in(Select isnull(TransExchangeTradesID2,0)from #PersonXMLTable where EntryMode='D'))
+	   Delete from Trans_ExchangeTrades where ExchangeTrades_ID in(Select isnull(TransExchangeTradesID1,0)from #PersonXMLTable where EntryMode='D')
+	   Delete from Trans_ExchangeTrades where ExchangeTrades_ID in(Select isnull(TransExchangeTradesID2,0)from #PersonXMLTable where EntryMode='D')
+	 End  
+	 
+  else
+     Begin
+       Delete from Trans_ComCustomerTrades WHERE ComCustomerTrades_ID in(select ComExchangeTrades_CustTransactionID from Trans_ComExchangeTrades  where ComExchangeTrades_ID in(Select isnull(TransExchangeTradesID1,0)from #PersonXMLTable where EntryMode='D'))
+	   Delete from Trans_ComCustomerTrades WHERE ComCustomerTrades_ID in(select ComExchangeTrades_CustTransactionID from Trans_ComExchangeTrades  where ComExchangeTrades_ID in(Select isnull(TransExchangeTradesID2,0)from #PersonXMLTable where EntryMode='D'))
+       Delete from Trans_ComExchangeTrades where ComExchangeTrades_ID in(Select isnull(TransExchangeTradesID1,0)from #PersonXMLTable where EntryMode='D')
+	   Delete from Trans_ComExchangeTrades where ComExchangeTrades_ID in(Select isnull(TransExchangeTradesID2,0)from #PersonXMLTable where EntryMode='D')
+	 End  
+     
+   Delete from #PersonXMLTable where EntryMode='D'
+	
+		 
+	Declare @MaxCount int,@MinCount int,@EntryType Char(2),@EntryMode Char(2),@TradeID1 int ,@TradeID2 int
+	
+    Select @MaxCount=MAX(RowID) from #PersonXMLTable
+    Select @MinCount=MIN(RowID) From #PersonXMLTable
+   
+    While(@MinCount<=@MaxCount)
+    Begin
+    
+		Select @EntryType=EntryType from #PersonXMLTable Where RowID=@MinCount
+		Select @EntryMode=EntryMode from #PersonXMLTable Where RowID=@MinCount
+		
+	    --Select @TradeID1=TransExchangeTradesID1 from #PersonXMLTable Where RowID=@MinCount
+	    --Select @TradeID2=TransExchangeTradesID2 from #PersonXMLTable Where RowID=@MinCount
+	    
+------------------------------------------Updatation And Insertion For CM/FO Segment-------------------------------------------------------------------------------------------
+-----------------------------------------------------for editing data-----------------------------------------------------------------------------------------------------------------		
+if (@ExchangeSegment=1 or @ExchangeSegment=4 or @ExchangeSegment=2 or @ExchangeSegment=5 or @ExchangeSegment=19 or @ExchangeSegment=20)
+ Begin
+	if @EntryMode= 'E'
+	  Begin		
+		 if @EntryType = 'EC'
+		
+			Begin
+		
+				Update Trans_ExchangeTrades set
+				ExchangeTrades_FinYear=@FinYear,
+				ExchangeTrades_CompanyID=@Company,
+				ExchangeTrades_Segment=@SegmentID,
+				ExchangeTrades_BranchID=cnt_branchid,
+				ExchangeTrades_TradeCategory=Case 
+					When len(TradeCategoryD)>0 Then TradeCategoryD
+					When @ExchangeSegment in (1,19) and @SETTTYPE='X' Then 'NOC'
+					When @ExchangeSegment =4 and @SETTTYPE='Y' Then 'NOC'
+					Else Null 
+				End,
+				ExchangeTrades_SettlementNumber=@SettNo,
+				ExchangeTrades_SettlementType=@SettType,
+				ExchangeTrades_TradeDate=@SettDate,
+				ExchangeTrades_TradeNumber=TradeNoD,
+				ExchangeTrades_OrderNumber=OrderNoD,
+				ExchangeTrades_ProCli=Case When CNT_CLIENTTYPE='Pro-Trading' Then 2 Else 1 End,
+				ExchangeTrades_CustomerUcc=SoldToClientTCodeD,
+				ExchangeTrades_CustomerID=CNT_INTERNALID,
+				ExchangeTrades_SecurityType=RTRIM(LTRIM(Equity_FOIdentifier)),
+				ExchangeTrades_SecuritySymbol=RTRIM(LTRIM(Equity_TickerSymbol)),
+				ExchangeTrades_SecurityCode=RTRIM(LTRIM(Equity_TickerCode)),
+				ExchangeTrades_SecuritySeries=RTRIM(LTRIM(Equity_Series)),
+				ExchangeTrades_SecurityGroup=RTRIM(LTRIM(Equity_Group)),
+				ExchangeTrades_SecurityExpiry=RTRIM(LTRIM(Equity_EffectUntil)),
+				ExchangeTrades_SecurityStrikePrice=RTRIM(LTRIM(Equity_StrikePrice)),
+				ExchangeTrades_ProductSeriesID=Equity_SeriesID,
+				ExchangeTrades_BookType=1,
+				ExchangeTrades_MarketType=1,
+				ExchangeTrades_BuySellFlag=1,
+				ExchangeTrades_QuantityLots=ABS(QuantityD),
+				ExchangeTrades_UnitPrice=ABS(MarketRateD),
+				ExchangeTrades_UnitPriceQuantity=ABS(QuantityD),
+				ExchangeTrades_MarketValue=ABS(ISNULL(QuantityD,0))*ABS(ISNULL(MarketRateD,0)),
+				ExchangeTrades_CustodialFlag='N',
+				ExchangeTrades_Remarks=CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END,
+				ExchangeTrades_ImportType='M',
+				ExchangeTrades_CreateUser=@User,
+				ExchangeTrades_StrikePrice=RTRIM(LTRIM(Equity_StrikePrice)),
+				ExchangeTrades_NDFlag=Case When @ExchangeSegment in (1,19) Then Null Else 'N' End,
+				ExchangeTrades_CounterPartyID=Null 
+			    
+				from TBL_MASTER_CONTACT,MASTER_EQUITY,#PersonXMLTable
+			    
+				Where @Company=ExchangeTrades_CompanyID and @SegmentID=ExchangeTrades_Segment and ExchangeTrades_TransactionType='ENTRD' 
+				and ExchangeTrades_SettlementNumber=@SettNo and ExchangeTrades_SettlementType=@SettType and ExchangeTrades_TradeDate=@SettDate 
+				and ExchangeTrades_CreateUser=@User and ExchangeTrades_FinYear=@FinYear and ExchangeTrades_CreateDateTime>(DATEADD(dd, 0, DATEDIFF(dd, 0,@SettDate)))
+				And CNT_INTERNALID=SoldToClientHiddenValueD AND Equity_SeriesID=InstrumentHiddenValue 
+				And ExchangeTrades_ID=TransExchangeTradesID1
+				AND Equity_ExchSegmentID=@ExchangeSegment
+				And RowID=@MinCount
+				And EntryMode='E'
+		    
+			End		
+				
+				
+			if @EntryType = 'CE'
+			Begin
+				
+				Update Trans_ExchangeTrades set
+				ExchangeTrades_FinYear=@FinYear,
+				ExchangeTrades_CompanyID=@Company,
+				ExchangeTrades_Segment=@SegmentID,
+				ExchangeTrades_BranchID=cnt_branchid,
+				ExchangeTrades_TradeCategory=
+				Case 
+					When len(TradeCategoryD)>0 Then TradeCategoryD
+					When @ExchangeSegment in (1,19) and @SETTTYPE='X' Then 'NOC'
+					When @ExchangeSegment =4 and @SETTTYPE='Y' Then 'NOC'
+					Else Null 
+				End,
+				ExchangeTrades_SettlementNumber=@SettNo,
+				ExchangeTrades_SettlementType=@SettType,
+				ExchangeTrades_TradeDate=@SettDate,
+				ExchangeTrades_TradeNumber=TradeNoD,
+				ExchangeTrades_OrderNumber=OrderNoD,
+				ExchangeTrades_ProCli=Case When CNT_CLIENTTYPE='Pro-Trading' Then 2 Else 1 End,
+				ExchangeTrades_CustomerUcc=BoughtFromClientTCodeD,
+				ExchangeTrades_CustomerID=CNT_INTERNALID,
+				ExchangeTrades_SecurityType=RTRIM(LTRIM(Equity_FOIdentifier)),
+				ExchangeTrades_SecuritySymbol=RTRIM(LTRIM(Equity_TickerSymbol)),
+				ExchangeTrades_SecurityCode=RTRIM(LTRIM(Equity_TickerCode)),
+				ExchangeTrades_SecuritySeries=RTRIM(LTRIM(Equity_Series)),
+				ExchangeTrades_SecurityGroup=RTRIM(LTRIM(Equity_Group)),
+				ExchangeTrades_SecurityExpiry=RTRIM(LTRIM(Equity_EffectUntil)),
+				ExchangeTrades_SecurityStrikePrice=RTRIM(LTRIM(Equity_StrikePrice)),
+				ExchangeTrades_ProductSeriesID=Equity_SeriesID,
+				ExchangeTrades_BookType=1,
+				ExchangeTrades_MarketType=1,
+				ExchangeTrades_BuySellFlag=2,
+				ExchangeTrades_QuantityLots=ABS(QuantityD),
+				ExchangeTrades_UnitPrice=ABS(MarketRateD),
+				ExchangeTrades_UnitPriceQuantity=ABS(QuantityD),
+				ExchangeTrades_MarketValue=ABS(ISNULL(QuantityD,0))*ABS(ISNULL(MarketRateD,0)),
+				ExchangeTrades_CustodialFlag='N',
+				ExchangeTrades_Remarks=CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END,
+				ExchangeTrades_ImportType='M',
+				ExchangeTrades_CreateUser=@User,
+				ExchangeTrades_StrikePrice=RTRIM(LTRIM(Equity_StrikePrice)),
+				ExchangeTrades_NDFlag=Case When @ExchangeSegment in (1,19) Then Null Else 'N' End,
+				ExchangeTrades_CounterPartyID=Null 
+			    
+				from TBL_MASTER_CONTACT,MASTER_EQUITY,#PersonXMLTable
+				Where @Company=ExchangeTrades_CompanyID and @SegmentID=ExchangeTrades_Segment and ExchangeTrades_TransactionType='ENTRD' 
+				and ExchangeTrades_SettlementNumber=@SettNo and ExchangeTrades_SettlementType=@SettType and ExchangeTrades_TradeDate=@SettDate 
+				and ExchangeTrades_CreateUser=@User and ExchangeTrades_FinYear=@FinYear and ExchangeTrades_CreateDateTime>(DATEADD(dd, 0, DATEDIFF(dd, 0,@SettDate)))
+				And ExchangeTrades_ID=TransExchangeTradesID1
+				And CNT_INTERNALID=BoughtFromClientHiddenValueD AND Equity_SeriesID=InstrumentHiddenValue 
+				AND Equity_ExchSegmentID=@ExchangeSegment
+				And RowID=@MinCount
+				And EntryMode='E'
+		    
+			End		
+					
+			
+			if @EntryType = 'CC'
+			Begin
+			
+				Update Trans_ExchangeTrades set
+				ExchangeTrades_FinYear=@FinYear,
+				ExchangeTrades_CompanyID=@Company,
+				ExchangeTrades_Segment=@SegmentID,
+				ExchangeTrades_BranchID=cnt_branchid,
+				ExchangeTrades_TradeCategory=Case 
+					When len(TradeCategoryD)>0 Then TradeCategoryD
+					When @ExchangeSegment in (1,19) and @SETTTYPE='X' Then 'NOC'
+					When @ExchangeSegment =4 and @SETTTYPE='Y' Then 'NOC'
+					Else Null 
+				End,
+				ExchangeTrades_SettlementNumber=@SettNo,
+				ExchangeTrades_SettlementType=@SettType,
+				ExchangeTrades_TradeDate=@SettDate,
+				ExchangeTrades_TradeNumber=TradeNoD,
+				ExchangeTrades_OrderNumber=OrderNoD,
+				ExchangeTrades_ProCli=Case When CNT_CLIENTTYPE='Pro-Trading' Then 2 Else 1 End,
+				ExchangeTrades_CustomerUcc=BoughtFromClientTCodeD,
+				ExchangeTrades_CustomerID=CNT_INTERNALID,
+				ExchangeTrades_SecurityType=RTRIM(LTRIM(Equity_FOIdentifier)),
+				ExchangeTrades_SecuritySymbol=RTRIM(LTRIM(Equity_TickerSymbol)),
+				ExchangeTrades_SecurityCode=RTRIM(LTRIM(Equity_TickerCode)),
+				ExchangeTrades_SecuritySeries=RTRIM(LTRIM(Equity_Series)),
+				ExchangeTrades_SecurityGroup=RTRIM(LTRIM(Equity_Group)),
+				ExchangeTrades_SecurityExpiry=RTRIM(LTRIM(Equity_EffectUntil)),
+				ExchangeTrades_SecurityStrikePrice=RTRIM(LTRIM(Equity_StrikePrice)),
+				ExchangeTrades_ProductSeriesID=Equity_SeriesID,
+				ExchangeTrades_BookType=1,
+				ExchangeTrades_MarketType=1,
+				--ExchangeTrades_BuySellFlag=1,
+				ExchangeTrades_QuantityLots=ABS(QuantityD),
+				ExchangeTrades_UnitPrice=ABS(MarketRateD),
+				ExchangeTrades_UnitPriceQuantity=ABS(QuantityD),
+				ExchangeTrades_MarketValue=ABS(ISNULL(QuantityD,0))*ABS(ISNULL(MarketRateD,0)),
+				ExchangeTrades_CustodialFlag='N',
+				ExchangeTrades_Remarks=CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END,
+				ExchangeTrades_ImportType='M',
+				ExchangeTrades_CreateUser=@User,
+				ExchangeTrades_StrikePrice=RTRIM(LTRIM(Equity_StrikePrice)),
+				ExchangeTrades_NDFlag=Case When @ExchangeSegment in (1,19) Then Null Else 'N' End
+				FROM TBL_MASTER_CONTACT,MASTER_EQUITY,#PersonXMLTable
+				Where @Company=ExchangeTrades_CompanyID and @SegmentID=ExchangeTrades_Segment and ExchangeTrades_TransactionType='ENTRD' 
+				and ExchangeTrades_SettlementNumber=@SettNo and ExchangeTrades_SettlementType=@SettType and ExchangeTrades_TradeDate=@SettDate 
+				and ExchangeTrades_CreateUser=@User and ExchangeTrades_FinYear=@FinYear and ExchangeTrades_CreateDateTime>(DATEADD(dd, 0, DATEDIFF(dd, 0,@SettDate)))
+				and ExchangeTrades_ID=TransExchangeTradesID1
+				And CNT_INTERNALID=BoughtFromClientHiddenValueD 
+				AND Equity_SeriesID=InstrumentHiddenValue 
+				AND Equity_ExchSegmentID=@ExchangeSegment
+				And RowID=@MinCount
+				And EntryMode='E'
+				
+				
+				SELECT @BUYCLIENTEXCHID=@@identity--------FOR COUNTERPARTYID UPDATE
+							
+				
+				Update Trans_ExchangeTrades set
+				ExchangeTrades_FinYear=@FinYear,
+				ExchangeTrades_CompanyID=@Company,
+				ExchangeTrades_Segment=@SegmentID,
+				ExchangeTrades_BranchID=cnt_branchid,
+				ExchangeTrades_TradeCategory=Case 
+					When len(TradeCategoryD)>0 Then TradeCategoryD
+					When @ExchangeSegment in (1,19) and @SETTTYPE='X' Then 'NOC'
+					When @ExchangeSegment =4 and @SETTTYPE='Y' Then 'NOC'
+					Else Null 
+				End,
+				ExchangeTrades_SettlementNumber=@SettNo,
+				ExchangeTrades_SettlementType=@SettType,
+				ExchangeTrades_TradeDate=@SettDate,
+				ExchangeTrades_TradeNumber=TradeNoD,
+				ExchangeTrades_OrderNumber=OrderNoD,	   
+				ExchangeTrades_ProCli=Case When CNT_CLIENTTYPE='Pro-Trading' Then 2 Else 1 End,
+				ExchangeTrades_CustomerUcc=SoldToClientTCodeD,
+				ExchangeTrades_CustomerID=CNT_INTERNALID,
+				ExchangeTrades_SecurityType=RTRIM(LTRIM(Equity_FOIdentifier)),
+				ExchangeTrades_SecuritySymbol=RTRIM(LTRIM(Equity_TickerSymbol)),
+				ExchangeTrades_SecurityCode=RTRIM(LTRIM(Equity_TickerCode)),
+				ExchangeTrades_SecuritySeries=RTRIM(LTRIM(Equity_Series)),
+				ExchangeTrades_SecurityGroup=RTRIM(LTRIM(Equity_Group)),
+				ExchangeTrades_SecurityExpiry=RTRIM(LTRIM(Equity_EffectUntil)),
+				ExchangeTrades_SecurityStrikePrice=RTRIM(LTRIM(Equity_StrikePrice)),
+				ExchangeTrades_ProductSeriesID=Equity_SeriesID,
+				ExchangeTrades_BookType=1,
+				ExchangeTrades_MarketType=1,
+				--ExchangeTrades_BuySellFlag=2,
+				ExchangeTrades_QuantityLots=ABS(QuantityD),
+				ExchangeTrades_UnitPrice=ABS(MarketRateD),
+				ExchangeTrades_UnitPriceQuantity=ABS(QuantityD),
+				ExchangeTrades_MarketValue=ABS(ISNULL(QuantityD,0))*ABS(ISNULL(MarketRateD,0)),
+				ExchangeTrades_CustodialFlag='N',
+				ExchangeTrades_Remarks=CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END,
+				ExchangeTrades_ImportType='M',
+				ExchangeTrades_CreateUser=@User,
+				ExchangeTrades_StrikePrice=RTRIM(LTRIM(Equity_StrikePrice)),
+				ExchangeTrades_NDFlag=Case When @ExchangeSegment in (1,19) Then Null Else 'N' End
+				FROM TBL_MASTER_CONTACT,MASTER_EQUITY,#PersonXMLTable
+				
+				Where @Company=ExchangeTrades_CompanyID and @SegmentID=ExchangeTrades_Segment and ExchangeTrades_TransactionType='ENTRD' 
+				and ExchangeTrades_SettlementNumber=@SettNo and ExchangeTrades_SettlementType=@SettType and ExchangeTrades_TradeDate=@SettDate 
+				and ExchangeTrades_CreateUser=@User and ExchangeTrades_FinYear=@FinYear and ExchangeTrades_CreateDateTime>(DATEADD(dd, 0, DATEDIFF(dd, 0,@SettDate)))
+				and ExchangeTrades_ID=TransExchangeTradesID2
+				And CNT_INTERNALID=SoldToClientHiddenValueD 
+				AND Equity_SeriesID=InstrumentHiddenValue 
+				AND Equity_ExchSegmentID=@ExchangeSegment
+				And RowID=@MinCount
+				And EntryMode='E'
+							
+								
+				SELECT @SELLCLIENTEXCHID=@@identity--------FOR COUNTERPARTYID UPDATE
+				
+				UPDATE Trans_ExchangeTrades SET ExchangeTrades_CounterPartyID=@SELLCLIENTEXCHID 
+				 WHERE ExchangeTrades_ID=@BUYCLIENTEXCHID
+				UPDATE Trans_ExchangeTrades SET ExchangeTrades_CounterPartyID=@BUYCLIENTEXCHID 
+				 WHERE ExchangeTrades_ID=@SELLCLIENTEXCHID
+			
+		End 
+				
+	End	
+			
+			
+
+	  
+----------------------------------------------------for addition or insertion-----------------------------------------------------
+	  if @EntryMode= 'A'
+	  Begin	 
+			if @EntryType = 'EC'
+		
+			Begin
+		
+				INSERT INTO Trans_ExchangeTrades
+				(ExchangeTrades_FinYear,ExchangeTrades_CompanyID,ExchangeTrades_Segment,ExchangeTrades_BranchID,
+				ExchangeTrades_TradeCategory,ExchangeTrades_SettlementNumber,ExchangeTrades_SettlementType
+			   ,ExchangeTrades_TradeDate,ExchangeTrades_TradeNumber,ExchangeTrades_OrderNumber,ExchangeTrades_TransactionType
+			   ,ExchangeTrades_ProCli,ExchangeTrades_CustomerUcc,ExchangeTrades_CustomerID,ExchangeTrades_SecurityType
+			   ,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecurityCode,ExchangeTrades_SecuritySeries
+			   ,ExchangeTrades_SecurityGroup,ExchangeTrades_SecurityExpiry,ExchangeTrades_SecurityStrikePrice
+			   ,ExchangeTrades_ProductSeriesID,ExchangeTrades_BookType,ExchangeTrades_MarketType,ExchangeTrades_BuySellFlag
+			   ,ExchangeTrades_QuantityLots,ExchangeTrades_UnitPrice,ExchangeTrades_UnitPriceQuantity,ExchangeTrades_MarketValue
+			   ,ExchangeTrades_CustodialFlag,ExchangeTrades_Remarks,ExchangeTrades_ImportType,ExchangeTrades_CreateUser
+			   ,ExchangeTrades_CreateDateTime,ExchangeTrades_StrikePrice,ExchangeTrades_NDFlag,ExchangeTrades_CounterPartyID)
+				
+							
+				SELECT @FinYear,@Company,@SegmentID,cnt_branchid,
+				Case 
+					When len(TradeCategoryD)>0 Then TradeCategoryD
+					When @ExchangeSegment in (1,19) and @SETTTYPE='X' Then 'NOC'
+					When @ExchangeSegment =4 and @SETTTYPE='Y' Then 'NOC'
+					Else Null 
+				End,
+				@SettNo,@SettType,@SettDate,TradeNoD,OrderNoD,'ENTRD',
+				Case When CNT_CLIENTTYPE='Pro-Trading' Then 2 Else 1 End
+				,SoldToClientTCodeD,CNT_INTERNALID,RTRIM(LTRIM(Equity_FOIdentifier))
+				,RTRIM(LTRIM(Equity_TickerSymbol)),RTRIM(LTRIM(Equity_TickerCode))
+				,RTRIM(LTRIM(Equity_Series)),RTRIM(LTRIM(Equity_Group)),
+				RTRIM(LTRIM(Equity_EffectUntil)),RTRIM(LTRIM(Equity_StrikePrice))
+				,Equity_SeriesID,1,1,1,ABS(QuantityD),ABS(MarketRateD),ABS(QuantityD)
+				,ABS(ISNULL(QuantityD,0))*ABS(ISNULL(MarketRateD,0)),'N',
+				CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END,
+				'M',@User,GETDATE(),RTRIM(LTRIM(Equity_StrikePrice))
+				,Case When @ExchangeSegment in (1,19) Then Null Else 'N' End,Null 
+				FROM TBL_MASTER_CONTACT,MASTER_EQUITY,#PersonXMLTable
+				WHERE CNT_INTERNALID=SoldToClientHiddenValueD AND Equity_SeriesID=InstrumentHiddenValue 
+				AND Equity_ExchSegmentID=@ExchangeSegment
+				And RowID=@MinCount
+		    
+			End		
+				
+			if @EntryType = 'CE'
+			Begin
+				
+				INSERT INTO Trans_ExchangeTrades
+				(ExchangeTrades_FinYear,ExchangeTrades_CompanyID,ExchangeTrades_Segment,ExchangeTrades_BranchID,
+				ExchangeTrades_TradeCategory,ExchangeTrades_SettlementNumber,ExchangeTrades_SettlementType
+			   ,ExchangeTrades_TradeDate,ExchangeTrades_TradeNumber,ExchangeTrades_OrderNumber,ExchangeTrades_TransactionType
+			   ,ExchangeTrades_ProCli,ExchangeTrades_CustomerUcc,ExchangeTrades_CustomerID,ExchangeTrades_SecurityType
+			   ,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecurityCode,ExchangeTrades_SecuritySeries
+			   ,ExchangeTrades_SecurityGroup,ExchangeTrades_SecurityExpiry,ExchangeTrades_SecurityStrikePrice
+			   ,ExchangeTrades_ProductSeriesID,ExchangeTrades_BookType,ExchangeTrades_MarketType,ExchangeTrades_BuySellFlag
+			   ,ExchangeTrades_QuantityLots,ExchangeTrades_UnitPrice,ExchangeTrades_UnitPriceQuantity,ExchangeTrades_MarketValue
+			   ,ExchangeTrades_CustodialFlag,ExchangeTrades_Remarks,ExchangeTrades_ImportType,ExchangeTrades_CreateUser
+			   ,ExchangeTrades_CreateDateTime,ExchangeTrades_StrikePrice,ExchangeTrades_NDFlag,ExchangeTrades_CounterPartyID)
+							
+				SELECT @FinYear,@Company,@SegmentID,cnt_branchid,
+				Case 
+					When len(TradeCategoryD)>0 Then TradeCategoryD
+					When @ExchangeSegment in (1,19) and @SETTTYPE='X' Then 'NOC'
+					When @ExchangeSegment =4 and @SETTTYPE='Y' Then 'NOC'
+					Else Null 
+				End,
+				@SettNo,@SettType,@SettDate,TradeNoD,OrderNoD,'ENTRD',
+				Case When CNT_CLIENTTYPE='Pro-Trading' Then 2 Else 1 End
+				,BoughtFromClientTCodeD,CNT_INTERNALID,RTRIM(LTRIM(Equity_FOIdentifier))
+				,RTRIM(LTRIM(Equity_TickerSymbol)),RTRIM(LTRIM(Equity_TickerCode))
+				,RTRIM(LTRIM(Equity_Series)),RTRIM(LTRIM(Equity_Group)),
+				RTRIM(LTRIM(Equity_EffectUntil)),RTRIM(LTRIM(Equity_StrikePrice))
+				,Equity_SeriesID,1,1,2,ABS(QuantityD),ABS(MarketRateD),ABS(QuantityD)
+				,ABS(ISNULL(QuantityD,0))*ABS(ISNULL(MarketRateD,0)),'N',
+				CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END,
+				'M',@User,GETDATE(),RTRIM(LTRIM(Equity_StrikePrice))
+				,Case When @ExchangeSegment in (1,19) Then Null Else 'N' End,Null
+				FROM TBL_MASTER_CONTACT,MASTER_EQUITY,#PersonXMLTable
+				WHERE CNT_INTERNALID=BoughtFromClientHiddenValueD AND Equity_SeriesID=InstrumentHiddenValue 
+				AND Equity_ExchSegmentID=@ExchangeSegment
+				And RowID=@MinCount
+			End		
+			
+			if @EntryType = 'CC'
+			Begin
+			
+				INSERT INTO Trans_ExchangeTrades
+				(ExchangeTrades_FinYear,ExchangeTrades_CompanyID,ExchangeTrades_Segment,ExchangeTrades_BranchID,
+				ExchangeTrades_TradeCategory,ExchangeTrades_SettlementNumber,ExchangeTrades_SettlementType
+			   ,ExchangeTrades_TradeDate,ExchangeTrades_TradeNumber,ExchangeTrades_OrderNumber,ExchangeTrades_TransactionType
+			   ,ExchangeTrades_ProCli,ExchangeTrades_CustomerUcc,ExchangeTrades_CustomerID,ExchangeTrades_SecurityType
+			   ,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecurityCode,ExchangeTrades_SecuritySeries
+			   ,ExchangeTrades_SecurityGroup,ExchangeTrades_SecurityExpiry,ExchangeTrades_SecurityStrikePrice
+			   ,ExchangeTrades_ProductSeriesID,ExchangeTrades_BookType,ExchangeTrades_MarketType,ExchangeTrades_BuySellFlag
+			   ,ExchangeTrades_QuantityLots,ExchangeTrades_UnitPrice,ExchangeTrades_UnitPriceQuantity,ExchangeTrades_MarketValue
+			   ,ExchangeTrades_CustodialFlag,ExchangeTrades_Remarks,ExchangeTrades_ImportType,ExchangeTrades_CreateUser
+			   ,ExchangeTrades_CreateDateTime,ExchangeTrades_StrikePrice,ExchangeTrades_NDFlag)
+							
+				SELECT @FinYear,@Company,@SegmentID,cnt_branchid,
+				Case 
+					When len(TradeCategoryD)>0 Then TradeCategoryD
+					When @ExchangeSegment in (1,19) and @SETTTYPE='X' Then 'NOC'
+					When @ExchangeSegment =4 and @SETTTYPE='Y' Then 'NOC'
+					Else Null 
+				End,
+				@SettNo,@SettType,@SettDate,TradeNoD,OrderNoD,'ENTRD',
+				Case When CNT_CLIENTTYPE='Pro-Trading' Then 2 Else 1 End
+				,BoughtFromClientTCodeD,CNT_INTERNALID,RTRIM(LTRIM(Equity_FOIdentifier))
+				,RTRIM(LTRIM(Equity_TickerSymbol)),RTRIM(LTRIM(Equity_TickerCode))
+				,RTRIM(LTRIM(Equity_Series)),RTRIM(LTRIM(Equity_Group)),
+				RTRIM(LTRIM(Equity_EffectUntil)),RTRIM(LTRIM(Equity_StrikePrice))
+				,Equity_SeriesID,1,1,2,ABS(QuantityD),ABS(MarketRateD),ABS(QuantityD)
+				,ABS(ISNULL(QuantityD,0))*ABS(ISNULL(MarketRateD,0)),'N',
+				CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END,
+				'M',@User,GETDATE(),RTRIM(LTRIM(Equity_StrikePrice))
+				,Case When @ExchangeSegment in (1,19) Then Null Else 'N' End
+				FROM TBL_MASTER_CONTACT,MASTER_EQUITY,#PersonXMLTable
+				WHERE CNT_INTERNALID=BoughtFromClientHiddenValueD AND Equity_SeriesID=InstrumentHiddenValue 
+				AND Equity_ExchSegmentID=@ExchangeSegment
+				And RowID=@MinCount
+			   SELECT @BUYCLIENTEXCHID=@@identity--------FOR COUNTERPARTYID UPDATE
+			
+			    
+				INSERT INTO Trans_ExchangeTrades
+				(ExchangeTrades_FinYear,ExchangeTrades_CompanyID,ExchangeTrades_Segment,ExchangeTrades_BranchID,
+				ExchangeTrades_TradeCategory,ExchangeTrades_SettlementNumber,ExchangeTrades_SettlementType
+			   ,ExchangeTrades_TradeDate,ExchangeTrades_TradeNumber,ExchangeTrades_OrderNumber,ExchangeTrades_TransactionType
+			   ,ExchangeTrades_ProCli,ExchangeTrades_CustomerUcc,ExchangeTrades_CustomerID,ExchangeTrades_SecurityType
+			   ,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecurityCode,ExchangeTrades_SecuritySeries
+			   ,ExchangeTrades_SecurityGroup,ExchangeTrades_SecurityExpiry,ExchangeTrades_SecurityStrikePrice
+			   ,ExchangeTrades_ProductSeriesID,ExchangeTrades_BookType,ExchangeTrades_MarketType,ExchangeTrades_BuySellFlag
+			   ,ExchangeTrades_QuantityLots,ExchangeTrades_UnitPrice,ExchangeTrades_UnitPriceQuantity,ExchangeTrades_MarketValue
+			   ,ExchangeTrades_CustodialFlag,ExchangeTrades_Remarks,ExchangeTrades_ImportType,ExchangeTrades_CreateUser
+			   ,ExchangeTrades_CreateDateTime,ExchangeTrades_StrikePrice,ExchangeTrades_NDFlag)
+							
+				SELECT @FinYear,@Company,@SegmentID,cnt_branchid,
+				Case 
+					When len(TradeCategoryD)>0 Then TradeCategoryD
+					When @ExchangeSegment in (1,19) and @SETTTYPE='X' Then 'NOC'
+					When @ExchangeSegment =4 and @SETTTYPE='Y' Then 'NOC'
+					Else Null 
+				End,
+				@SettNo,@SettType,@SettDate,TradeNoD,OrderNoD,'ENTRD',
+				Case When CNT_CLIENTTYPE='Pro-Trading' Then 2 Else 1 End
+				,SoldToClientTCodeD,CNT_INTERNALID,RTRIM(LTRIM(Equity_FOIdentifier))
+				,RTRIM(LTRIM(Equity_TickerSymbol)),RTRIM(LTRIM(Equity_TickerCode))
+				,RTRIM(LTRIM(Equity_Series)),RTRIM(LTRIM(Equity_Group)),
+				RTRIM(LTRIM(Equity_EffectUntil)),RTRIM(LTRIM(Equity_StrikePrice))
+				,Equity_SeriesID,1,1,1,ABS(QuantityD),ABS(MarketRateD),ABS(QuantityD)
+				,ABS(ISNULL(QuantityD,0))*ABS(ISNULL(MarketRateD,0)),'N',
+				CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END,
+				'M',@User,GETDATE(),RTRIM(LTRIM(Equity_StrikePrice))
+				,Case When @ExchangeSegment in (1,19) Then Null Else 'N' End
+				FROM TBL_MASTER_CONTACT,MASTER_EQUITY,#PersonXMLTable
+				WHERE CNT_INTERNALID=SoldToClientHiddenValueD AND Equity_SeriesID=InstrumentHiddenValue 
+				AND Equity_ExchSegmentID=@ExchangeSegment
+				And RowID=@MinCount
+
+				
+				SELECT @SELLCLIENTEXCHID=@@identity--------FOR COUNTERPARTYID UPDATE
+				
+				UPDATE Trans_ExchangeTrades SET ExchangeTrades_CounterPartyID=@SELLCLIENTEXCHID 
+				WHERE ExchangeTrades_ID=@BUYCLIENTEXCHID
+				UPDATE Trans_ExchangeTrades SET ExchangeTrades_CounterPartyID=@BUYCLIENTEXCHID 
+				WHERE ExchangeTrades_ID=@SELLCLIENTEXCHID
+			
+		End 
+		
+	End 
+
+	--if @EntryMode= 'D'
+	--print 1
+	--  Begin
+	--         Delete from Trans_ExchangeTrades where @Company=ExchangeTrades_CompanyID and @SegmentID=ExchangeTrades_Segment and ExchangeTrades_TransactionType='ENTRD' 
+	--		 and ExchangeTrades_SettlementNumber=@SettNo and ExchangeTrades_SettlementType=@SettType and ExchangeTrades_TradeDate=@SettDate 
+	--		 and ExchangeTrades_CreateUser=@User and ExchangeTrades_FinYear=@FinYear and ExchangeTrades_CreateDateTime>(DATEADD(dd, 0, DATEDIFF(dd, 0,@SettDate)))
+	--		 And ExchangeTrades_ID=@TradeID1
+	--		 And (select  RowID from #PersonXMLTable)=@MinCount 
+	--		 And (select EntryMode from #PersonXMLTable)='D'
+	--		 --And (select Equity_ExchSegmentID from MASTER_EQUITY)=@ExchangeSegment
+	--		 --And (select CNT_INTERNALID from TBL_MASTER_CONTACT)=(select SoldToClientHiddenValueD from #PersonXMLTable)
+	--		 --AND (select Equity_SeriesID from MASTER_EQUITY)=(select InstrumentHiddenValue from #PersonXMLTable)
+			 
+	--		 Delete from Trans_ExchangeTrades where @Company=ExchangeTrades_CompanyID and @SegmentID=ExchangeTrades_Segment and ExchangeTrades_TransactionType='ENTRD' 
+	--		 and ExchangeTrades_SettlementNumber=@SettNo and ExchangeTrades_SettlementType=@SettType and ExchangeTrades_TradeDate=@SettDate 
+	--		 and ExchangeTrades_CreateUser=@User and ExchangeTrades_FinYear=@FinYear and ExchangeTrades_CreateDateTime>(DATEADD(dd, 0, DATEDIFF(dd, 0,@SettDate)))
+	--		 And ExchangeTrades_ID=@TradeID2
+	--		 And (select  RowID from #PersonXMLTable)=@MinCount 
+	--		 And (select EntryMode from #PersonXMLTable)='D'
+	--		 --And (select Equity_ExchSegmentID from MASTER_EQUITY)=@ExchangeSegment
+	--		 --And (select CNT_INTERNALID from TBL_MASTER_CONTACT)=(select SoldToClientHiddenValueD from #PersonXMLTable)
+	--		 --AND (select Equity_SeriesID from MASTER_EQUITY)=(select InstrumentHiddenValue from #PersonXMLTable) 	  
+			 	
+ End	
+ 
+ ----------------------------------------------Updatation and Insertion for COM/CDX/SPOT Segment-----------------------------------------------------------------------------------------------------------------------------
+ 
+ ------------------------------------------------------------for editing data-------------------------------------------------------------------------------------------------------------------
+ 
+ else
+	  Begin
+	  
+	   	if @EntryMode= 'E'
+	  Begin		
+				
+      if @EntryType = 'EC'
+		
+			Begin
+		
+				Update Trans_ComExchangeTrades set
+				    ComExchangeTrades_FinYear=@finyear
+				   ,ComExchangeTrades_CompanyID=@Company
+				   ,ComExchangeTrades_Segment=@SegmentID
+				   ,ComExchangeTrades_BranchID=cnt_branchid
+				   ,ComExchangeTrades_TradeCategory=Case When len(TradeCategoryD)>0 Then TradeCategoryD Else Null End
+				   ,ComExchangeTrades_SettlementNumber=@SETTNO
+				   ,ComExchangeTrades_SettlementType=@SETTTYPE
+				   ,ComExchangeTrades_TradeDate=@SettDate
+				   ,ComExchangeTrades_TradeNumber=TradeNoD
+				   ,ComExchangeTrades_OrderNumber=OrderNoD
+				   ,ComExchangeTrades_TransactionType='ENTRD'
+				   ,ComExchangeTrades_ProCli=case when CNT_CLIENTTYPE='Pro-Trading' then 2 else 1 end
+				   ,ComExchangeTrades_CustomerUcc=SoldToClientTCodeD
+				   ,ComExchangeTrades_CustomerID=CNT_INTERNALID
+				   ,ComExchangeTrades_SecurityType=RTRIM(LTRIM(Commodity_Identifier))
+				   ,ComExchangeTrades_SecuritySymbol=RTRIM(LTRIM(Commodity_TickerSymbol))
+				   ,ComExchangeTrades_SecurityCode=RTRIM(LTRIM(Commodity_tickercode))
+				   ,ComExchangeTrades_SecuritySeries=RTRIM(LTRIM(Commodity_tickerSeries))
+				   ,ComExchangeTrades_SecurityGroup=null
+				   ,ComExchangeTrades_SecurityExpiry=RTRIM(LTRIM(Commodity_ExpiryDate))
+				   ,ComExchangeTrades_SecurityStrikePrice=RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,ComExchangeTrades_ProductSeriesID=Commodity_ProductSeriesID
+				   ,ComExchangeTrades_BookType=1
+				   ,ComExchangeTrades_MarketType=1
+				   ,ComExchangeTrades_BuySellFlag=1
+				   ,ComExchangeTrades_QuantityLots=ABS(QuantityD)
+				   ,ComExchangeTrades_UnitPrice=ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,ComExchangeTrades_UnitPriceQuantity=ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))
+				   ,ComExchangeTrades_MarketValue=ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))*ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,ComExchangeTrades_CustodialFlag='N'
+				   ,ComExchangeTrades_Remarks=CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END
+				   ,ComExchangeTrades_ImportType='M'
+				   ,ComExchangeTrades_CreateUser=@User
+				   ,ComExchangeTrades_CreateDateTime=GETDATE()
+				   ,ComExchangeTrades_StrikePrice=RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,ComExchangeTrades_NDFlag=NULL
+				   ,ComExchangeTrades_CounterPartyID=NULL
+				    FROM TBL_MASTER_CONTACT,Master_Commodity,#PersonXMLTable
+				Where @Company=ComExchangeTrades_CompanyID and @SegmentID=ComExchangeTrades_Segment and ComExchangeTrades_TransactionType='ENTRD' 
+				and ComExchangeTrades_SettlementNumber=@SettNo and ComExchangeTrades_SettlementType=@SettType and ComExchangeTrades_TradeDate=@SettDate 
+				and ComExchangeTrades_CreateUser=@User and ComExchangeTrades_FinYear=@FinYear and ComExchangeTrades_CreateDateTime>(DATEADD(dd, 0, DATEDIFF(dd, 0,@SettDate)))
+				And ComExchangeTrades_ID=TransExchangeTradesID1
+				And CNT_INTERNALID=SoldToClientHiddenValueD AND Commodity_ProductSeriesID=InstrumentHiddenValue 
+				AND Commodity_ExchangeSegmentID=@ExchangeSegment
+				And RowID=@MinCount
+				And EntryMode='E'	
+					
+			End	
+				
+				
+			if @EntryType = 'CE'
+			Begin
+				
+			  Update Trans_ComExchangeTrades set
+				    ComExchangeTrades_FinYear=@finyear
+				   ,ComExchangeTrades_CompanyID=@Company
+				   ,ComExchangeTrades_Segment=@SegmentID
+				   ,ComExchangeTrades_BranchID=cnt_branchid
+				   ,ComExchangeTrades_TradeCategory=Case When len(TradeCategoryD)>0 Then TradeCategoryD Else Null End
+				   ,ComExchangeTrades_SettlementNumber=@SETTNO
+				   ,ComExchangeTrades_SettlementType=@SETTTYPE
+				   ,ComExchangeTrades_TradeDate=@SettDate
+				   ,ComExchangeTrades_TradeNumber=TradeNoD
+				   ,ComExchangeTrades_OrderNumber=OrderNoD
+				   ,ComExchangeTrades_TransactionType='ENTRD'
+				   ,ComExchangeTrades_ProCli=case when CNT_CLIENTTYPE='Pro-Trading' then 2 else 1 end
+				   ,ComExchangeTrades_CustomerUcc=BoughtFromClientTCodeD
+				   ,ComExchangeTrades_CustomerID=CNT_INTERNALID
+				   ,ComExchangeTrades_SecurityType=RTRIM(LTRIM(Commodity_Identifier))
+				   ,ComExchangeTrades_SecuritySymbol=RTRIM(LTRIM(Commodity_TickerSymbol))
+				   ,ComExchangeTrades_SecurityCode=RTRIM(LTRIM(Commodity_tickercode))
+				   ,ComExchangeTrades_SecuritySeries=RTRIM(LTRIM(Commodity_tickerSeries))
+				   ,ComExchangeTrades_SecurityGroup=null
+				   ,ComExchangeTrades_SecurityExpiry=RTRIM(LTRIM(Commodity_ExpiryDate))
+				   ,ComExchangeTrades_SecurityStrikePrice=RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,ComExchangeTrades_ProductSeriesID=Commodity_ProductSeriesID
+				   ,ComExchangeTrades_BookType=1
+				   ,ComExchangeTrades_MarketType=1
+				   ,ComExchangeTrades_BuySellFlag=2
+				   ,ComExchangeTrades_QuantityLots=ABS(QuantityD)
+				   ,ComExchangeTrades_UnitPrice=ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,ComExchangeTrades_UnitPriceQuantity=ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))
+				   ,ComExchangeTrades_MarketValue=ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))*ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,ComExchangeTrades_CustodialFlag='N'
+				   ,ComExchangeTrades_Remarks=CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END
+				   ,ComExchangeTrades_ImportType='M'
+				   ,ComExchangeTrades_CreateUser=@User
+				   ,ComExchangeTrades_CreateDateTime=GETDATE()
+				   ,ComExchangeTrades_StrikePrice=RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,ComExchangeTrades_NDFlag=NULL
+				   ,ComExchangeTrades_CounterPartyID=NULL
+				   FROM TBL_MASTER_CONTACT,Master_Commodity,#PersonXMLTable
+				Where @Company=ComExchangeTrades_CompanyID and @SegmentID=ComExchangeTrades_Segment and ComExchangeTrades_TransactionType='ENTRD' 
+				and ComExchangeTrades_SettlementNumber=@SettNo and ComExchangeTrades_SettlementType=@SettType and ComExchangeTrades_TradeDate=@SettDate 
+				and ComExchangeTrades_CreateUser=@User and ComExchangeTrades_FinYear=@FinYear and ComExchangeTrades_CreateDateTime>(DATEADD(dd, 0, DATEDIFF(dd, 0,@SettDate)))
+				And ComExchangeTrades_ID=TransExchangeTradesID1
+				And CNT_INTERNALID=BoughtFromClientHiddenValueD AND Commodity_ProductSeriesID=InstrumentHiddenValue 
+				AND Commodity_ExchangeSegmentID=@ExchangeSegment
+				And RowID=@MinCount
+				And EntryMode='E'
+		
+			End		
+			
+			if @EntryType = 'CC'
+			Begin
+			
+			Update Trans_ComExchangeTrades set
+				    ComExchangeTrades_FinYear=@finyear
+				   ,ComExchangeTrades_CompanyID=@Company
+				   ,ComExchangeTrades_Segment=@SegmentID
+				   ,ComExchangeTrades_BranchID=cnt_branchid
+				   ,ComExchangeTrades_TradeCategory=Case When len(TradeCategoryD)>0 Then TradeCategoryD Else Null End
+				   ,ComExchangeTrades_SettlementNumber=@SETTNO
+				   ,ComExchangeTrades_SettlementType=@SETTTYPE
+				   ,ComExchangeTrades_TradeDate=@SettDate
+				   ,ComExchangeTrades_TradeNumber=TradeNoD
+				   ,ComExchangeTrades_OrderNumber=OrderNoD
+				   ,ComExchangeTrades_TransactionType='ENTRD'
+				   ,ComExchangeTrades_ProCli=case when CNT_CLIENTTYPE='Pro-Trading' then 2 else 1 end
+				   ,ComExchangeTrades_CustomerUcc=BoughtFromClientTCodeD
+				   ,ComExchangeTrades_CustomerID=CNT_INTERNALID
+				   ,ComExchangeTrades_SecurityType=RTRIM(LTRIM(Commodity_Identifier))
+				   ,ComExchangeTrades_SecuritySymbol=RTRIM(LTRIM(Commodity_TickerSymbol))
+				   ,ComExchangeTrades_SecurityCode=RTRIM(LTRIM(Commodity_tickercode))
+				   ,ComExchangeTrades_SecuritySeries=RTRIM(LTRIM(Commodity_tickerSeries))
+				   ,ComExchangeTrades_SecurityGroup=null
+				   ,ComExchangeTrades_SecurityExpiry=RTRIM(LTRIM(Commodity_ExpiryDate))
+				   ,ComExchangeTrades_SecurityStrikePrice=RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,ComExchangeTrades_ProductSeriesID=Commodity_ProductSeriesID
+				   ,ComExchangeTrades_BookType=1
+				   ,ComExchangeTrades_MarketType=1
+				   --,ComExchangeTrades_BuySellFlag=2
+				   ,ComExchangeTrades_QuantityLots=ABS(QuantityD)
+				   ,ComExchangeTrades_UnitPrice=ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,ComExchangeTrades_UnitPriceQuantity=ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))
+				   ,ComExchangeTrades_MarketValue=ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))*ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,ComExchangeTrades_CustodialFlag='N'
+				   ,ComExchangeTrades_Remarks=CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END
+				   ,ComExchangeTrades_ImportType='M'
+				   ,ComExchangeTrades_CreateUser=@User
+				   ,ComExchangeTrades_CreateDateTime=GETDATE()
+				   ,ComExchangeTrades_StrikePrice=RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,ComExchangeTrades_NDFlag='N'
+				   FROM TBL_MASTER_CONTACT,Master_Commodity,#PersonXMLTable
+				Where @Company=ComExchangeTrades_CompanyID and @SegmentID=ComExchangeTrades_Segment and ComExchangeTrades_TransactionType='ENTRD' 
+				and ComExchangeTrades_SettlementNumber=@SettNo and ComExchangeTrades_SettlementType=@SettType and ComExchangeTrades_TradeDate=@SettDate 
+				and ComExchangeTrades_CreateUser=@User and ComExchangeTrades_FinYear=@FinYear and ComExchangeTrades_CreateDateTime>(DATEADD(dd, 0, DATEDIFF(dd, 0,@SettDate)))
+				And CNT_INTERNALID=BoughtFromClientHiddenValueD AND Commodity_ProductSeriesID=InstrumentHiddenValue 
+				and ComExchangeTrades_ID=TransExchangeTradesID1 
+				AND Commodity_ExchangeSegmentID=@ExchangeSegment
+				And RowID=@MinCount
+				And EntryMode='E'
+				  
+				
+			   SELECT @BUYCLIENTEXCHID=@@identity--------FOR COUNTERPARTYID UPDATE
+			
+			    
+				Update Trans_ComExchangeTrades set
+				    ComExchangeTrades_FinYear=@finyear
+				   ,ComExchangeTrades_CompanyID=@Company
+				   ,ComExchangeTrades_Segment=@SegmentID
+				   ,ComExchangeTrades_BranchID=cnt_branchid
+				   ,ComExchangeTrades_TradeCategory=Case When len(TradeCategoryD)>0 Then TradeCategoryD Else Null End
+				   ,ComExchangeTrades_SettlementNumber=@SETTNO
+				   ,ComExchangeTrades_SettlementType=@SETTTYPE
+				   ,ComExchangeTrades_TradeDate=@SettDate
+				   ,ComExchangeTrades_TradeNumber=TradeNoD
+				   ,ComExchangeTrades_OrderNumber=OrderNoD
+				   ,ComExchangeTrades_TransactionType='ENTRD'
+				   ,ComExchangeTrades_ProCli=case when CNT_CLIENTTYPE='Pro-Trading' then 2 else 1 end
+				   ,ComExchangeTrades_CustomerUcc=SoldToClientTCodeD
+				   ,ComExchangeTrades_CustomerID=CNT_INTERNALID
+				   ,ComExchangeTrades_SecurityType=RTRIM(LTRIM(Commodity_Identifier))
+				   ,ComExchangeTrades_SecuritySymbol=RTRIM(LTRIM(Commodity_TickerSymbol))
+				   ,ComExchangeTrades_SecurityCode=RTRIM(LTRIM(Commodity_tickercode))
+				   ,ComExchangeTrades_SecuritySeries=RTRIM(LTRIM(Commodity_tickerSeries))
+				   ,ComExchangeTrades_SecurityGroup=null
+				   ,ComExchangeTrades_SecurityExpiry=RTRIM(LTRIM(Commodity_ExpiryDate))
+				   ,ComExchangeTrades_SecurityStrikePrice=RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,ComExchangeTrades_ProductSeriesID=Commodity_ProductSeriesID
+				   ,ComExchangeTrades_BookType=1
+				   ,ComExchangeTrades_MarketType=1
+				   --,ComExchangeTrades_BuySellFlag=1
+				   ,ComExchangeTrades_QuantityLots=ABS(QuantityD)
+				   ,ComExchangeTrades_UnitPrice=ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,ComExchangeTrades_UnitPriceQuantity=ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))
+				   ,ComExchangeTrades_MarketValue=ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))*ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,ComExchangeTrades_CustodialFlag='N'
+				   ,ComExchangeTrades_Remarks=CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END
+				   ,ComExchangeTrades_ImportType='M'
+				   ,ComExchangeTrades_CreateUser=@User
+				   ,ComExchangeTrades_CreateDateTime=GETDATE()
+				   ,ComExchangeTrades_StrikePrice=RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,ComExchangeTrades_NDFlag='N'
+				
+				    FROM TBL_MASTER_CONTACT,Master_Commodity,#PersonXMLTable
+				Where @Company=ComExchangeTrades_CompanyID and @SegmentID=ComExchangeTrades_Segment and ComExchangeTrades_TransactionType='ENTRD' 
+				and ComExchangeTrades_SettlementNumber=@SettNo and ComExchangeTrades_SettlementType=@SettType and ComExchangeTrades_TradeDate=@SettDate 
+				and ComExchangeTrades_CreateUser=@User and ComExchangeTrades_FinYear=@FinYear and ComExchangeTrades_CreateDateTime>(DATEADD(dd, 0, DATEDIFF(dd, 0,@SettDate)))
+				And CNT_INTERNALID=SoldToClientHiddenValueD AND Commodity_ProductSeriesID=InstrumentHiddenValue
+				and ComExchangeTrades_ID=TransExchangeTradesID2 
+				AND Commodity_ExchangeSegmentID=@ExchangeSegment
+				And RowID=@MinCount
+				And EntryMode='E'	
+				  
+				
+				SELECT @SELLCLIENTEXCHID=@@identity--------FOR COUNTERPARTYID UPDATE
+				
+				UPDATE Trans_ComExchangeTrades SET ComExchangeTrades_CounterPartyID=@SELLCLIENTEXCHID 
+				  WHERE ComExchangeTrades_ID=@BUYCLIENTEXCHID
+				UPDATE Trans_ComExchangeTrades SET ComExchangeTrades_CounterPartyID=@BUYCLIENTEXCHID 
+				  WHERE ComExchangeTrades_ID=@SELLCLIENTEXCHID
+				
+	End	
+			
+End			
+			
+  
+	  
+----------------------------------------------------for addition or insertion-----------------------------------------------------
+	  if @EntryMode= 'A'
+	  Begin	 
+			if @EntryType = 'EC'
+		
+			Begin
+		
+				INSERT INTO [Trans_ComExchangeTrades]
+				   ([ComExchangeTrades_FinYear]
+				   ,[ComExchangeTrades_CompanyID]
+				   ,[ComExchangeTrades_Segment]
+				   ,[ComExchangeTrades_BranchID]
+				   ,[ComExchangeTrades_TradeCategory]
+				   ,[ComExchangeTrades_SettlementNumber]
+				   ,[ComExchangeTrades_SettlementType]
+				   ,[ComExchangeTrades_TradeDate]
+				   ,[ComExchangeTrades_TradeNumber]
+				   ,[ComExchangeTrades_OrderNumber]
+				   ,[ComExchangeTrades_TransactionType]
+				   ,[ComExchangeTrades_ProCli]
+				   ,[ComExchangeTrades_CustomerUcc]
+				   ,[ComExchangeTrades_CustomerID]
+				   ,[ComExchangeTrades_SecurityType]
+				   ,[ComExchangeTrades_SecuritySymbol]
+				   ,[ComExchangeTrades_SecurityCode]
+				   ,[ComExchangeTrades_SecuritySeries]
+				   ,[ComExchangeTrades_SecurityGroup]
+				   ,[ComExchangeTrades_SecurityExpiry]
+				   ,[ComExchangeTrades_SecurityStrikePrice]
+				   ,[ComExchangeTrades_ProductSeriesID]
+				   ,[ComExchangeTrades_BookType]
+				   ,[ComExchangeTrades_MarketType]
+				   ,[ComExchangeTrades_BuySellFlag]
+				   ,[ComExchangeTrades_QuantityLots]
+				   ,[ComExchangeTrades_UnitPrice]
+				   ,[ComExchangeTrades_UnitPriceQuantity]
+				   ,[ComExchangeTrades_MarketValue]
+				   ,[ComExchangeTrades_CustodialFlag]
+				   ,[ComExchangeTrades_Remarks]
+				   ,[ComExchangeTrades_ImportType]
+				   ,[ComExchangeTrades_CreateUser]
+				   ,[ComExchangeTrades_CreateDateTime]
+				   ,[ComExchangeTrades_StrikePrice]
+				   ,ComExchangeTrades_NDFlag
+				   ,ComExchangeTrades_CounterPartyID)
+				
+					
+					
+			SELECT	Distinct
+					@finyear
+				   ,@Company
+				   ,@SegmentID
+				   ,cnt_branchid
+				   ,Case When len(TradeCategoryD)>0 Then TradeCategoryD Else Null End
+				   ,@SETTNO
+				   ,@SETTTYPE
+				   ,@SettDate
+				   ,TradeNoD
+				   ,OrderNoD
+				   ,'ENTRD'
+				   ,case when CNT_CLIENTTYPE='Pro-Trading' then 2 else 1 end
+				   ,SoldToClientTCodeD
+				   ,CNT_INTERNALID
+				   ,RTRIM(LTRIM(Commodity_Identifier))
+				   ,RTRIM(LTRIM(Commodity_TickerSymbol))
+				   ,RTRIM(LTRIM(Commodity_tickercode))
+				   ,RTRIM(LTRIM(Commodity_tickerSeries))
+				   ,null
+				   ,RTRIM(LTRIM(Commodity_ExpiryDate))
+				   ,RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,Commodity_ProductSeriesID
+				   ,1
+				   ,1
+				   ,1
+				   ,ABS(QuantityD)
+				   ,ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))
+				   ,ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))*ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,'N'
+				   ,CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END
+				   ,'M'
+				   ,@User
+				   ,GETDATE()
+				   ,RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,NULL
+				   ,NULL
+				   FROM TBL_MASTER_CONTACT,Master_Commodity,#PersonXMLTable
+				   WHERE CNT_INTERNALID=SoldToClientHiddenValueD	
+				   AND Commodity_ProductSeriesID=InstrumentHiddenValue
+				   AND Commodity_ExchangeSegmentID=@ExchangeSegment
+				   And RowID=@MinCount
+					
+			End	
+				
+				
+			if @EntryType = 'CE'
+			Begin
+				
+			   INSERT INTO [Trans_ComExchangeTrades]
+				   ([ComExchangeTrades_FinYear]
+				   ,[ComExchangeTrades_CompanyID]
+				   ,[ComExchangeTrades_Segment]
+				   ,[ComExchangeTrades_BranchID]
+				   ,[ComExchangeTrades_TradeCategory]
+				   ,[ComExchangeTrades_SettlementNumber]
+				   ,[ComExchangeTrades_SettlementType]
+				   ,[ComExchangeTrades_TradeDate]
+				   ,[ComExchangeTrades_TradeNumber]
+				   ,[ComExchangeTrades_OrderNumber]
+				   ,[ComExchangeTrades_TransactionType]
+				   ,[ComExchangeTrades_ProCli]
+				   ,[ComExchangeTrades_CustomerUcc]
+				   ,[ComExchangeTrades_CustomerID]
+				   ,[ComExchangeTrades_SecurityType]
+				   ,[ComExchangeTrades_SecuritySymbol]
+				   ,[ComExchangeTrades_SecurityCode]
+				   ,[ComExchangeTrades_SecuritySeries]
+				   ,[ComExchangeTrades_SecurityGroup]
+				   ,[ComExchangeTrades_SecurityExpiry]
+				   ,[ComExchangeTrades_SecurityStrikePrice]
+				   ,[ComExchangeTrades_ProductSeriesID]
+				   ,[ComExchangeTrades_BookType]
+				   ,[ComExchangeTrades_MarketType]
+				   ,[ComExchangeTrades_BuySellFlag]
+				   ,[ComExchangeTrades_QuantityLots]
+				   ,[ComExchangeTrades_UnitPrice]
+				   ,[ComExchangeTrades_UnitPriceQuantity]
+				   ,[ComExchangeTrades_MarketValue]
+				   ,[ComExchangeTrades_CustodialFlag]
+				   ,[ComExchangeTrades_Remarks]
+				   ,[ComExchangeTrades_ImportType]
+				   ,[ComExchangeTrades_CreateUser]
+				   ,[ComExchangeTrades_CreateDateTime]
+				   ,[ComExchangeTrades_StrikePrice]
+				   ,ComExchangeTrades_NDFlag
+				   ,ComExchangeTrades_CounterPartyID)
+				   
+				   
+				   
+				   	SELECT Distinct 
+					@finyear
+				   ,@Company
+				   ,@SegmentID
+				   ,cnt_branchid
+				   ,Case When len(TradeCategoryD)>0 Then TradeCategoryD Else Null End
+				   ,@SETTNO
+				   ,@SETTTYPE
+				   ,@SettDate
+				   ,TradeNoD
+				   ,OrderNoD
+				   ,'ENTRD'
+				   ,case when CNT_CLIENTTYPE='Pro-Trading' then 2 else 1 end
+				   ,BoughtFromClientTCodeD
+				   ,CNT_INTERNALID
+				   ,RTRIM(LTRIM(Commodity_Identifier))
+				   ,RTRIM(LTRIM(Commodity_TickerSymbol))
+				   ,RTRIM(LTRIM(Commodity_tickercode))
+				   ,RTRIM(LTRIM(Commodity_tickerSeries))
+				   ,null
+				   ,RTRIM(LTRIM(Commodity_ExpiryDate))
+				   ,RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,Commodity_ProductSeriesID
+				   ,1
+				   ,1
+				   ,2
+				   ,ABS(QuantityD)
+				   ,ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))
+				   ,ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))*ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,'N'
+				   ,CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END
+				   ,'M'
+				   ,@User
+				   ,GETDATE()
+				   ,RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,NULL
+				   ,NULL
+				   FROM TBL_MASTER_CONTACT,Master_Commodity,#PersonXMLTable
+				   WHERE CNT_INTERNALID=BoughtFromClientHiddenValueD	
+				   AND Commodity_ProductSeriesID=InstrumentHiddenValue 
+				   AND Commodity_ExchangeSegmentID=@ExchangeSegment
+				   And RowID=@MinCount
+				
+			End		
+			
+		if @EntryType = 'CC'
+			Begin
+			
+				INSERT INTO [Trans_ComExchangeTrades]
+				   ([ComExchangeTrades_FinYear]
+				   ,[ComExchangeTrades_CompanyID]
+				   ,[ComExchangeTrades_Segment]
+				   ,[ComExchangeTrades_BranchID]
+				   ,[ComExchangeTrades_TradeCategory]
+				   ,[ComExchangeTrades_SettlementNumber]
+				   ,[ComExchangeTrades_SettlementType]
+				   ,[ComExchangeTrades_TradeDate]
+				   ,[ComExchangeTrades_TradeNumber]
+				   ,[ComExchangeTrades_OrderNumber]
+				   ,[ComExchangeTrades_TransactionType]
+				   ,[ComExchangeTrades_ProCli]
+				   ,[ComExchangeTrades_CustomerUcc]
+				   ,[ComExchangeTrades_CustomerID]
+				   ,[ComExchangeTrades_SecurityType]
+				   ,[ComExchangeTrades_SecuritySymbol]
+				   ,[ComExchangeTrades_SecurityCode]
+				   ,[ComExchangeTrades_SecuritySeries]
+				   ,[ComExchangeTrades_SecurityGroup]
+				   ,[ComExchangeTrades_SecurityExpiry]
+				   ,[ComExchangeTrades_SecurityStrikePrice]
+				   ,[ComExchangeTrades_ProductSeriesID]
+				   ,[ComExchangeTrades_BookType]
+				   ,[ComExchangeTrades_MarketType]
+				   ,[ComExchangeTrades_BuySellFlag]
+				   ,[ComExchangeTrades_QuantityLots]
+				   ,[ComExchangeTrades_UnitPrice]
+				   ,[ComExchangeTrades_UnitPriceQuantity]
+				   ,[ComExchangeTrades_MarketValue]
+				   ,[ComExchangeTrades_CustodialFlag]
+				   ,[ComExchangeTrades_Remarks]
+				   ,[ComExchangeTrades_ImportType]
+				   ,[ComExchangeTrades_CreateUser]
+				   ,[ComExchangeTrades_CreateDateTime]
+				   ,[ComExchangeTrades_StrikePrice]
+				   ,ComExchangeTrades_NDFlag)
+							
+				
+				 	SELECT Distinct 
+					@finyear
+				   ,@Company
+				   ,@SegmentID
+				   ,cnt_branchid
+				   ,Case When len(TradeCategoryD)>0 Then TradeCategoryD Else Null End
+				   ,@SETTNO
+				   ,@SETTTYPE
+				   ,@SettDate
+				   ,TradeNoD
+				   ,OrderNoD
+				   ,'ENTRD'
+				   ,case when CNT_CLIENTTYPE='Pro-Trading' then 2 else 1 end
+				   ,BoughtFromClientTCodeD
+				   ,CNT_INTERNALID
+				   ,RTRIM(LTRIM(Commodity_Identifier))
+				   ,RTRIM(LTRIM(Commodity_TickerSymbol))
+				   ,RTRIM(LTRIM(Commodity_tickercode))
+				   ,RTRIM(LTRIM(Commodity_tickerSeries))
+				   ,null
+				   ,RTRIM(LTRIM(Commodity_ExpiryDate))
+				   ,RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,Commodity_ProductSeriesID
+				   ,1
+				   ,1
+				   ,2
+				   ,ABS(QuantityD)
+				   ,ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))
+				   ,ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))*ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,'N'
+				   ,CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END
+				   ,'M'
+				   ,@User
+				   ,GETDATE()
+				   ,RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,'N'
+				   FROM TBL_MASTER_CONTACT,Master_Commodity,#PersonXMLTable
+				   WHERE CNT_INTERNALID=BoughtFromClientHiddenValueD	
+				   AND Commodity_ProductSeriesID=InstrumentHiddenValue 
+				   AND Commodity_ExchangeSegmentID=@ExchangeSegment
+				   And RowID=@MinCount
+				
+				
+			   SELECT @BUYCLIENTEXCHID=@@identity--------FOR COUNTERPARTYID UPDATE
+			
+			    
+				INSERT INTO [Trans_ComExchangeTrades]
+				   ([ComExchangeTrades_FinYear]
+				   ,[ComExchangeTrades_CompanyID]
+				   ,[ComExchangeTrades_Segment]
+				   ,[ComExchangeTrades_BranchID]
+				   ,[ComExchangeTrades_TradeCategory]
+				   ,[ComExchangeTrades_SettlementNumber]
+				   ,[ComExchangeTrades_SettlementType]
+				   ,[ComExchangeTrades_TradeDate]
+				   ,[ComExchangeTrades_TradeNumber]
+				   ,[ComExchangeTrades_OrderNumber]
+				   ,[ComExchangeTrades_TransactionType]
+				   ,[ComExchangeTrades_ProCli]
+				   ,[ComExchangeTrades_CustomerUcc]
+				   ,[ComExchangeTrades_CustomerID]
+				   ,[ComExchangeTrades_SecurityType]
+				   ,[ComExchangeTrades_SecuritySymbol]
+				   ,[ComExchangeTrades_SecurityCode]
+				   ,[ComExchangeTrades_SecuritySeries]
+				   ,[ComExchangeTrades_SecurityGroup]
+				   ,[ComExchangeTrades_SecurityExpiry]
+				   ,[ComExchangeTrades_SecurityStrikePrice]
+				   ,[ComExchangeTrades_ProductSeriesID]
+				   ,[ComExchangeTrades_BookType]
+				   ,[ComExchangeTrades_MarketType]
+				   ,[ComExchangeTrades_BuySellFlag]
+				   ,[ComExchangeTrades_QuantityLots]
+				   ,[ComExchangeTrades_UnitPrice]
+				   ,[ComExchangeTrades_UnitPriceQuantity]
+				   ,[ComExchangeTrades_MarketValue]
+				   ,[ComExchangeTrades_CustodialFlag]
+				   ,[ComExchangeTrades_Remarks]
+				   ,[ComExchangeTrades_ImportType]
+				   ,[ComExchangeTrades_CreateUser]
+				   ,[ComExchangeTrades_CreateDateTime]
+				   ,[ComExchangeTrades_StrikePrice]
+				   ,ComExchangeTrades_NDFlag)
+							
+				
+				
+		         SELECT	Distinct
+					@finyear
+				   ,@Company
+				   ,@SegmentID
+				   ,cnt_branchid
+				   ,Case When len(TradeCategoryD)>0 Then TradeCategoryD Else Null End
+				   ,@SETTNO
+				   ,@SETTTYPE
+				   ,@SettDate
+				   ,TradeNoD
+				   ,OrderNoD
+				   ,'ENTRD'
+				   ,case when CNT_CLIENTTYPE='Pro-Trading' then 2 else 1 end
+				   ,SoldToClientTCodeD
+				   ,CNT_INTERNALID
+				   ,RTRIM(LTRIM(Commodity_Identifier))
+				   ,RTRIM(LTRIM(Commodity_TickerSymbol))
+				   ,RTRIM(LTRIM(Commodity_tickercode))
+				   ,RTRIM(LTRIM(Commodity_tickerSeries))
+				   ,null
+				   ,RTRIM(LTRIM(Commodity_ExpiryDate))
+				   ,RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,Commodity_ProductSeriesID
+				   ,1
+				   ,1
+				   ,1
+				   ,ABS(QuantityD)
+				   ,ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))
+				   ,ABS((isnull(QuantityD,0)*isnull(Commodity_ConvNumerator,0))/isnull(Commodity_ConDenominator,1))*ABS(MarketRateD*isnull(Commodity_PriceNumerator,1)/isnull(Commodity_PriceDenominator,1))
+				   ,'N'
+				   ,CASE WHEN BrokerageD='Zero Brokerage' THEN '0BRKG' ELSE NULL END
+				   ,'M'
+				   ,@User
+				   ,GETDATE()
+				   ,RTRIM(LTRIM(Commodity_StrikePrice))
+				   ,'N'
+				   FROM TBL_MASTER_CONTACT,Master_Commodity,#PersonXMLTable
+				   WHERE CNT_INTERNALID=SoldToClientHiddenValueD	
+				   AND Commodity_ProductSeriesID=InstrumentHiddenValue
+				   AND Commodity_ExchangeSegmentID=@ExchangeSegment
+				   And RowID=@MinCount
+
+				
+				SELECT @SELLCLIENTEXCHID=@@identity--------FOR COUNTERPARTYID UPDATE
+				
+				UPDATE Trans_ComExchangeTrades SET ComExchangeTrades_CounterPartyID=@SELLCLIENTEXCHID 
+				  WHERE ComExchangeTrades_ID=@BUYCLIENTEXCHID
+				UPDATE Trans_ComExchangeTrades SET ComExchangeTrades_CounterPartyID=@BUYCLIENTEXCHID 
+				  WHERE ComExchangeTrades_ID=@SELLCLIENTEXCHID
+			
+		End 
+		
+	End 
+
+	
+ End
+
+		
+		Set @MinCount=@MinCount+1
+		
+    End 
+    
+     
+	--select * INTO NewXML from #PersonXMLTable 
+	--select *from NewXML
+	--insert into NewXML 
+	 select * from #PersonXMLTable
+
+end
+
+
+
+
+
+

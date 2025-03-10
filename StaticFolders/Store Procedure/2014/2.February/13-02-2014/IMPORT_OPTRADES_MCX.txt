@@ -1,0 +1,242 @@
+
+
+-- EXEC [IMPORT_OPTRADES_MCX] 'InsertTrade','D:\CommonFolderInfluxCRM\MCXPOS_17012012_2.csv',30,'COR0000002'
+-- =============================================
+-- =============================================
+ALTER  procedure [dbo].[IMPORT_OPTRADES_MCX]
+	@Module varchar(100),
+	@FilePath as varchar(255)=null,
+	@SegmentId  int,
+	@COMPANY_ID varchar(255)=null,
+	@LckTradeDate datetime,
+	@ExpireDate datetime,
+	@LockMsg Varchar(250) Output
+
+AS
+BEGIN
+	
+	declare @ReadFrom as int
+	declare @Q as varchar(250)
+	declare @P int 
+	Declare @Min as Int
+	Declare @Max As Int
+	DECLARE @STATUS AS INT		
+	
+	
+
+	IF @Module='InsertTrade'
+	BEGIN
+			CREATE TABLE  #tmpTrans_MCEXTRADES (
+
+				[MCEXTRADES_TradeTime] varchar(100) null,
+				[MCEXTRADES_Accounts] varchar(100) null,
+				[MCEXTRADES_InstrumentID] varchar(100) NULL,
+				[MCEXTRADES_ContractCode] varchar(100) NULL,
+				[MCEXTRADES_ExpiryDate] varchar(200) null,
+				[MCEXTRADES_StrikePrice] varchar(200) null,
+				[MCEXTRADES_OptionType] varchar(200) null,
+				[MCEXTRADES_TradeQuantity] INT null,
+				[MCEXTRADES_BuySellIndicator] varchar(100) null,
+				[MCEXTRADES_Price] NUMERIC(10,2) null
+				)
+				set @ReadFrom=2
+				
+				set @Q='BULK INSERT #tmpTrans_MCEXTRADES FROM '+ char(39) + @FilePath + char(39) + ' with (firstrow = ' + convert(varchar,@ReadFrom) + ' , FIELDTERMINATOR = ' + char(39) + ',' + char(39) + ' , ROWTERMINATOR = ' + char(39) + char(10)+ + char(39) +')'
+				print @Q
+				exec (@Q)
+				
+			alter table #tmpTrans_MCEXTRADES
+				
+				add [MCEXTRADES_ID] [bigint] IDENTITY(1,1) NOT NULL,	
+			        [MCEXTRADES_ProductSeriesId] varchar(100) NULL,
+					[MCEXTRADES_UNITQuantity] varchar(100) NULL,
+					[MCEXTRADES_CustomerID] varchar(100) NULL,
+					[MCEXTRADES_CMCODE] varchar(100) null,
+					[MCEXTRADES_TMCODE] varchar(100) null,
+					[MCEXTRADES_OrderNumber] varchar(100) null,
+					[MCEXTRADES_AccountType] varchar(100) null
+
+				DECLARE @TransactionType varchar(20)
+				DECLARE @FY VARCHAR(11)  
+				DECLARE @SETT_FY VARCHAR(250)
+				DECLARE @DTDIFF	int
+				Declare @Cflag char(1)
+				declare @ww char(20)
+							
+							
+							
+				set @FY=(select Top (1) Convert(datetime,[MCEXTRADES_TradeTime],120) From #tmpTrans_MCEXTRADES )
+				SET @DTDIFF=CAST(MONTH(@FY) AS INT)
+				IF(@DTDIFF>=1 AND @DTDIFF<=3)
+				BEGIN
+					SET @SETT_FY=NULL
+					SET @SETT_FY=  CAST((CAST(YEAR(@FY) AS INT)-1) AS VARCHAR(50) )+'-'+CAST(YEAR(@FY) AS VARCHAR(50))
+				END
+				IF(@DTDIFF>=4 AND @DTDIFF<=12)
+				BEGIN
+					SET @SETT_FY=NULL
+					SET @SETT_FY=  CAST(YEAR(@FY) AS VARCHAR(50))+'-'+CAST((CAST(YEAR(@FY) AS INT)+1) AS VARCHAR(50) )
+				END
+
+				----------------------------------------------------------------------------------------------------
+				UPDATE #tmpTrans_MCEXTRADES
+				SET [MCEXTRADES_ProductSeriesId]=Commodity_ProductSeriesID
+				from Master_Commodity where 
+				LTRIM(RTRIM(Commodity_Identifier))=LTRIM(RTRIM([MCEXTRADES_InstrumentID]))
+				AND Commodity_ExchangeSegmentID=7 
+				AND Commodity_EffectiveDate=SUBSTRING(CONVERT(varchar(12),CONVERT(DATETIME,[MCEXTRADES_ExpiryDate],121),120),0,11) 	
+				AND Commodity_TickerSymbol=REPLACE([MCEXTRADES_ContractCode],CHAR(13),'')
+				-------------------------------------------------------------------------------------------------------
+
+				-----------------------------------Update temp table for Unit Price Quantity---------------------------
+				Update #tmpTrans_MCEXTRADES 
+				SET [MCEXTRADES_UNITQuantity]=[MCEXTRADES_TradeQuantity]*Commodity_ConvNumerator/Commodity_ConDenominator
+				from Master_Commodity,#tmpTrans_MCEXTRADES   
+				Where Commodity_ProductSeriesID=[MCEXTRADES_ProductSeriesId]
+
+				-------------------------------------------------------------------------------------------------------
+
+				--------------------------------------Customer ID--------------------------------------------------------
+
+				UPDATE #tmpTrans_MCEXTRADES set [MCEXTRADES_CustomerID]=crg_cntID
+					from tbl_master_contactExchange
+					where crg_tcode=Ltrim(Rtrim([MCEXTRADES_Accounts]))AND crg_exchange='MCX - COMM'
+				---------------------------------------------------------------------------------------------------------
+
+				Update #tmpTrans_MCEXTRADES set [MCEXTRADES_AccountType]=
+					(case when left(isnull(cnt_clienttype,'CLI'),3)='PRO' then '2' else '1' End)
+					from tbl_master_contact where [MCEXTRADES_CustomerID]=cnt_internalid
+				-------------------------------------------------------------------------------------------------------
+
+				--------------------------------------CM/TM Code--------------------------------------------------------
+				UPDATE #tmpTrans_MCEXTRADES set [MCEXTRADES_CMCODE]=Exch_CMCode,
+					[MCEXTRADES_TMCODE]=Exch_TMCode
+					from tbl_master_CompanyExchange
+					where exch_internalid = CAST(@SegmentId AS INT)
+				---------------------------------------------------------------------------------------------------------
+				UPDATE #tmpTrans_MCEXTRADES set [MCEXTRADES_OrderNumber]='OPENING'+CAST([MCEXTRADES_ID] AS VARCHAR)
+				
+			If (cast(@FY as datetime)>=@LckTradeDate and cast(@FY as datetime)<=@ExpireDate)
+			Begin
+				---------------------------------------------------------------------------------------------------------
+				----Delete All previously imported Opening Trades
+				--FIRST from Trans_ComCustomerTrades
+				Delete from Trans_ComCustomertrades where ComCustomerTrades_CompanyID=@COMPANY_ID
+				And ComCustomerTrades_ExchangeSegment=@SegmentId
+				And ComCustomerTrades_TradeDate=@FY
+				And (ComCustomerTrades_ID in (
+				Select ComExchangeTrades_CustTransactionID from Trans_ComExchangeTrades Where ComExchangeTrades_CompanyID=@COMPANY_ID
+				And ComExchangeTrades_Segment=@SegmentId And ComExchangeTrades_ImportType='O'
+				And ComExchangeTrades_TradeDate=@FY
+				And ComExchangeTrades_TransactionType='ENTRD')
+				OR Isnull(ComCustomerTrades_OriginalTransactionID,0) in (
+				Select ComExchangeTrades_CustTransactionID from Trans_ComExchangeTrades Where ComExchangeTrades_CompanyID=@COMPANY_ID
+				And ComExchangeTrades_Segment=@SegmentId And ComExchangeTrades_ImportType='O'
+				And ComExchangeTrades_TradeDate=@FY
+				And ComExchangeTrades_TransactionType='ENTRD'))
+				--THEN from Trans_ComExchangeTrades
+				Delete from Trans_ComExchangeTrades Where ComExchangeTrades_CompanyID=@COMPANY_ID
+				And ComExchangeTrades_Segment=@SegmentId And ComExchangeTrades_ImportType='O'
+				And ComExchangeTrades_TradeDate=@FY
+				And ComExchangeTrades_TransactionType='ENTRD'
+				--------------------------------------------					
+
+				insert into Trans_ComExchangeTrades
+				(ComExchangeTrades_FinYear,ComExchangeTrades_CompanyID,ComExchangeTrades_Segment,ComExchangeTrades_BranchID,ComExchangeTrades_SettlementNumber,
+				ComExchangeTrades_SettlementType,ComExchangeTrades_ProductSeriesID,ComExchangeTrades_TradeDate,ComExchangeTrades_TradeNumber,
+				ComExchangeTrades_OrderNumber,
+				ComExchangeTrades_TransactionType,ComExchangeTrades_CustomerUcc,ComExchangeTrades_ClearingMemberID,ComExchangeTrades_TradingMemberID,
+				ComExchangeTrades_CustomerID,ComExchangeTrades_SecurityType,ComExchangeTrades_SecuritySymbol,ComExchangeTrades_SecurityExpiry,
+				ComExchangeTrades_ProCli,
+				ComExchangeTrades_BuySellFlag,ComExchangeTrades_Quantitylots,ComExchangeTrades_UnitPrice,
+				ComExchangeTrades_UnitPriceQuantity,ComExchangeTrades_MarketValue,ComExchangeTrades_Remarks,
+				ComExchangeTrades_CreateUser,ComExchangeTrades_CreateDatetime,ComExchangeTrades_ImportType,ComExchangeTrades_CustodialFlag)
+				select 
+				@SETT_FY,
+				@COMPANY_ID,
+				@SegmentId,
+				(select cnt_branchid from tbl_master_contact where cnt_internalId=[MCEXTRADES_CustomerID]),
+				(Select Top(1) Master_Settlements.Settlements_Number FROM #tmpTrans_MCEXTRADES,Master_Settlements WHERE Master_Settlements.Settlements_ExchangeSegmentID=7 AND Substring(Convert(varchar(20),Convert(datetime,LTRIM(RTRIM(#tmpTrans_MCEXTRADES.[MCEXTRADES_TradeTime])),120),120),1,11) Between Settlements_StartDateTime AND Settlements_EndDateTime And Settlements_TypeSuffix='F'), 
+				'F',
+				[MCEXTRADES_ProductSeriesId],
+				@FY,
+				CAST([MCEXTRADES_ID] AS VARCHAR(12)), 
+				[MCEXTRADES_OrderNumber],
+				'ENTRD',
+				[MCEXTRADES_Accounts],
+				[MCEXTRADES_CMCODE],
+				[MCEXTRADES_TMCODE],
+				[MCEXTRADES_CustomerID],
+				[MCEXTRADES_InstrumentID],
+				[MCEXTRADES_ContractCode],
+				CAST([MCEXTRADES_ExpiryDate] AS VARCHAR(20)),
+				[MCEXTRADES_AccountType],
+				(Case when [MCEXTRADES_BuySellIndicator]='B' then '1' Else '2' End),
+				[MCEXTRADES_TradeQuantity],
+				[MCEXTRADES_Price],
+				[MCEXTRADES_UNITQuantity],
+				CAST(Convert(numeric(18, 4),[MCEXTRADES_Price])*Convert(numeric(14, 4),[MCEXTRADES_UNITQuantity]) as decimal(28,4)),
+				'0BRKG',
+				'11111',
+				getdate(),
+				'O',
+				'N'
+	          
+				from #tmpTrans_MCEXTRADES 
+
+-------------------------------------------------Checking For CustomerID Is Null---------------------------------
+				SELECT DISTINCT ComExchangeTrades_CustomerUcc FROM Trans_ComExchangeTrades WHERE
+				ComExchangeTrades_Segment=@SegmentId AND  convert(varchar(10),ComExchangeTrades_TradeDate,120)=convert(varchar(10),convert(datetime,@FY,120),120)
+				AND (ComExchangeTrades_CustomerID IS NULL or len(ComExchangeTrades_CustomerID)=0) and ComExchangeTrades_CompanyID=@COMPANY_ID
+-------------------------------------------------Showing the Import Summary --------------------------------------------------------
+				select comexchangetrades_settlementnumber as [Sett.No],comexchangetrades_settlementtype as [Sett.Type],
+				sum(rowcnt) as Records,
+				sum(isnull(buy,0)) as [Buy Obligation],
+				sum(isnull(sell,0)) as [Sell Obligation],
+				(sum(isnull(sell,0))-sum(isnull(buy,0))) as [Net Obligation]
+				 from
+				(select comexchangetrades_settlementnumber,comexchangetrades_settlementtype,COUNT(comexchangetrades_settlementtype) as rowcnt,
+				case when comexchangetrades_buysellflag=1 then sum(comexchangetrades_marketvalue) else null end buy,
+				case when  comexchangetrades_buysellflag=2 then sum(comexchangetrades_marketvalue)  else null end as sell
+				from TRANS_COMEXCHANGETRADES WHERE
+				COMEXCHANGETRADES_SEGMENT=@SegmentId 
+				and ComExchangeTrades_TransactionType='ENTRD' AND ComExchangeTrades_ImportType='O'
+				AND convert(varchar(10),ComExchangeTrades_TradeDate,120)=convert(varchar(10),convert(datetime,@FY,120),120)
+				and ComExchangeTrades_CompanyID=@COMPANY_ID
+				group by comexchangetrades_settlementnumber,comexchangetrades_settlementtype,comexchangetrades_buysellflag)as bb
+				group by comexchangetrades_settlementnumber,comexchangetrades_settlementtype
+
+-------------------------------------------------Checking For ProductSeriesID Is null-------------------------------------------
+				SELECT DISTINCT ComExchangeTrades_SecuritySymbol+'['+ComExchangeTrades_SecurityCode+']'+'['+Convert(varchar(20),ComExchangeTrades_SecurityExpiry,106)+']' AS ComExchangeTrades_SecuritySymbol FROM Trans_ComExchangeTrades WHERE
+				ComExchangeTrades_Segment=@SegmentId AND  convert(varchar(10),ComExchangeTrades_TradeDate,120)=convert(varchar(10),convert(datetime,@FY,120),120)
+				AND (ComExchangeTrades_ProductSeriesID IS NULL or len(ComExchangeTrades_ProductSeriesID)=0) and ComExchangeTrades_CompanyID=@COMPANY_ID
+
+--------------------------------------------------Delete NULL ProductSeriesID---------------------------------------------------------------
+				Delete FROM Trans_ComExchangeTrades WHERE
+				ComExchangeTrades_Segment=@SegmentId AND  convert(varchar(10),ComExchangeTrades_TradeDate,120)=convert(varchar(10),convert(datetime,@FY,120),120)
+				AND (ComExchangeTrades_ProductSeriesID IS NULL or len(ComExchangeTrades_ProductSeriesID)=0) and ComExchangeTrades_CompanyID=@COMPANY_ID
+
+------------------------------------------------------------------------------------------------------------------------------------------
+				Select cast(@FY as datetime) as TradeDate
+
+--------------------------------------------------Select Terminal IDs ----------------------------------
+				SELECT DISTINCT	ComExchangeTrades_TerminalID from TRANS_COMEXCHANGETRADES WHERE
+				ComExchangeTrades_Segment=@SegmentId AND ComExchangeTrades_TradeDate=cast(@FY as datetime)
+				and ComExchangeTrades_CompanyID=@COMPANY_ID
+				and ComExchangeTrades_TransactionType='Orgnl'
+--------------------------------------------------------------------------------------------------------------
+--------------------------------------------------Select UCC----------------------------------
+				SELECT DISTINCT	ComExchangeTrades_CustomerUcc from TRANS_COMEXCHANGETRADES WHERE
+				ComExchangeTrades_Segment=@SegmentId AND ComExchangeTrades_TradeDate=cast(@FY as datetime)
+				and ComExchangeTrades_CompanyID=@COMPANY_ID
+				and ComExchangeTrades_TransactionType='Orgnl'
+--------------------------------------------------------------------------------------------------------------
+				Set @LockMsg=''
+			End
+			Else
+			Begin
+				Set @LockMsg= 'The Data is Locked' 
+			End
+	END
+END
+

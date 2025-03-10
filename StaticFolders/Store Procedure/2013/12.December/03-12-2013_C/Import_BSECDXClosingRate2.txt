@@ -1,0 +1,131 @@
+
+ALTER PROCEDURE [dbo].[Import_BSECDXClosingRate2]
+	@FilePath as varchar(255),
+	@ModifyUser int
+	
+------Exec [Import_BSECDXClosingRate2] 'C:\grd\BSECDX\291113\BFX_MS2_20131129.CSV',398
+
+AS
+BEGIN
+	
+	declare @ReadFrom as int
+	declare @Q as varchar(250)
+	
+			Create Table #tmpCols (Content varchar(5000) null)
+			set @ReadFrom=1
+		
+			set @Q='BULK INSERT #tmpCols FROM '+ char(39) + @FilePath + char(39) + ' with (firstrow = ' + convert(varchar,@ReadFrom) +  ' , ROWTERMINATOR = ' + char(39) + char(10)+ + char(39) +')'
+			print @Q
+			exec (@Q)
+	
+	
+
+			CREATE TABLE  #tmpTrans_ClosingRates (
+				[ClosingRate_ContractDate] DateTime null,
+				[ClosingRate_InstrType] varchar(10) null,
+				[ClosingRate_Symbol] varchar(10) null,
+				[ClosingRate_Expiry] DateTime null,
+				[ClosingRate_StrikePrice] numeric(15,4) NULL,
+				[ClosingRate_OptType] varchar(2) NULL,
+				[ClosingRate_Filler1] int NULL,
+				[ClosingRate_ContractLot] numeric(10,0) null,
+				[ClosingRate_ContractIssueStart] DateTime null,
+				[ClosingRate_ContractIssueMaturity] DateTime null,----------10
+				[ClosingRate_ContractExerciseStart] DateTime null,
+				[ClosingRate_ContractExerciseEnd] DateTime null,
+				[ClosingRate_ContractExerciseStyle] char(1) null,
+				[ClosingRate_Filler2] int null,
+				[ClosingRate_Open] numeric(15,4) null,
+				[ClosingRate_High] numeric(15,4) null,
+				[ClosingRate_Low] numeric(15,4) null,
+				[ClosingRate_ClosingPrice] numeric(15,4) null,
+				[ClosingRate_SettlementPrice] numeric(15,4) null,
+				[ClosingRate_UnderlyingPrice] numeric(15,4) null,----------20
+				[ClosingRate_PreviousClose] numeric(15,4) null,
+				[ClosingRate_TradeQty] numeric(15,0) null,
+				[ClosingRate_TotalTradeValue] numeric(22,2) null,
+				[ClosingRate_OpenInt] int null,
+				[ClosingRate_OpenIntChange] int null,----------25
+				[ClosingRate_Filler3] int null,		
+				[ClosingRate_Filler4] int null				)
+		
+				
+				set @ReadFrom=1
+				
+				set @Q='BULK INSERT #tmpTrans_ClosingRates FROM '+ char(39) + @FilePath + char(39) + ' with (firstrow = ' + convert(varchar,@ReadFrom) + ' , FIELDTERMINATOR = ' + char(39) + ',' + char(39) + ' , ROWTERMINATOR = ' + char(39) + char(10)+ + char(39) +')'
+				exec (@Q)
+						alter table #tmpTrans_ClosingRates
+									add  	[ClosingRate_ID] [bigint] IDENTITY(1,1) NOT NULL,	
+											[ClosingRate_ProductSeriesID] varchar(100) null
+							
+
+		
+		
+				
+--select * from #tmpTrans_ClosingRates
+
+Declare @StartDate as datetime
+select @StartDate=cast(substring(RIGHT(@FilePath,20),9,8) as datetime)
+ 
+
+-----------------------Update  ProductSeriesID
+
+Update #tmpTrans_ClosingRates set [ClosingRate_ProductSeriesID]=Commodity_ProductSeriesID from Master_Commodity where 
+																Commodity_ExpiryDate=ClosingRate_Expiry
+																and ltrim(rtrim(Commodity_TickerSymbol))=ltrim(rtrim(ClosingRate_Symbol))
+																and ltrim(rtrim(Commodity_Identifier))=ltrim(rtrim(ClosingRate_InstrType))
+																and ltrim(rtrim(isnull(Commodity_TickerSeries,'FF')))=ltrim(rtrim(isnull(ClosingRate_OptType,'FF')))
+																and isnull(Commodity_StrikePrice,0.00)=isnull(ClosingRate_StrikePrice,0.00)
+																and Commodity_ExchangeSegmentID=6
+
+---------------------------------------------------Delete From Trans_ComDailyStat-------------------------------------------------
+Delete from Trans_ComDailyStat where ComDailyStat_ExchangeSegmentID=6 and ComDailyStat_DateTime=@StartDate
+
+Select * from #tmpTrans_ClosingRates
+------------------------------------------------------INSERT INTO MAIN TABLE
+
+	INSERT INTO [Trans_ComDailyStat]
+           ([ComDailyStat_ExchangeSegmentID]
+           ,[ComDailyStat_ProductSeriesID]
+           ,[ComDailyStat_DateTime]
+           ,[ComDailyStat_Type]
+           ,[ComDailyStat_Open]
+           ,[ComDailyStat_High]
+           ,[ComDailyStat_Low]
+           ,[ComDailyStat_Close]
+           ,[ComDailyStat_PreviousClose]
+           ,[ComDailyStat_SettlementPrice]
+           ,[ComDailyStat_SpotPrice]
+           ,[ComDailyStat_TradedQuantity]
+           ,[ComDailyStat_TradedValue]
+           ,[ComDailyStat_OpenInterest]
+           ,[ComDailyStat_ChangeInOpenInterest]
+           ,[ComDailyStat_UpdateDateTime]
+           ,[ComDailyStat_TradingLots]
+           ,[ComDailyStat_AssetPrice])
+Select	6
+		,[ClosingRate_ProductSeriesID]
+		,@StartDate
+		,'Final'
+		,ClosingRate_Open
+		,ClosingRate_High
+		,ClosingRate_Low
+		,ClosingRate_ClosingPrice
+		,ClosingRate_PreviousClose
+		,(Case when isnull(ClosingRate_SettlementPrice,0.00)=0.00 then ClosingRate_ClosingPrice Else ClosingRate_SettlementPrice End)
+		,ClosingRate_UnderlyingPrice
+		,ClosingRate_TradeQty
+		,ClosingRate_TotalTradeValue
+		,ClosingRate_OpenInt
+		,ClosingRate_OpenIntChange
+		,GETDATE()
+		,Commodity_TradingLot
+		,ClosingRate_UnderlyingPrice
+from #tmpTrans_ClosingRates,Master_Commodity
+where  [ClosingRate_ProductSeriesID] IS NOT NULL
+AND  Commodity_ProductSeriesID=[ClosingRate_ProductSeriesID]
+		
+END
+
+GO
+

@@ -1,0 +1,97 @@
+<?xml version="1.0" standalone="yes"?>
+<xs:schema id="NewDataSet" xmlns="" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+  <xs:element name="NewDataSet" msdata:IsDataSet="true" msdata:UseCurrentLocale="true">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="Table">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="SrNo" type="xs:int" minOccurs="0" />
+              <xs:element name="TrDate" type="xs:string" minOccurs="0" />
+              <xs:element name="ValueDate" type="xs:string" minOccurs="0" />
+              <xs:element name="TransactionRefID" type="xs:string" minOccurs="0" />
+              <xs:element name="Narration" type="xs:string" minOccurs="0" />
+              <xs:element name="InstNo" type="xs:string" minOccurs="0" />
+              <xs:element name="SettNo" type="xs:string" minOccurs="0" />
+              <xs:element name="PayOutDate" type="xs:string" minOccurs="0" />
+              <xs:element name="BranchCode" type="xs:string" minOccurs="0" />
+              <xs:element name="AmountCr" type="xs:decimal" minOccurs="0" />
+              <xs:element name="AmountDr" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Closing" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CustomerID" type="xs:string" minOccurs="0" />
+              <xs:element name="Address" type="xs:string" minOccurs="0" />
+              <xs:element name="PhNumber" type="xs:string" minOccurs="0" />
+              <xs:element name="City" type="xs:string" minOccurs="0" />
+              <xs:element name="State" type="xs:string" minOccurs="0" />
+              <xs:element name="Country" type="xs:string" minOccurs="0" />
+              <xs:element name="PANNo" type="xs:string" minOccurs="0" />
+              <xs:element name="clientemail" type="xs:string" minOccurs="0" />
+              <xs:element name="CompilanceofficerName" type="xs:string" minOccurs="0" />
+              <xs:element name="CompilanceofficerPhone" type="xs:string" minOccurs="0" />
+              <xs:element name="CompilanceofficerEmail" type="xs:string" minOccurs="0" />
+              <xs:element name="complianceadd1" type="xs:string" minOccurs="0" />
+              <xs:element name="complianceadd2" type="xs:string" minOccurs="0" />
+              <xs:element name="complianceadd3" type="xs:string" minOccurs="0" />
+              <xs:element name="compliancepin" type="xs:string" minOccurs="0" />
+              <xs:element name="compliancecity" type="xs:string" minOccurs="0" />
+              <xs:element name="CmpServiceTaxNo" type="xs:string" minOccurs="0" />
+              <xs:element name="tmcode" type="xs:string" minOccurs="0" />
+              <xs:element name="sebino" type="xs:string" minOccurs="0" />
+              <xs:element name="CompAddress" type="xs:string" minOccurs="0" />
+              <xs:element name="CompPhNumber" type="xs:string" minOccurs="0" />
+              <xs:element name="CompCity" type="xs:string" minOccurs="0" />
+              <xs:element name="CompState" type="xs:string" minOccurs="0" />
+              <xs:element name="CompCountry" type="xs:string" minOccurs="0" />
+              <xs:element name="CompEmail" type="xs:string" minOccurs="0" />
+              <xs:element name="CompPanNo" type="xs:string" minOccurs="0" />
+              <xs:element name="LedgerNarration" type="xs:string" minOccurs="0" />
+              <xs:element name="Fdate" type="xs:string" minOccurs="0" />
+              <xs:element name="Tdate" type="xs:string" minOccurs="0" />
+              <xs:element name="CompName" type="xs:string" minOccurs="0" />
+              <xs:element name="ClientName" type="xs:string" minOccurs="0" />
+              <xs:element name="OpeningBalanceDr" type="xs:decimal" minOccurs="0" />
+              <xs:element name="OpeningBalanceCr" type="xs:decimal" minOccurs="0" />
+              <xs:element name="OpeningTotal" type="xs:decimal" minOccurs="0" />
+              <xs:element name="ClosingBalanceDr" type="xs:decimal" minOccurs="0" />
+              <xs:element name="ClosingBalanceCr" type="xs:decimal" minOccurs="0" />
+              <xs:element name="ClosingTotal" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SegmentName" type="xs:string" minOccurs="0" />
+              <xs:element name="MainAccName" type="xs:string" minOccurs="0" />
+              <xs:element name="ReportType" type="xs:string" minOccurs="0" />
+              <xs:element name="SingleDouble" type="xs:string" minOccurs="0" />
+              <xs:element name="SettlementNumber" type="xs:string" minOccurs="0" />
+              <xs:element name="SettlementType" type="xs:string" minOccurs="0" />
+              <xs:element name="Header" type="xs:string" minOccurs="0" />
+              <xs:element name="Footer" type="xs:string" minOccurs="0" />
+              <xs:element name="MainAccountID" type="xs:string" minOccurs="0" />
+              <xs:element name="CompFaxNumber" type="xs:string" minOccurs="0" />
+              <xs:element name="CompAddress1" type="xs:string" minOccurs="0" />
+              <xs:element name="CompAddress2" type="xs:string" minOccurs="0" />
+              <xs:element name="Address1" type="xs:string" minOccurs="0" />
+              <xs:element name="Address2" type="xs:string" minOccurs="0" />
+              <xs:element name="StatementDate" type="xs:string" minOccurs="0" />
+              <xs:element name="GroupName" type="xs:string" minOccurs="0" />
+              <xs:element name="BGType" type="xs:string" minOccurs="0" />
+              <xs:element name="AmountCr1" type="xs:string" minOccurs="0" />
+              <xs:element name="AmountDr1" type="xs:string" minOccurs="0" />
+              <xs:element name="Closing1" type="xs:string" minOccurs="0" />
+              <xs:element name="OpeningBalanceDr1" type="xs:string" minOccurs="0" />
+              <xs:element name="OpeningBalanceCr1" type="xs:string" minOccurs="0" />
+              <xs:element name="OpeningTotal1" type="xs:string" minOccurs="0" />
+              <xs:element name="ClosingBalanceDr1" type="xs:string" minOccurs="0" />
+              <xs:element name="ClosingBalanceCr1" type="xs:string" minOccurs="0" />
+              <xs:element name="ClosingTotal1" type="xs:string" minOccurs="0" />
+              <xs:element name="CustPIN" type="xs:string" minOccurs="0" />
+              <xs:element name="CompPIN" type="xs:string" minOccurs="0" />
+              <xs:element name="compaddfinal1" type="xs:string" minOccurs="0" />
+              <xs:element name="compaddfinal23" type="xs:string" minOccurs="0" />
+              <xs:element name="Image" type="xs:base64Binary" minOccurs="0" />
+              <xs:element name="Signature" type="xs:base64Binary" minOccurs="0" />
+              <xs:element name="Status" type="xs:string" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

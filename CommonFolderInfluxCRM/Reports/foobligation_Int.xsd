@@ -1,0 +1,186 @@
+<?xml version="1.0" standalone="yes"?>
+<xs:schema id="NewDataSet" xmlns="" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+  <xs:element name="NewDataSet" msdata:IsDataSet="true" msdata:UseCurrentLocale="true">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="Table">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="CUSTID" type="xs:string" minOccurs="0" />
+              <xs:element name="ORIGINALTRANSACTIONID" type="xs:string" minOccurs="0" />
+              <xs:element name="PRODUCTID" type="xs:string" minOccurs="0" />
+              <xs:element name="CUSTOMERID" type="xs:string" minOccurs="0" />
+              <xs:element name="CLIENTNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="UCC" type="xs:string" minOccurs="0" />
+              <xs:element name="GRPID" type="xs:string" minOccurs="0" />
+              <xs:element name="GRPNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="EMAIL" type="xs:string" minOccurs="0" />
+              <xs:element name="clinameucc" type="xs:string" minOccurs="0" />
+              <xs:element name="cmppanno" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpphno" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpfax" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpemail" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpname" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpaddress" type="xs:string" minOccurs="0" />
+              <xs:element name="CLIENTADDRESS1" type="xs:string" minOccurs="0" />
+              <xs:element name="CLIENTADDRESS2" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpservicetax" type="xs:string" minOccurs="0" />
+              <xs:element name="SEGMENTNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="DATE" type="xs:string" minOccurs="0" />
+              <xs:element name="clientpancard" type="xs:string" minOccurs="0" />
+              <xs:element name="PRSTATUS" type="xs:string" minOccurs="0" />
+              <xs:element name="NETOPENINGNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="STATEMENTNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="NETOPENINGDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETOPENINGCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BFQTYDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BFQTYCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BFSETTPRICE" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BFVALUEDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BFVALUECR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SYMBOL" type="xs:string" minOccurs="0" />
+              <xs:element name="Identifier" type="xs:string" minOccurs="0" />
+              <xs:element name="EXPIRYDATE" type="xs:dateTime" minOccurs="0" />
+              <xs:element name="STRIKEPRICE" type="xs:decimal" minOccurs="0" />
+              <xs:element name="TRADEDATE" type="xs:string" minOccurs="0" />
+              <xs:element name="TradeNumber" type="xs:string" minOccurs="0" />
+              <xs:element name="TRADECATEGORY" type="xs:string" minOccurs="0" />
+              <xs:element name="BUYQTY" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SELLQTY" type="xs:decimal" minOccurs="0" />
+              <xs:element name="MKTRATE" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BRKG" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETRATE" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETAMNTDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETAMNTCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CFQTYDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CFQTYCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CFSETTPRICE" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CFVALUEDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CFVALUECR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SETTLEMENTNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="MTMDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="MTMCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="FINALSETTLEMENTNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="FINALSETTLEMENTDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="FINALSETTLEMENTCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="MTMSETTLEMENTNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="MTMSETTLEMENTDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="MTMSETTLEMENTCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETMTMSETTLEMENTNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="NETMTMSETTLEMENTDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETMTMSETTLEMENTCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETPRMSETTLEMENTNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="NETPRMSETTLEMENTDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETPRMSETTLEMENTCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETOPTIONSETTLEMENTNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="NETOPTIONSETTLEMENTDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETOPTIONSETTLEMENTCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="TOTALOBLIGATIONNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="TOTALOBLIGATIONDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="TOTALOBLIGATIONCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SRVTAXONBRKG" type="xs:decimal" minOccurs="0" />
+              <xs:element name="TOTALCHARGE" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETBILLAMNTDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETBILLAMNTCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETFUNDNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="NETFUNDDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETFUNDCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETOPTNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="NETOPTDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETOPTCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETINTNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="NETINTDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETINTCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CLIENTNETAMNTNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="CLIENTNETAMNTDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CLIENTNETAMNTCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SPANMRGN" type="xs:decimal" minOccurs="0" />
+              <xs:element name="PRMMRGN" type="xs:decimal" minOccurs="0" />
+              <xs:element name="TOTMRGN" type="xs:decimal" minOccurs="0" />
+              <xs:element name="EXPOSURMRGN" type="xs:decimal" minOccurs="0" />
+              <xs:element name="APPMRGN" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CASHDEP" type="xs:decimal" minOccurs="0" />
+              <xs:element name="COLLATERAL" type="xs:decimal" minOccurs="0" />
+              <xs:element name="TOTDEP" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SHORTAGE" type="xs:decimal" minOccurs="0" />
+              <xs:element name="EXCESS" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CLIENTLASTNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="CLIENTLASTDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CLIENTLASTCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CASHDEPnew1" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CASHDEPnew" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Header" type="xs:string" minOccurs="0" />
+              <xs:element name="Footer" type="xs:string" minOccurs="0" />
+              <xs:element name="CurrencyID" type="xs:long" minOccurs="0" />
+              <xs:element name="CurrencyAlphaCode" type="xs:string" minOccurs="0" />
+              <xs:element name="CurrencySymbol" type="xs:string" minOccurs="0" />
+              <xs:element name="CurrencyTotalDr" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CurrencyTotalCr" type="xs:decimal" minOccurs="0" />
+              <xs:element name="AllChargeInString" type="xs:string" minOccurs="0" />
+              <xs:element name="BuyLot" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SellLot" type="xs:decimal" minOccurs="0" />
+              <xs:element name="LotSize" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BFLotDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BFLotCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CFLotDR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CFLotCR" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BFLotSize" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CFLotSize" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CntBranchID" type="xs:int" minOccurs="0" />
+              <xs:element name="ExchangeSegmentID" type="xs:int" minOccurs="0" />
+              <xs:element name="Image" type="xs:base64Binary" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Table1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="CUSTOMERID" type="xs:string" minOccurs="0" />
+              <xs:element name="Account" type="xs:string" minOccurs="0" />
+              <xs:element name="Trade_x0020_Currency" type="xs:string" minOccurs="0" />
+              <xs:element name="Balance" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Base_x0020_Currency" type="xs:string" minOccurs="0" />
+              <xs:element name="FxRate" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Convt.Balance" type="xs:decimal" minOccurs="0" />
+              <xs:element name="ExchangeSegmentID" type="xs:int" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Table2">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="CustomerID" type="xs:string" minOccurs="0" />
+              <xs:element name="Und.Asset" type="xs:string" minOccurs="0" />
+              <xs:element name="Exchng" type="xs:string" minOccurs="0" />
+              <xs:element name="Series" type="xs:string" minOccurs="0" />
+              <xs:element name="ProdIdentifier" type="xs:string" minOccurs="0" />
+              <xs:element name="Buy.Lots" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Sell.Lots" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Sett.Price" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Buy.Exposure" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Sell.Exposure" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Trd.Cur" type="xs:string" minOccurs="0" />
+              <xs:element name="ExchangeSegmentID" type="xs:int" minOccurs="0" />
+              <xs:element name="SumAsset" type="xs:string" minOccurs="0" />
+              <xs:element name="SumExchng" type="xs:string" minOccurs="0" />
+              <xs:element name="SeriesDesc" type="xs:string" minOccurs="0" />
+              <xs:element name="Buy" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Sell" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BuyAmount" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SellAmount" type="xs:decimal" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Table3">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="CustomerID" type="xs:string" minOccurs="0" />
+              <xs:element name="OptAmtDesc" type="xs:string" minOccurs="0" />
+              <xs:element name="TotalOptAmount" type="xs:decimal" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

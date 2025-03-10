@@ -1,0 +1,202 @@
+
+
+
+--EXEC [Contract_AnnextureSttax] 'COR0000002','25','''CLP0000453''','2012-04-02','2012001',F,'Print'
+
+
+
+
+ALTER procedure [dbo].[Contract_AnnextureSttax]
+
+@CompanyID varchar(50),
+@DpId varchar(50),
+@CustomerID varchar(Max),
+@tradedate varchar(20),
+@SettlementNumber varchar(20),
+@SettlementType varchar(5),
+@Reporttype varchar(10)
+as 
+begin
+	if (@CustomerID='pdf')
+		Begin
+				select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+						(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+						and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+						and cnt_internalId=ContractNotes_CustomerID AND cnt_internalId like 'CL%' 
+						 ) rr
+						 
+						set @CustomerID=''''+@CustomerID+''''
+		
+		End
+
+
+
+
+		CREATE TABLE  #tmpTEMP 
+		(
+
+				STTAXCONTACT_ID  int Identity not null,
+				STTAXID  varchar(100) null,
+				STTAXContactNumber varchar(100) null
+				
+				
+		)
+		
+Declare @sql varchar(MAX),@dpname varchar(20)
+select @dpname=Exh_ShortName from
+(Select Exch_CompID,Exch_InternalID,Exh_ShortName,Exch_SegmentID from Tbl_Master_Exchange,Tbl_Master_CompanyExchange 
+Where Exh_CntId=Exch_ExchID) as T1,Master_Exchange
+Where Exchange_ShortName=Exh_ShortName
+and Exch_InternalID=@DpId
+
+
+		set @sql='Select C.Sttax_ID,C.Sttax_BranchID,C.Sttax_SegmentID,C.Sttax_Type,C.Sttax_CustomerID,C.Sttax_STTDate,C.Sttax_SettlementNumber,C.Sttax_SettlementType,C.Sttax_SecuritySymbol,C.Sttax_SecuritySeries,C.Sttax_SecurityCode,C.Equity_TickerCode,
+		C.Sttax_ExpiryDate,C.Sttax_StrikePrice,C.Sttax_ProductSeriesID,C.Sttax_TotalBuyQuantity,C.Sttax_TotalBuyValue,C.Sttax_TotalSaleQuantity,C.Sttax_TotalSaleValue,C.Sttax_OptionSaleValue,C.Sttax_FutureSaleValue,C.Sttax_deliveryBuyQuantity,C.Sttax_deliveryBuyvalue,
+		C.sttax_AverageRate,C.Sttax_DeliveryBuyStt,C.Sttax_DeliverySaleQuantity,C.Sttax_DeliverySaleValue,
+		C.Sttax_DeliverySaleStt,C.Sttax_DifferenceSaleValue,C.Sttax_DifferenceSaleQuantity,
+		C.Sttax_DifferenceStt,C.Sttax_TotalStt,C.Sttax_FutureStt,C.Sttax_OptionExerciseStt,C.Sttax_OptionStt,
+		C.Sttax_CustomerUCC,C.Sttax_Mode,C.Sttax_ContractNoteNumber,C.Equity_FoIdentifier,C.CustomerName,
+		C.crg_Number,(tbl_master_contactRegistration.crg_Number)as MapIN, null as ContractNote,
+		(Select cmp_name from tbl_master_company where cmp_internalID='''+@CompanyID+''') as CompanyName,
+		(Select exch_TMCode from tbl_master_companyExchange where exch_compID='''+@CompanyID+''' AND exch_InternalID='''+@DpId+''') as TMCODE
+        
+		
+
+
+		FROM
+		(Select b.Sttax_ID,b.Sttax_BranchID,b.Sttax_SegmentID,b.Sttax_Type,b.Sttax_CustomerID,b.Sttax_STTDate,b.Sttax_SettlementNumber,b.Sttax_SettlementType,b.Sttax_SecuritySymbol,b.Sttax_SecuritySeries,b.Sttax_SecurityCode,b.Equity_TickerCode,
+		b.Sttax_ExpiryDate,b.Sttax_StrikePrice,b.Sttax_ProductSeriesID,b.Sttax_TotalBuyQuantity,b.Sttax_TotalBuyValue,b.Sttax_TotalSaleQuantity,b.Sttax_TotalSaleValue,b.Sttax_OptionSaleValue,b.Sttax_FutureSaleValue,b.Sttax_deliveryBuyQuantity,b.Sttax_deliveryBuyvalue,
+		b.sttax_AverageRate,b.Sttax_DeliveryBuyStt,b.Sttax_DeliverySaleQuantity,b.Sttax_DeliverySaleValue,
+		b.Sttax_DeliverySaleStt,b.Sttax_DifferenceSaleValue,b.Sttax_DifferenceSaleQuantity,
+		b.Sttax_DifferenceStt,b.Sttax_TotalStt,b.Sttax_FutureStt,b.Sttax_OptionExerciseStt,b.Sttax_OptionStt,
+		b.Sttax_CustomerUCC,b.Sttax_Mode,b.Sttax_ContractNoteNumber,b.Equity_FoIdentifier,b.CustomerName,
+		tbl_master_contactRegistration.crg_Number
+
+		FROM
+		(Select a.Sttax_ID,a.Sttax_BranchID,a.Sttax_SegmentID,a.Sttax_Type,a.Sttax_CustomerID,a.Sttax_STTDate,a.Sttax_SettlementNumber,a.Sttax_SettlementType,a.Sttax_SecuritySymbol,a.Sttax_SecuritySeries,a.Sttax_SecurityCode,a.Equity_TickerCode,
+		a.Sttax_ExpiryDate,a.Sttax_StrikePrice,a.Sttax_ProductSeriesID,a.Sttax_TotalBuyQuantity,a.Sttax_TotalBuyValue,a.Sttax_TotalSaleQuantity,a.Sttax_TotalSaleValue,a.Sttax_OptionSaleValue,a.Sttax_FutureSaleValue,a.Sttax_deliveryBuyQuantity,a.Sttax_deliveryBuyvalue,
+		a.sttax_AverageRate,a.Sttax_DeliveryBuyStt,a.Sttax_DeliverySaleQuantity,a.Sttax_DeliverySaleValue,
+		a.Sttax_DeliverySaleStt,a.Sttax_DifferenceSaleValue,a.Sttax_DifferenceSaleQuantity,
+		a.Sttax_DifferenceStt,a.Sttax_TotalStt,a.Sttax_FutureStt,a.Sttax_OptionExerciseStt,a.Sttax_OptionStt,
+		a.Sttax_CustomerUCC,a.Sttax_Mode,a.Sttax_ContractNoteNumber,a.Equity_FoIdentifier,
+		(isnull(tbl_master_contact.cnt_firstName,'+char(39)+''+char(39)+')+isnull(tbl_master_contact.cnt_middleName,'+char(39)+''+char(39)+')+isnull(tbl_master_contact.cnt_lastName,'+char(39)+''+char(39)+'))as CustomerName
+		FROM
+		(Select Sttax_ID,Sttax_BranchID,Sttax_SegmentID,Sttax_Type,Sttax_CustomerID,Sttax_STTDate,Sttax_SettlementNumber,Sttax_SettlementType,
+		(ltrim(rtrim(Sttax_SecuritySymbol))+'' [ ''+ case when '''+@dpname+'''<>''NSE'' then  isnull(Equity_TickerCode,'''') else isnull(ltrim(rtrim(Equity_Series)),'''') end+'' ]'') as Sttax_SecuritySymbol,
+		Sttax_SecuritySeries,Sttax_SecurityCode,
+		Sttax_ExpiryDate,Sttax_StrikePrice,Sttax_ProductSeriesID,Sttax_TotalBuyQuantity,Sttax_TotalBuyValue,Sttax_TotalSaleQuantity,Sttax_TotalSaleValue,
+		isnull(Sttax_OptionSaleValue,0)+isnull(Sttax_OptionExerciseValue,0) as Sttax_OptionSaleValue,Sttax_FutureSaleValue,Sttax_deliveryBuyQuantity,Sttax_deliveryBuyvalue,
+		sttax_AverageRate,Sttax_DeliveryBuyStt,Sttax_DeliverySaleQuantity,Sttax_DeliverySaleValue,
+		Sttax_DeliverySaleStt,Sttax_DifferenceSaleValue,Sttax_DifferenceSaleQuantity,
+		Sttax_DifferenceStt,Sttax_TotalStt,Sttax_FutureStt,isnull(Sttax_OptionExerciseStt,0) as Sttax_OptionExerciseStt,Sttax_OptionStt,
+		Sttax_CustomerUCC,Sttax_Mode,Sttax_ContractNoteNumber,Equity_FoIdentifier,Equity_TickerCode
+		From
+		trans_sttax,master_equity
+		Where
+        equity_seriesid=Sttax_ProductSeriesID
+        and Sttax_ProductSeriesID is not null
+		and Sttax_CompanyID='''+@CompanyID+'''
+		AND Sttax_SegmentID='''+@DpId+'''
+		AND Sttax_CustomerID IN('+@CustomerID+')'
+		--AND Sttax_SettlementNumber='''+@SettlementNumber+'''
+		--AND Sttax_SettlementType='''+@SettlementType+'''
+		If(@Reporttype<>'Digital')
+			Begin
+				set @sql=@sql+' AND Sttax_SettlementNumber='''+@SettlementNumber+'''
+							    AND Sttax_SettlementType='''+@SettlementType+''' '
+			End
+		set @sql=@sql+' AND Sttax_STTDate='''+@tradedate+'''
+		AND Sttax_Type='+char(39)+'Prov'+char(39)+'
+		AND Sttax_ContractNoteNumber IS NULL) as a
+		left outer join
+		tbl_master_contact
+		On(tbl_master_contact.cnt_internalID=a.Sttax_CustomerID and tbl_master_contact.cnt_branchId=a.Sttax_BranchID))as b
+		left outer join
+		tbl_master_contactRegistration
+		On(tbl_master_contactRegistration.crg_cntId=b.Sttax_CustomerID and crg_type='+char(39)+'Pancard'+char(39)+'))as C
+		left outer join
+		tbl_master_contactRegistration
+		On(tbl_master_contactRegistration.crg_cntId=C.Sttax_CustomerID and crg_type='+char(39)+'MAPIN'+char(39)+')
+		
+		UNION 
+		
+		Select C.Sttax_ID,C.Sttax_BranchID,C.Sttax_SegmentID,C.Sttax_Type,C.Sttax_CustomerID,C.Sttax_STTDate,C.Sttax_SettlementNumber,C.Sttax_SettlementType,C.Sttax_SecuritySymbol,C.Sttax_SecuritySeries,C.Sttax_SecurityCode,C.Equity_TickerCode,
+		C.Sttax_ExpiryDate,C.Sttax_StrikePrice,C.Sttax_ProductSeriesID,C.Sttax_TotalBuyQuantity,C.Sttax_TotalBuyValue,C.Sttax_TotalSaleQuantity,C.Sttax_TotalSaleValue,C.Sttax_OptionSaleValue,C.Sttax_FutureSaleValue,C.Sttax_deliveryBuyQuantity,C.Sttax_deliveryBuyvalue,
+		C.sttax_AverageRate,C.Sttax_DeliveryBuyStt,C.Sttax_DeliverySaleQuantity,C.Sttax_DeliverySaleValue,
+		C.Sttax_DeliverySaleStt,C.Sttax_DifferenceSaleValue,C.Sttax_DifferenceSaleQuantity,
+		C.Sttax_DifferenceStt,C.Sttax_TotalStt,C.Sttax_FutureStt,C.Sttax_OptionExerciseStt,C.Sttax_OptionStt,
+		C.Sttax_CustomerUCC,C.Sttax_Mode,C.Sttax_ContractNoteNumber,C.Equity_FoIdentifier,C.CustomerName,
+		C.crg_Number,(tbl_master_contactRegistration.crg_Number)as MapIN,null as ContractNote,
+		(Select cmp_name from tbl_master_company where cmp_internalID='''+@CompanyID+''') as CompanyName,
+		(Select exch_TMCode from tbl_master_companyExchange where exch_compID='''+@CompanyID+''' AND exch_InternalID='''+@DpId+''') as TMCODE
+		
+		
+
+		FROM
+		(Select b.Sttax_ID,b.Sttax_BranchID,b.Sttax_SegmentID,b.Sttax_Type,b.Sttax_CustomerID,b.Sttax_STTDate,b.Sttax_SettlementNumber,b.Sttax_SettlementType,b.Sttax_SecuritySymbol,b.Sttax_SecuritySeries,b.Sttax_SecurityCode,b.Equity_TickerCode,
+		b.Sttax_ExpiryDate,b.Sttax_StrikePrice,b.Sttax_ProductSeriesID,b.Sttax_TotalBuyQuantity,b.Sttax_TotalBuyValue,b.Sttax_TotalSaleQuantity,b.Sttax_TotalSaleValue,b.Sttax_OptionSaleValue,b.Sttax_FutureSaleValue,b.Sttax_deliveryBuyQuantity,b.Sttax_deliveryBuyvalue,
+		b.sttax_AverageRate,b.Sttax_DeliveryBuyStt,b.Sttax_DeliverySaleQuantity,b.Sttax_DeliverySaleValue,
+		b.Sttax_DeliverySaleStt,b.Sttax_DifferenceSaleValue,b.Sttax_DifferenceSaleQuantity,
+		b.Sttax_DifferenceStt,b.Sttax_TotalStt,b.Sttax_FutureStt,b.Sttax_OptionExerciseStt,b.Sttax_OptionStt,
+		b.Sttax_CustomerUCC,b.Sttax_Mode,b.Sttax_ContractNoteNumber,b.Equity_FoIdentifier,b.CustomerName,
+		tbl_master_contactRegistration.crg_Number
+
+		FROM
+		(Select a.Sttax_ID,a.Sttax_BranchID,a.Sttax_SegmentID,a.Sttax_Type,a.Sttax_CustomerID,a.Sttax_STTDate,a.Sttax_SettlementNumber,a.Sttax_SettlementType,a.Sttax_SecuritySymbol,a.Sttax_SecuritySeries,a.Sttax_SecurityCode,a.Equity_TickerCode,
+		a.Sttax_ExpiryDate,a.Sttax_StrikePrice,a.Sttax_ProductSeriesID,a.Sttax_TotalBuyQuantity,a.Sttax_TotalBuyValue,a.Sttax_TotalSaleQuantity,a.Sttax_TotalSaleValue,a.Sttax_OptionSaleValue,a.Sttax_FutureSaleValue,a.Sttax_deliveryBuyQuantity,a.Sttax_deliveryBuyvalue,
+		a.sttax_AverageRate,a.Sttax_DeliveryBuyStt,a.Sttax_DeliverySaleQuantity,a.Sttax_DeliverySaleValue,
+		a.Sttax_DeliverySaleStt,a.Sttax_DifferenceSaleValue,a.Sttax_DifferenceSaleQuantity,
+		a.Sttax_DifferenceStt,a.Sttax_TotalStt,a.Sttax_FutureStt,a.Sttax_OptionExerciseStt,a.Sttax_OptionStt,
+		a.Sttax_CustomerUCC,a.Sttax_Mode,a.Sttax_ContractNoteNumber,a.Equity_FoIdentifier,
+		(isnull(tbl_master_contact.cnt_firstName,'+char(39)+''+char(39)+')+isnull(tbl_master_contact.cnt_middleName,'+char(39)+''+char(39)+')+isnull(tbl_master_contact.cnt_lastName,'+char(39)+''+char(39)+'))as CustomerName
+		FROM
+		(Select Sttax_ID,Sttax_BranchID,Sttax_SegmentID,Sttax_Type,Sttax_CustomerID,Sttax_STTDate,Sttax_SettlementNumber,Sttax_SettlementType,
+		(ltrim(rtrim(Sttax_SecuritySymbol))+'' [ ''+ case when '''+@dpname+'''<>''NSE'' then  isnull(Equity_TickerCode,'''') else isnull(ltrim(rtrim(Equity_Series)),'''') end+'' ]'') as Sttax_SecuritySymbol,Sttax_SecuritySeries,Sttax_SecurityCode,
+		Sttax_ExpiryDate,Sttax_StrikePrice,Sttax_ProductSeriesID,Sttax_TotalBuyQuantity,Sttax_TotalBuyValue,Sttax_TotalSaleQuantity,Sttax_TotalSaleValue,
+		isnull(Sttax_OptionSaleValue,0)+isnull(Sttax_OptionExerciseValue,0) as Sttax_OptionSaleValue,Sttax_FutureSaleValue,Sttax_deliveryBuyQuantity,Sttax_deliveryBuyvalue,
+		sttax_AverageRate,Sttax_DeliveryBuyStt,Sttax_DeliverySaleQuantity,Sttax_DeliverySaleValue,
+		Sttax_DeliverySaleStt,Sttax_DifferenceSaleValue,Sttax_DifferenceSaleQuantity,
+		Sttax_DifferenceStt,Sttax_TotalStt,Sttax_FutureStt,isnull(Sttax_OptionExerciseStt,0) as Sttax_OptionExerciseStt,Sttax_OptionStt,
+		Sttax_CustomerUCC,Sttax_Mode,Sttax_ContractNoteNumber,Equity_FoIdentifier,Equity_TickerCode
+		From
+		trans_sttax,master_equity
+		Where
+		equity_seriesid=Sttax_ProductSeriesID
+        and Sttax_ProductSeriesID is not null
+		and Sttax_CompanyID='''+@CompanyID+'''
+		AND Sttax_SegmentID='''+@DpId+'''
+		AND Sttax_CustomerID IN('+@CustomerID+')'
+		--AND Sttax_SettlementNumber='''+@SettlementNumber+'''
+		--AND Sttax_SettlementType='''+@SettlementType+'''
+		If(@Reporttype<>'Digital')
+			Begin
+				set @sql=@sql+' AND Sttax_SettlementNumber='''+@SettlementNumber+'''
+							    AND Sttax_SettlementType='''+@SettlementType+''' '
+			End
+		set @sql=@sql+' AND Sttax_STTDate='''+@tradedate+'''
+		AND Sttax_Type='+char(39)+'Prov'+char(39)+'
+		AND Sttax_ContractNoteNumber IS NOT NULL) as a
+		left outer join
+		tbl_master_contact
+		On(tbl_master_contact.cnt_internalID=a.Sttax_CustomerID and tbl_master_contact.cnt_branchId=a.Sttax_BranchID))as b
+		left outer join
+		tbl_master_contactRegistration
+		On(tbl_master_contactRegistration.crg_cntId=b.Sttax_CustomerID and crg_type='+char(39)+'Pancard'+char(39)+'))as C
+		left outer join
+		tbl_master_contactRegistration
+		On(tbl_master_contactRegistration.crg_cntId=C.Sttax_CustomerID and crg_type='+char(39)+'MAPIN'+char(39)+')'
+		 
+
+exec (@sql)
+		
+
+		
+end
+
+
+
+
+
+
+
+

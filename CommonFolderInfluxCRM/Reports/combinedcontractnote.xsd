@@ -1,0 +1,497 @@
+<?xml version="1.0" standalone="yes"?>
+<xs:schema id="NewDataSet" xmlns="" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+  <xs:element name="NewDataSet" msdata:IsDataSet="true" msdata:UseCurrentLocale="true">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="Table">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="id" type="xs:int" minOccurs="0" />
+              <xs:element name="Clientid" type="xs:string" minOccurs="0" />
+              <xs:element name="contractnoteno" type="xs:string" minOccurs="0" />
+              <xs:element name="orderno" type="xs:string" minOccurs="0" />
+              <xs:element name="ordertime" type="xs:dateTime" minOccurs="0" />
+              <xs:element name="Tradeno" type="xs:string" minOccurs="0" />
+              <xs:element name="Tradetime" type="xs:dateTime" minOccurs="0" />
+              <xs:element name="Scripname" type="xs:string" minOccurs="0" />
+              <xs:element name="BuySell" type="xs:string" minOccurs="0" />
+              <xs:element name="Quantity" type="xs:decimal" minOccurs="0" />
+              <xs:element name="netrate" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Grossrate" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Brokerage" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Closingrate" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Nettotal" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Remarks" type="xs:string" minOccurs="0" />
+              <xs:element name="customertradesid" type="xs:long" minOccurs="0" />
+              <xs:element name="origialtransactionid" type="xs:long" minOccurs="0" />
+              <xs:element name="Segment" type="xs:string" minOccurs="0" />
+              <xs:element name="Exchange" type="xs:string" minOccurs="0" />
+              <xs:element name="vieworder" type="xs:int" minOccurs="0" />
+              <xs:element name="ProductSeriesId" type="xs:int" minOccurs="0" />
+              <xs:element name="Companyname" type="xs:string" minOccurs="0" />
+              <xs:element name="CompanyAddress" type="xs:string" minOccurs="0" />
+              <xs:element name="Companytelphone" type="xs:string" minOccurs="0" />
+              <xs:element name="Companyfax" type="xs:string" minOccurs="0" />
+              <xs:element name="CompanyEmail" type="xs:string" minOccurs="0" />
+              <xs:element name="Companywebsite" type="xs:string" minOccurs="0" />
+              <xs:element name="CompanyPan" type="xs:string" minOccurs="0" />
+              <xs:element name="Companyservicetax" type="xs:string" minOccurs="0" />
+              <xs:element name="CompanyCin" type="xs:string" minOccurs="0" />
+              <xs:element name="Companycity" type="xs:string" minOccurs="0" />
+              <xs:element name="Compliancename" type="xs:string" minOccurs="0" />
+              <xs:element name="Compliancemob" type="xs:string" minOccurs="0" />
+              <xs:element name="Complianceemail" type="xs:string" minOccurs="0" />
+              <xs:element name="Complianceaddrs" type="xs:string" minOccurs="0" />
+              <xs:element name="Greviencebrokermail" type="xs:string" minOccurs="0" />
+              <xs:element name="GrevienceExchangemail" type="xs:string" minOccurs="0" />
+              <xs:element name="ClientName" type="xs:string" minOccurs="0" />
+              <xs:element name="Clientucc" type="xs:string" minOccurs="0" />
+              <xs:element name="Clienttcode" type="xs:string" minOccurs="0" />
+              <xs:element name="Clientaddress" type="xs:string" minOccurs="0" />
+              <xs:element name="ClientPan" type="xs:string" minOccurs="0" />
+              <xs:element name="ClientMob" type="xs:string" minOccurs="0" />
+              <xs:element name="ClientEmail" type="xs:string" minOccurs="0" />
+              <xs:element name="BranchName" type="xs:string" minOccurs="0" />
+              <xs:element name="BranchAddress" type="xs:string" minOccurs="0" />
+              <xs:element name="BranchCity" type="xs:string" minOccurs="0" />
+              <xs:element name="BranchPhone" type="xs:string" minOccurs="0" />
+              <xs:element name="BranchFax" type="xs:string" minOccurs="0" />
+              <xs:element name="Settno" type="xs:string" minOccurs="0" />
+              <xs:element name="PayinPayoutdt" type="xs:string" minOccurs="0" />
+              <xs:element name="PayinPayoutdtbse" type="xs:string" minOccurs="0" />
+              <xs:element name="PayinPayoutdtmcxsx" type="xs:string" minOccurs="0" />
+              <xs:element name="SebiRegnno" type="xs:string" minOccurs="0" />
+              <xs:element name="CMID" type="xs:string" minOccurs="0" />
+              <xs:element name="settnonse" type="xs:string" minOccurs="0" />
+              <xs:element name="settnobse" type="xs:string" minOccurs="0" />
+              <xs:element name="settnomcxsx" type="xs:string" minOccurs="0" />
+              <xs:element name="settnouse" type="xs:string" minOccurs="0" />
+              <xs:element name="settnoMCX" type="xs:string" minOccurs="0" />
+              <xs:element name="settnoNCDEX" type="xs:string" minOccurs="0" />
+              <xs:element name="settnoICEX" type="xs:string" minOccurs="0" />
+              <xs:element name="settnoNMCE" type="xs:string" minOccurs="0" />
+              <xs:element name="sebinouse" type="xs:string" minOccurs="0" />
+              <xs:element name="sebinonse" type="xs:string" minOccurs="0" />
+              <xs:element name="sebinobse" type="xs:string" minOccurs="0" />
+              <xs:element name="sebinomcxsx" type="xs:string" minOccurs="0" />
+              <xs:element name="usersegid" type="xs:string" minOccurs="0" />
+              <xs:element name="sebiregno" type="xs:string" minOccurs="0" />
+              <xs:element name="Nsecmoblgation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Nsefooblgation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Nsecdxoblgation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Bsecmoblgation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Bsefooblgation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Bsecdxoblgation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Mcxsxcmoblgation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Mcxsxfooblgation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Mcxsxcdxoblgation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="usecdxoblgation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="MCXObligation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NCDEXObligation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="ICEXObligation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NMCEObligation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Totalobligation" type="xs:decimal" minOccurs="0" />
+              <xs:element name="clientemailtype" type="xs:string" minOccurs="0" />
+              <xs:element name="Clientdeliverytype" type="xs:string" minOccurs="0" />
+              <xs:element name="Nseobligation" type="xs:string" minOccurs="0" />
+              <xs:element name="Bseobigation" type="xs:string" minOccurs="0" />
+              <xs:element name="MCXSXobligation" type="xs:string" minOccurs="0" />
+              <xs:element name="Otherobligation" type="xs:string" minOccurs="0" />
+              <xs:element name="MCXObligation1" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NCDEXObligation1" type="xs:decimal" minOccurs="0" />
+              <xs:element name="ICEXObligation1" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NMCEObligation1" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NseStt" type="xs:string" minOccurs="0" />
+              <xs:element name="BseStt" type="xs:string" minOccurs="0" />
+              <xs:element name="Mcxsxstt" type="xs:string" minOccurs="0" />
+              <xs:element name="otherstt" type="xs:string" minOccurs="0" />
+              <xs:element name="Nsestaxonbrkg" type="xs:string" minOccurs="0" />
+              <xs:element name="Bsestaxonbrkg" type="xs:string" minOccurs="0" />
+              <xs:element name="Mcxsxstaxonbrkg" type="xs:string" minOccurs="0" />
+              <xs:element name="Otherstaxonbrkg" type="xs:string" minOccurs="0" />
+              <xs:element name="Nsetranchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Bsetranchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Mcxsxtranchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="othertranchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Nsestaxontranchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Bsestaxontranchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Mcxsxstaxontranchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Otherstaxontranchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Nseclearingchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Bseclearingchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Mcxsxclearingchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Otherclearingchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Nsestaxonclearingchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Bsestaxonclearingchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Mcxsxstaxonclearingchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Otherstaxonclearingchrg" type="xs:string" minOccurs="0" />
+              <xs:element name="Nsesebifee" type="xs:string" minOccurs="0" />
+              <xs:element name="Bsesebifee" type="xs:string" minOccurs="0" />
+              <xs:element name="Mcxsxsebifee" type="xs:string" minOccurs="0" />
+              <xs:element name="Othersebifee" type="xs:string" minOccurs="0" />
+              <xs:element name="Nsestampdutyfee" type="xs:string" minOccurs="0" />
+              <xs:element name="Bsestampdutyfee" type="xs:string" minOccurs="0" />
+              <xs:element name="Mcxsxstampdutyfee" type="xs:string" minOccurs="0" />
+              <xs:element name="Otherstampdutyfee" type="xs:string" minOccurs="0" />
+              <xs:element name="NseRoundofffee" type="xs:string" minOccurs="0" />
+              <xs:element name="BseRoundofffee" type="xs:string" minOccurs="0" />
+              <xs:element name="McxsxRoundofffee" type="xs:string" minOccurs="0" />
+              <xs:element name="OtherRoundofffee" type="xs:string" minOccurs="0" />
+              <xs:element name="Nsenettotal" type="xs:string" minOccurs="0" />
+              <xs:element name="Bsenettotal" type="xs:string" minOccurs="0" />
+              <xs:element name="Mcxsxnettotal" type="xs:string" minOccurs="0" />
+              <xs:element name="Othernettotal" type="xs:string" minOccurs="0" />
+              <xs:element name="NseCmsettno" type="xs:string" minOccurs="0" />
+              <xs:element name="NseFosettno" type="xs:string" minOccurs="0" />
+              <xs:element name="NseCdxsettno" type="xs:string" minOccurs="0" />
+              <xs:element name="BseCmsettno" type="xs:string" minOccurs="0" />
+              <xs:element name="BseFosettno" type="xs:string" minOccurs="0" />
+              <xs:element name="BseCdxsettno" type="xs:string" minOccurs="0" />
+              <xs:element name="McxsxCmsettno" type="xs:string" minOccurs="0" />
+              <xs:element name="McxsxFosettno" type="xs:string" minOccurs="0" />
+              <xs:element name="McxsxCdxsettno" type="xs:string" minOccurs="0" />
+              <xs:element name="Othersettno" type="xs:string" minOccurs="0" />
+              <xs:element name="McxCommsettno" type="xs:string" minOccurs="0" />
+              <xs:element name="NcdexCommsettno" type="xs:string" minOccurs="0" />
+              <xs:element name="IcexCommsettno" type="xs:string" minOccurs="0" />
+              <xs:element name="NmceCommsettno" type="xs:string" minOccurs="0" />
+              <xs:element name="Totaloblgallseg" type="xs:string" minOccurs="0" />
+              <xs:element name="Totalsttallseg" type="xs:string" minOccurs="0" />
+              <xs:element name="Totalstaxonbrkgallseg" type="xs:string" minOccurs="0" />
+              <xs:element name="Totaltrancgrgallseg" type="xs:string" minOccurs="0" />
+              <xs:element name="Totalstaxontranchargallseg" type="xs:string" minOccurs="0" />
+              <xs:element name="Totalclearingchrgallseg" type="xs:string" minOccurs="0" />
+              <xs:element name="Totalstaxonclearingchrgallseg" type="xs:string" minOccurs="0" />
+              <xs:element name="Totalsebifeeallseg" type="xs:string" minOccurs="0" />
+              <xs:element name="Totalstampdutyallseg" type="xs:string" minOccurs="0" />
+              <xs:element name="Totalroundoffallseg" type="xs:string" minOccurs="0" />
+              <xs:element name="Totalnettotalallseg" type="xs:string" minOccurs="0" />
+              <xs:element name="NseCmtcode" type="xs:string" minOccurs="0" />
+              <xs:element name="NseFotcode" type="xs:string" minOccurs="0" />
+              <xs:element name="NseCdxtcode" type="xs:string" minOccurs="0" />
+              <xs:element name="BseCmtcode" type="xs:string" minOccurs="0" />
+              <xs:element name="BseFotcode" type="xs:string" minOccurs="0" />
+              <xs:element name="BseCdxtcode" type="xs:string" minOccurs="0" />
+              <xs:element name="McxsxCmtcode" type="xs:string" minOccurs="0" />
+              <xs:element name="McxsxFotcode" type="xs:string" minOccurs="0" />
+              <xs:element name="McxsxCdxtcode" type="xs:string" minOccurs="0" />
+              <xs:element name="Othertcode" type="xs:string" minOccurs="0" />
+              <xs:element name="McxCommtcode" type="xs:string" minOccurs="0" />
+              <xs:element name="NcdexCommtcode" type="xs:string" minOccurs="0" />
+              <xs:element name="IcexCommtcode" type="xs:string" minOccurs="0" />
+              <xs:element name="NmceCommtcode" type="xs:string" minOccurs="0" />
+              <xs:element name="NseCmsebino" type="xs:string" minOccurs="0" />
+              <xs:element name="NseFosebino" type="xs:string" minOccurs="0" />
+              <xs:element name="NseCdxsebino" type="xs:string" minOccurs="0" />
+              <xs:element name="BseCmsebino" type="xs:string" minOccurs="0" />
+              <xs:element name="BseFosebino" type="xs:string" minOccurs="0" />
+              <xs:element name="BseCdxsebino" type="xs:string" minOccurs="0" />
+              <xs:element name="McxsxCmsebino" type="xs:string" minOccurs="0" />
+              <xs:element name="McxsxFosebino" type="xs:string" minOccurs="0" />
+              <xs:element name="McxsxCdxsebino" type="xs:string" minOccurs="0" />
+              <xs:element name="Othersebino" type="xs:string" minOccurs="0" />
+              <xs:element name="MCXsebino" type="xs:string" minOccurs="0" />
+              <xs:element name="NCDEXsebino" type="xs:string" minOccurs="0" />
+              <xs:element name="ICEXsebino" type="xs:string" minOccurs="0" />
+              <xs:element name="NMCEsebino" type="xs:string" minOccurs="0" />
+              <xs:element name="NSECMsettdate" type="xs:string" minOccurs="0" />
+              <xs:element name="NSEFOsettdate" type="xs:string" minOccurs="0" />
+              <xs:element name="NSECDXsettdate" type="xs:string" minOccurs="0" />
+              <xs:element name="BSECMsettdate" type="xs:string" minOccurs="0" />
+              <xs:element name="BSEFOsettdate" type="xs:string" minOccurs="0" />
+              <xs:element name="BSECDXsettdate" type="xs:string" minOccurs="0" />
+              <xs:element name="MCXSXCMsettdate" type="xs:string" minOccurs="0" />
+              <xs:element name="MCXSXFOsettdate" type="xs:string" minOccurs="0" />
+              <xs:element name="MCXSXCDXsettdate" type="xs:string" minOccurs="0" />
+              <xs:element name="Othersettdate" type="xs:string" minOccurs="0" />
+              <xs:element name="NSEdate" type="xs:string" minOccurs="0" />
+              <xs:element name="BSEdate" type="xs:string" minOccurs="0" />
+              <xs:element name="MCXSXdate" type="xs:string" minOccurs="0" />
+              <xs:element name="tradedatecast" type="xs:dateTime" minOccurs="0" />
+              <xs:element name="Allcontract" type="xs:string" minOccurs="0" />
+              <xs:element name="contractNoteType" type="xs:string" minOccurs="0" />
+              <xs:element name="exchangename" type="xs:string" minOccurs="0" />
+              <xs:element name="segmentname" type="xs:string" minOccurs="0" />
+              <xs:element name="NetOblgNSECM" type="xs:decimal" minOccurs="0" />
+              <xs:element name="stt" type="xs:decimal" minOccurs="0" />
+              <xs:element name="sttMode" type="xs:string" minOccurs="0" />
+              <xs:element name="staxonbrkg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="staxMode" type="xs:string" minOccurs="0" />
+              <xs:element name="tranchrg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="staxontrncheg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="clearingchrg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="staxonclearingchrg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="sebifee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="stampduty" type="xs:decimal" minOccurs="0" />
+              <xs:element name="stampMode" type="xs:string" minOccurs="0" />
+              <xs:element name="ipft" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Roundoff" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CMBPID" type="xs:string" minOccurs="0" />
+              <xs:element name="TMCODE" type="xs:string" minOccurs="0" />
+              <xs:element name="DPId" type="xs:string" minOccurs="0" />
+              <xs:element name="AuthSignatory" type="xs:string" minOccurs="0" />
+              <xs:element name="TotalBrokerage" type="xs:decimal" minOccurs="0" />
+              <xs:element name="MembershipType" type="xs:string" minOccurs="0" />
+              <xs:element name="DeliveryBuyQuantity" type="xs:decimal" minOccurs="0" />
+              <xs:element name="DeliveryBuyStt" type="xs:decimal" minOccurs="0" />
+              <xs:element name="DeliverySaleQuantity" type="xs:decimal" minOccurs="0" />
+              <xs:element name="DeliverySaleStt" type="xs:decimal" minOccurs="0" />
+              <xs:element name="DifferenceSaleQuantity" type="xs:decimal" minOccurs="0" />
+              <xs:element name="DifferenceStt" type="xs:decimal" minOccurs="0" />
+              <xs:element name="MinProcessingChrg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="STaxMinProcessingChrg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="MinProcessingChrgMode" type="xs:string" minOccurs="0" />
+              <xs:element name="OtherCharges" type="xs:decimal" minOccurs="0" />
+              <xs:element name="ServiceTaxOnOtherCharges" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BranchCode" type="xs:string" minOccurs="0" />
+              <xs:element name="BranchGSTIN" type="xs:string" minOccurs="0" />
+              <xs:element name="StateName" type="xs:string" minOccurs="0" />
+              <xs:element name="StateCode" type="xs:string" minOccurs="0" />
+              <xs:element name="ClientGSTIN" type="xs:string" minOccurs="0" />
+              <xs:element name="CGST_Amt" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGST_Rate" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGST_Amt" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGST_Rate" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGST_Amt" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGST_Rate" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTT_Amt" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTT_Rate" type="xs:decimal" minOccurs="0" />
+              <xs:element name="GSTMode" type="xs:string" minOccurs="0" />
+              <xs:element name="CGST_Brkg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGST_Brkg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGST_Brkg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTT_Brkg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGST_TranCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGST_TranCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGST_TranCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTT_TranCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGST_CLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGST_CLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGST_CLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTT_CLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGST_DLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGST_DLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGST_DLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTT_DLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGST_OTCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGST_OTCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGST_OTCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTT_OTCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGST_SebiFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGST_SebiFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGST_SebiFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTT_SebiFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGST_RMSFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGST_RMSFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGST_RMSFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTT_RMSFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BranchNameOnly" type="xs:string" minOccurs="0" />
+              <xs:element name="AverageType" type="xs:string" minOccurs="0" />
+              <xs:element name="ServTaxRate" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SBBrg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SBTrnChg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="TotSBC" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SBRate" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SBDelivery" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SBOthers" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SBClearing" type="xs:decimal" minOccurs="0" />
+              <xs:element name="KKCBrg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="KKCTrnChg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="TotKKC" type="xs:decimal" minOccurs="0" />
+              <xs:element name="KKCRate" type="xs:decimal" minOccurs="0" />
+              <xs:element name="KKCDelivery" type="xs:decimal" minOccurs="0" />
+              <xs:element name="KKCOthers" type="xs:decimal" minOccurs="0" />
+              <xs:element name="KKCClearing" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SebiService" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SebiEducess" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SebiHgEducess" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SebiSBC" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SebiKKC" type="xs:decimal" minOccurs="0" />
+              <xs:element name="ContractNotes_IRN" type="xs:string" minOccurs="0" />
+              <xs:element name="ContractNotes_ACKNo" type="xs:string" minOccurs="0" />
+              <xs:element name="ContractNotes_ACKDate" type="xs:dateTime" minOccurs="0" />
+              <xs:element name="ContractNotes_QRCode" type="xs:string" minOccurs="0" />
+              <xs:element name="NseIPFT" type="xs:string" minOccurs="0" />
+              <xs:element name="Totalipftallseg" type="xs:string" minOccurs="0" />
+              <xs:element name="BseIPFT" type="xs:string" minOccurs="0" />
+              <xs:element name="McxsxIPFT" type="xs:string" minOccurs="0" />
+              <xs:element name="OtherIPFT" type="xs:string" minOccurs="0" />
+              <xs:element name="CGST_IPFT" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGST_IPFT" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGST_IPFT" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTT_IPFT" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IPFT1" type="xs:decimal" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Table1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="SrlNo" type="xs:long" minOccurs="0" />
+              <xs:element name="Clientnameucc" type="xs:string" minOccurs="0" />
+              <xs:element name="Email" type="xs:string" minOccurs="0" />
+              <xs:element name="Contractdeliverymode" type="xs:string" minOccurs="0" />
+              <xs:element name="EmailType" type="xs:string" minOccurs="0" />
+              <xs:element name="clientid" type="xs:string" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Table2">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="SrlNo" type="xs:long" minOccurs="0" />
+              <xs:element name="Clientnameucc" type="xs:string" minOccurs="0" />
+              <xs:element name="Email" type="xs:string" minOccurs="0" />
+              <xs:element name="Contractdeliverymode" type="xs:string" minOccurs="0" />
+              <xs:element name="EmailType" type="xs:string" minOccurs="0" />
+              <xs:element name="EcnEnableContract" type="xs:string" minOccurs="0" />
+              <xs:element name="ecnenablecontractforpage" type="xs:string" minOccurs="0" />
+              <xs:element name="clientid" type="xs:string" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Table3">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="clientid" type="xs:string" minOccurs="0" />
+              <xs:element name="AllreadyDeliver" type="xs:string" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Table4">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Clientid" type="xs:string" minOccurs="0" />
+              <xs:element name="Srlno" type="xs:int" minOccurs="0" />
+              <xs:element name="Clientname" type="xs:string" minOccurs="0" />
+              <xs:element name="Email" type="xs:string" minOccurs="0" />
+              <xs:element name="mode" type="xs:string" minOccurs="0" />
+              <xs:element name="EmailType" type="xs:string" minOccurs="0" />
+              <xs:element name="RemainingEcn" type="xs:string" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Table5">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="autoidcharges" type="xs:int" minOccurs="0" />
+              <xs:element name="Clientid" type="xs:string" minOccurs="0" />
+              <xs:element name="Chargesfield" type="xs:string" minOccurs="0" />
+              <xs:element name="NSECM" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NSEFO" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NSECDX" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BSECM" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BSEFO" type="xs:decimal" minOccurs="0" />
+              <xs:element name="BSECDX" type="xs:decimal" minOccurs="0" />
+              <xs:element name="MCXSXCM" type="xs:decimal" minOccurs="0" />
+              <xs:element name="MCXSXFO" type="xs:decimal" minOccurs="0" />
+              <xs:element name="MCXSXCDX" type="xs:decimal" minOccurs="0" />
+              <xs:element name="USECDX" type="xs:decimal" minOccurs="0" />
+              <xs:element name="MCXCOMM" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NCDEXCOMM" type="xs:decimal" minOccurs="0" />
+              <xs:element name="ICEXCOMM" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NMCECOMM" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NETTOTAL" type="xs:decimal" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Table6">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="autoidcharges" type="xs:int" minOccurs="0" />
+              <xs:element name="Clientid" type="xs:string" minOccurs="0" />
+              <xs:element name="exchangename" type="xs:string" minOccurs="0" />
+              <xs:element name="segmentname" type="xs:string" minOccurs="0" />
+              <xs:element name="NetOblgNSECM" type="xs:decimal" minOccurs="0" />
+              <xs:element name="stt" type="xs:decimal" minOccurs="0" />
+              <xs:element name="sttMode" type="xs:string" minOccurs="0" />
+              <xs:element name="staxonbrkg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="staxMode" type="xs:string" minOccurs="0" />
+              <xs:element name="tranchrg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="staxontrncheg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="clearingchrg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="staxonclearingchrg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="sebifee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="stampduty" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Roundoff" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGSTBrkg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGSTBrkg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGSTBrkg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTTBrkg" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGSTTranCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGSTTranCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGSTTranCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTTTranCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGSTCLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGSTCLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGSTCLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTTCLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGSTDLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGSTDLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGSTDLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTTDLCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGSTOTCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGSTOTCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGSTOTCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTTOTCharge" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGSTSEBIFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGSTSEBIFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGSTSEBIFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTTSEBIFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGSTRMSFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGSTRMSFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGSTRMSFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTTRMSFee" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGSTAmt" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGSTAmt" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGSTAmt" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTTAmt" type="xs:decimal" minOccurs="0" />
+              <xs:element name="stampMode" type="xs:string" minOccurs="0" />
+              <xs:element name="ipft" type="xs:decimal" minOccurs="0" />
+              <xs:element name="CGSTIPFT" type="xs:decimal" minOccurs="0" />
+              <xs:element name="SGSTIPFT" type="xs:decimal" minOccurs="0" />
+              <xs:element name="IGSTIPFT" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UTTIPFT" type="xs:decimal" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Table7">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="id" type="xs:long" minOccurs="0" />
+              <xs:element name="Clientid" type="xs:string" minOccurs="0" />
+              <xs:element name="contractnoteno" type="xs:string" minOccurs="0" />
+              <xs:element name="orderno" type="xs:string" minOccurs="0" />
+              <xs:element name="ordertime" type="xs:dateTime" minOccurs="0" />
+              <xs:element name="Tradeno" type="xs:string" minOccurs="0" />
+              <xs:element name="Tradetime" type="xs:dateTime" minOccurs="0" />
+              <xs:element name="Scripname" type="xs:string" minOccurs="0" />
+              <xs:element name="BuySell" type="xs:string" minOccurs="0" />
+              <xs:element name="Quantity" type="xs:decimal" minOccurs="0" />
+              <xs:element name="UnitPrice" type="xs:decimal" minOccurs="0" />
+              <xs:element name="MarketValue" type="xs:decimal" minOccurs="0" />
+              <xs:element name="ClientName" type="xs:string" minOccurs="0" />
+              <xs:element name="Clientucc" type="xs:string" minOccurs="0" />
+              <xs:element name="Companyname" type="xs:string" minOccurs="0" />
+              <xs:element name="CompanyAddress" type="xs:string" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Table8">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Image" type="xs:base64Binary" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Table9">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Signature" type="xs:base64Binary" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

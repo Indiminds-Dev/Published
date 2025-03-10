@@ -1,0 +1,493 @@
+
+--exec [Import_BSECDXTrades_BoltPlus] 416,35,'C:\grd\BSECDX\291113\bsecd 29112013.csv','COR0000002','1900-01-01','2015-01-01','11'
+
+ALTER PROCEDURE [dbo].[Import_BSECDXTrades_BoltPlus]
+@ModifyUser	varchar(10)=null,
+@ExcSegmt int,
+@FilePath varchar(250)=null,
+@ExchangeTrades_CompanyID char(10)=null,
+@LckTradeDate datetime,
+@ExpireDate datetime,
+@LockMsg Varchar(250) Output
+
+AS
+BEGIN
+
+				declare @ReadFrom as int
+				declare @Q as varchar(250)
+				declare @P int 
+			
+	
+			CREATE TABLE  #tmpTrans_BSECDXTrade (
+				[BSECDXTrade_TradeNo] varchar(20) null,
+				[BSECDXTrade_TradeStatus] varchar(10) null,
+				[BSECDXTrade_TickerSymbol]  varchar(12) null,
+				[BSECDXTrade_InstrumentType]  varchar(12) null,
+				[BSECDXTrade_ExpiryDate]  DateTime null,
+				[BSECDXTrade_StrikePrice]  NUMERIC(15,4) null,
+				[BSECDXTrade_OptionType] varchar(5) null,
+				[BSECDXTrade_SecName] varchar(30) NULL,
+				[BSECDXTrade_BookType] varchar(10) null,
+				[BSECDXTrade_MarketType] varchar(10) null,   -----------------------10
+				[BSECDXTrade_TerminalID] varchar(20) null,
+				[BSECDXTrade_BranchID] varchar(20) null,
+				[BSECDXTrade_BuySell] tinyint null,
+				[BSECDXTrade_Qty] numeric(10,0) null,
+				[BSECDXTrade_Price] NUMERIC(15,4) null,  --------------15          
+				[BSECDXTrade_ProCli] tinyint null,
+				[BSECDXTrade_DealerID] varchar(20) null,
+				[BSECDXTrade_TMCode] varchar(20) null,
+				[BSECDXTrade_Filler] varchar(20) null,
+				[BSECDXTrade_Tradedate] DateTime null,  -----------20
+				[BSECDXTrade_OrderDate] DateTime null,
+				[BSECDXTrade_OrderNo] varchar(20) null,
+				[BSECDXTrade_ExBrokerID] varchar(20) null,
+				[BSECDXTrade_ModifiedTime] DateTime null
+				)
+				set @ReadFrom=1
+				set @Q='BULK INSERT #tmpTrans_BSECDXTrade FROM '+ char(39) + @FilePath + char(39) + ' with (firstrow = ' + convert(varchar,@ReadFrom) + ' , FIELDTERMINATOR = ' + char(39) + ',' + char(39) + ' , ROWTERMINATOR = ' + char(39) + '\n'+ + char(39) +')'
+				print @Q
+				exec (@Q)
+
+				Declare @UpdateDate DateTime,@CreateDate DateTime
+				Set @UpdateDate=GETDATE()
+				Set @CreateDate=(SELECT DATEADD(D, 0, DATEDIFF(D, 0, GETDATE())))
+
+				alter table #tmpTrans_BSECDXTrade
+						add  	[BSECDXTrade_CustomerBranch] varchar(10) NULL,
+								[BSECDXTrade_ProductSeriesID] bigint null,
+								[BSECDXTrade_UCC] varchar(100) null,
+								[BSECDXTrade_Exists] char(1) null,
+								[BSECDXTrade_CustomerID] varchar(100) null,
+								[BSECDXTrade_BrokerID] varchar(10) null,
+								[ProductID] bigint null,
+								[UnitPriceQuantity] numeric(12,0) null
+			
+
+                
+				DECLARE @FY Datetime  
+				DECLARE @SETT_FY VARCHAR(250)
+				DECLARE @DTDIFF	int
+			
+					set @FY=(select top(1) convert(varchar(11), [BSECDXTrade_TradeDate], 101) from #tmpTrans_BSECDXTrade)
+
+If (cast(@FY as datetime)>=@LckTradeDate and cast(@FY as datetime)<=@ExpireDate)
+begin
+						
+-----------------------------------Financial Year
+							
+						SET @DTDIFF=CAST(MONTH(@FY) AS INT)
+						IF(@DTDIFF>=1 AND @DTDIFF<=3)
+						BEGIN
+							SET @SETT_FY=NULL
+							SET @SETT_FY=  CAST((CAST(YEAR(@FY) AS INT)-1) AS VARCHAR(50) )+'-'+CAST(YEAR(@FY) AS VARCHAR(50))
+						END
+						IF(@DTDIFF>=4 AND @DTDIFF<=12)
+						BEGIN
+							SET @SETT_FY=NULL
+							SET @SETT_FY=  CAST(YEAR(@FY) AS VARCHAR(50))+'-'+CAST((CAST(YEAR(@FY) AS INT)+1) AS VARCHAR(50) )
+						END
+----------------------------Update UCC/TerminalID
+			Update #tmpTrans_BSECDXTrade set [BSECDXTrade_UCC]=
+			substring(LTRIM(RTRIM([BSECDXTrade_DealerID])),1,CHARINDEX('-',LTRIM(RTRIM([BSECDXTrade_DealerID])))-1)
+
+----------------------------------------------Update ProductSeries ID--------------------------------------------------------------
+					UPDATE #tmpTrans_BSECDXTrade set [BSECDXTrade_ProductSeriesID]=Commodity_ProductSeriesID
+					from Master_Commodity where Commodity_ExchangeSegmentID=6
+					and Commodity_Identifier=BSECDXTrade_InstrumentType
+					and Commodity_TickerSymbol=BSECDXTrade_TickerSymbol
+					and Commodity_ExpiryDate=BSECDXTrade_ExpiryDate
+					and isnull(Commodity_TickerSeries,'FF')=
+					Case when ltrim(rtrim(BSECDXTrade_OptionType))='' then 'FF'
+					Else ltrim(rtrim(BSECDXTrade_OptionType)) End
+					and isnull(Commodity_StrikePrice,0.00)=isnull(BSECDXTrade_StrikePrice,0.00)
+
+----	We can create the missing products from the information contained in the trade file itself for the missing ProductSeries
+	
+----	First we can create the entry in master_commodity if ProductID already exists
+
+	Update #tmpTrans_BSECDXTrade Set [ProductID]=(select top(1) Commodity_ProductID 
+												from Master_Commodity where
+												Commodity_ExchangeSegmentID=6
+												and ltrim(rtrim(BSECDXTrade_TickerSymbol))=ltrim(rtrim(Commodity_TickerSymbol))
+												and ltrim(rtrim(BSECDXTrade_InstrumentType))=ltrim(rtrim(Commodity_Identifier))
+												and isnull(Commodity_TickerSeries,'FF')=
+												Case when ltrim(rtrim(BSECDXTrade_OptionType))='' then 'FF'
+												Else ltrim(rtrim(BSECDXTrade_OptionType)) End
+												and [BSECDXTrade_ProductSeriesID] is NULL)
+	
+----	Next we might have a situation where ProductID still is un-identified. In that case we find the ProductID from the Master_Products itself
+----	provided the derivative type product have been already opened manually by the user using 'Masters-Products' link
+
+	Update #tmpTrans_BSECDXTrade Set [ProductID]=Products_ID from Master_Products
+												where ltrim(rtrim(BSECDXTrade_TickerSymbol))=ltrim(rtrim(Products_ShortName))
+												and ltrim(rtrim(BSECDXTrade_InstrumentType))='OPTCUR'
+												AND Products_ProductTypeID=9
+												and Products_ProductSubTypeID=21 
+												and Products_OptionType=
+														case when left(ltrim(rtrim(isnull(BSECDXTrade_OptionType,'FF'))),1)='C' then 'CALL' 
+														when left(ltrim(rtrim(isnull(BSECDXTrade_OptionType,'FF'))),1)='P' then 'PUT' 
+														Else NULL End
+												and Products_ExerciseStyle=
+														case when right(ltrim(rtrim(isnull(BSECDXTrade_OptionType,'FF'))),1)='E' then 'EUROPEAN' 
+														when right(ltrim(rtrim(isnull(BSECDXTrade_OptionType,'FF'))),1)='A' then 'AMERICAN' 
+														Else NULL End
+												and [BSECDXTrade_ProductSeriesID] is NULL
+												and ProductID is NULL									
+
+		Update #tmpTrans_BSECDXTrade Set ProductID=Products_ID from Master_Products
+												where ltrim(rtrim(BSECDXTrade_InstrumentType))='FUTCUR'
+												and Products_ProductTypeID=9
+												and Products_ProductSubTypeID=20
+												and ltrim(rtrim(Products_ShortName))=ltrim(rtrim(BSECDXTrade_TickerSymbol))
+												and [BSECDXTrade_ProductSeriesID] is NULL
+												and ProductID is NULL							
+
+
+----	Now we create entries in Master_Commodity for the missing products whose ProductID is identified
+INSERT INTO [Master_Commodity]
+           ([Commodity_ProductID]
+           ,[Commodity_ExchangeSegmentID]
+           ,[Commodity_EffectiveDate]
+           ,[Commodity_TickerSymbol]
+           ,[Commodity_Identifier]
+           ,[Commodity_TickerSeries]
+           ,[Commodity_StrikePrice]
+           ,[Commodity_TradingLot]
+           ,[Commodity_TradingUnitID]
+           ,[Commodity_QuoteCurrencyID]
+           ,[Commodity_QuoteLot]
+           ,[Commodity_QuoteUnitID]
+           ,[Commodity_ContractEndDate]
+           ,[Commodity_TenderEndDate]
+           ,[Commodity_DeliveryEndDate]
+           ,[Commodity_ExpiryDate]
+           ,[Commodity_ConvNumerator]
+           ,[Commodity_ConDenominator]
+           ,[Commodity_CreateUser]
+           ,[Commodity_CreateDateTime]
+           ,[Commodity_GeneralNumerator]
+           ,[Commodity_GeneralDenominator]
+           ,[Commodity_LotNumerator]
+           ,[Commodity_LotDenominator]
+           ,[Commodity_PriceNumerator]
+           ,[Commodity_PriceDenominator])
+
+SELECT Distinct ProductID,6,@CreateDate,ltrim(rtrim(BSECDXTrade_TickerSymbol)),ltrim(rtrim(BSECDXTrade_InstrumentType)),
+		Case when ltrim(rtrim(BSECDXTrade_OptionType))='' then 'FF'
+		Else ltrim(rtrim(BSECDXTrade_OptionType)) End,
+		isnull(BSECDXTrade_StrikePrice,0.00),
+		Case when BSECDXTrade_TickerSymbol='JPYINR' then 100000.00 Else 1000.00 End,1,1,
+		Case when BSECDXTrade_TickerSymbol='JPYINR' then 100.00 Else 1.00 End,1,BSECDXTrade_ExpiryDate,BSECDXTrade_ExpiryDate,BSECDXTrade_ExpiryDate,BSECDXTrade_ExpiryDate,
+		1000,1,@ModifyUser,GETDATE(),1000,1,1000,1,1,1
+FROM #tmpTrans_BSECDXTrade where [BSECDXTrade_ProductSeriesID] is NULL and ProductID is Not NULL
+
+--- Once again Update the Temp table with the productseriesid now created .........
+
+					UPDATE #tmpTrans_BSECDXTrade set [BSECDXTrade_ProductSeriesID]=Commodity_ProductSeriesID
+					from Master_Commodity where Commodity_ExchangeSegmentID=6
+					and Commodity_Identifier=BSECDXTrade_InstrumentType
+					and Commodity_TickerSymbol=BSECDXTrade_TickerSymbol
+					and Commodity_ExpiryDate=BSECDXTrade_ExpiryDate
+					and isnull(Commodity_TickerSeries,'FF')=
+					Case when ltrim(rtrim(BSECDXTrade_OptionType))='' then 'FF'
+					Else ltrim(rtrim(BSECDXTrade_OptionType)) End
+					and isnull(Commodity_StrikePrice,0.00)=isnull(BSECDXTrade_StrikePrice,0.00)
+
+
+	Update #tmpTrans_BSECDXTrade Set [UnitPriceQuantity]=BSECDXTrade_Qty*(isnull(Commodity_LotNumerator,1)/isnull(Commodity_LotDenominator,1))
+									from Master_Commodity
+									where [BSECDXTrade_ProductSeriesID]=Commodity_ProductSeriesID
+
+
+
+----------------------------------------CUSTOMER ID--------------------------------------------------------------------
+		--- First Preference is the DealerID
+					Update #tmpTrans_BSECDXTrade Set [BSECDXTrade_CustomerID]=ltrim(rtrim(TradingTerminal_ProTradeID))
+					From Master_TradingTerminal where TradingTerminal_CompanyID=@ExchangeTrades_CompanyID
+					and TradingTerminal_ExchangeSegmentID=@ExcSegmt
+					and ltrim(rtrim(TradingTerminal_TerminalID))=ltrim(rtrim(BSECDXTrade_DealerID))
+					and BSECDXTrade_ProCli=2
+					and len(ltrim(rtrim(isnull(TradingTerminal_ProTradeID,''))))=10
+					
+					Update #tmpTrans_BSECDXTrade Set [BSECDXTrade_CustomerID]=ltrim(rtrim(TradingTerminal_CliTradeID))
+					From Master_TradingTerminal where TradingTerminal_CompanyID=@ExchangeTrades_CompanyID
+					and TradingTerminal_ExchangeSegmentID=@ExcSegmt
+					and ltrim(rtrim(TradingTerminal_TerminalID))=ltrim(rtrim(BSECDXTrade_DealerID))
+					and BSECDXTrade_ProCli=1
+					and len(ltrim(rtrim(isnull(TradingTerminal_CliTradeID,''))))=10
+					and ([BSECDXTrade_CustomerID] is NULL or [BSECDXTrade_CustomerID]='')
+					
+					Update #tmpTrans_BSECDXTrade Set [BSECDXTrade_CustomerID]=ltrim(rtrim(TradingTerminal_AllTradeID))
+					From Master_TradingTerminal where TradingTerminal_CompanyID=@ExchangeTrades_CompanyID
+					and TradingTerminal_ExchangeSegmentID=@ExcSegmt
+					and ltrim(rtrim(TradingTerminal_TerminalID))=ltrim(rtrim(BSECDXTrade_DealerID))
+					and len(ltrim(rtrim(isnull(TradingTerminal_AllTradeID,''))))=10
+					and ([BSECDXTrade_CustomerID] is NULL or [BSECDXTrade_CustomerID]='')
+
+		--- Second Preference is the TerminalID
+					Update #tmpTrans_BSECDXTrade Set [BSECDXTrade_CustomerID]=ltrim(rtrim(TradingTerminal_ProTradeID))
+					From Master_TradingTerminal where TradingTerminal_CompanyID=@ExchangeTrades_CompanyID
+					and TradingTerminal_ExchangeSegmentID=@ExcSegmt
+					and ltrim(rtrim(TradingTerminal_TerminalID))=ltrim(rtrim(BSECDXTrade_TerminalID))
+					and BSECDXTrade_ProCli=2
+					and len(ltrim(rtrim(isnull(TradingTerminal_ProTradeID,''))))=10
+					and ([BSECDXTrade_CustomerID] is NULL or [BSECDXTrade_CustomerID]='')
+					
+					Update #tmpTrans_BSECDXTrade Set [BSECDXTrade_CustomerID]=ltrim(rtrim(TradingTerminal_CliTradeID))
+					From Master_TradingTerminal where TradingTerminal_CompanyID=@ExchangeTrades_CompanyID
+					and TradingTerminal_ExchangeSegmentID=@ExcSegmt
+					and ltrim(rtrim(TradingTerminal_TerminalID))=ltrim(rtrim(BSECDXTrade_TerminalID))
+					and BSECDXTrade_ProCli=1
+					and len(ltrim(rtrim(isnull(TradingTerminal_CliTradeID,''))))=10
+					and ([BSECDXTrade_CustomerID] is NULL or [BSECDXTrade_CustomerID]='')
+					
+					Update #tmpTrans_BSECDXTrade Set [BSECDXTrade_CustomerID]=ltrim(rtrim(TradingTerminal_AllTradeID))
+					From Master_TradingTerminal where TradingTerminal_CompanyID=@ExchangeTrades_CompanyID
+					and TradingTerminal_ExchangeSegmentID=@ExcSegmt
+					and ltrim(rtrim(TradingTerminal_TerminalID))=ltrim(rtrim(BSECDXTrade_TerminalID))
+					and len(ltrim(rtrim(isnull(TradingTerminal_AllTradeID,''))))=10
+					and ([BSECDXTrade_CustomerID] is NULL or [BSECDXTrade_CustomerID]='')
+
+		---	Finally If customer is not identified through DealrID mapping we finally allot the trades to clients based on their UCC
+
+					UPDATE #tmpTrans_BSECDXTrade set [BSECDXTrade_CustomerID]=crg_cntID
+					from tbl_master_contactExchange
+					where crg_tcode=[BSECDXTrade_UCC] and crg_exchange='BSE - CDX'
+					and ([BSECDXTrade_CustomerID] is NULL or [BSECDXTrade_CustomerID]='')
+------------------------------------------------------------- ---------------------------------------------------------------
+----------- Update the brokerID in case the DealerlD/TerminalID are mapped to a broker -------------------
+			Update #tmpTrans_BSECDXTrade Set [BSECDXTrade_BrokerID]=TradingTerminal_BrokerID 
+								from Master_TradingTerminal
+								where TradingTerminal_CompanyID=@ExchangeTrades_CompanyID
+								and TradingTerminal_ExchangeSegmentID=@ExcSegmt
+								and ltrim(rtrim(TradingTerminal_TerminalID))=ltrim(rtrim([BSECDXTrade_DealerID]))
+
+			Update #tmpTrans_BSECDXTrade Set [BSECDXTrade_BrokerID]=TradingTerminal_BrokerID 
+								from Master_TradingTerminal
+								where TradingTerminal_CompanyID=@ExchangeTrades_CompanyID
+								and TradingTerminal_ExchangeSegmentID=@ExcSegmt
+								and ltrim(rtrim(TradingTerminal_TerminalID))=ltrim(rtrim([BSECDXTrade_TerminalID]))
+								and ([BSECDXTrade_BrokerID] is NULL or [BSECDXTrade_BrokerID]='')
+
+			---	Update the branchID
+			Update #tmpTrans_BSECDXTrade Set [BSECDXTrade_CustomerBranch]=1
+								from tbl_master_contact
+								where cnt_internalId=[BSECDXTrade_CustomerID]
+
+
+					Delete from Trans_ComExchangeTrades where ComExchangeTrades_CompanyID=@ExchangeTrades_CompanyID
+					and ComExchangeTrades_Segment=@ExcSegmt and ComExchangeTrades_FinYear=@SETT_FY
+					and ComExchangeTrades_TradeDate=cast(Ltrim(Rtrim(@FY)) as datetime)
+					and ComExchangeTrades_CustTransactionID is NULL
+					and (ComExchangeTrades_ProductSeriesID is NULL or ComExchangeTrades_CustomerID is null
+						Or ComExchangeTrades_SettlementNumber is NULL or ComExchangeTrades_SettlementType is NULL)
+					
+					Update #tmpTrans_BSECDXTrade Set [BSECDXTrade_Exists]='Y'
+					from Trans_ComExchangeTrades where ComExchangeTrades_CompanyID=@ExchangeTrades_CompanyID
+					and ComExchangeTrades_Segment=@ExcSegmt
+					and ComExchangeTrades_TradeDate=@FY
+					and ltrim(rtrim(ComExchangeTrades_OrderNumber))=ltrim(rtrim(BSECDXTrade_OrderNo))
+					and ltrim(rtrim(ComExchangeTrades_TradeNumber))=ltrim(rtrim(BSECDXTrade_TradeNo))
+
+--select * from #tmpTrans_BSECDXTrade
+
+---------------------------------Insert Into Main Table------------------------------
+				INSERT INTO [Trans_ComExchangeTrades]
+						   ([ComExchangeTrades_FinYear]
+						   ,[ComExchangeTrades_CompanyID]
+						   ,[ComExchangeTrades_Segment]
+						   ,[ComExchangeTrades_BranchID]
+						   ,[ComExchangeTrades_SettlementNumber]-----------------------5
+						   ,[ComExchangeTrades_SettlementType]
+						   ,[ComExchangeTrades_TradeDate]
+						   ,[ComExchangeTrades_TradeNumber]
+						   ,[ComExchangeTrades_TradeStatus]
+						   ,[ComExchangeTrades_TradeEntryTime]-----------------------10
+						   ,[ComExchangeTrades_TradeModifyTime]
+						   ,[ComExchangeTrades_OrderNumber]
+						   ,[ComExchangeTrades_OrderEntryTime]
+						   ,[ComExchangeTrades_OrderModifyTime]
+						   ,[ComExchangeTrades_TransactionType]-----------------------15
+						   ,[ComExchangeTrades_OriginalTransactionID]
+						   ,[ComExchangeTrades_ProCli]
+						   ,[ComExchangeTrades_CustomerUcc]
+						   ,[ComExchangeTrades_TradingMemberID]
+						   ,[ComExchangeTrades_CustomerID]-----------------------20
+						   ,[ComExchangeTrades_CounterPartyID]
+						   ,[ComExchangeTrades_SecurityType]
+						   ,[ComExchangeTrades_SecuritySymbol]
+						   ,[ComExchangeTrades_SecuritySeries]
+						   ,[ComExchangeTrades_SecurityExpiry]-----------------------25
+						   ,[ComExchangeTrades_SecurityOptionType]
+						   ,[ComExchangeTrades_SecurityStrikePrice]
+						   ,[ComExchangeTrades_ProductSeriesID]
+						   ,[ComExchangeTrades_BookType]
+						   ,[ComExchangeTrades_MarketType]-----------------------30
+						   ,[ComExchangeTrades_TerminalID]
+						   ,[ComExchangeTrades_ExchangeBranchID]
+						   ,[ComExchangeTrades_BuySellFlag]
+						   ,[ComExchangeTrades_QuantityLots]
+						   ,[ComExchangeTrades_UnitPrice]-----------------------35
+						   ,[ComExchangeTrades_UnitPriceQuantity]
+						   ,[ComExchangeTrades_MarketValue]
+						   ,[ComExchangeTrades_NDFlag]
+						   ,[ComExchangeTrades_CustodialFlag]
+						   ,[ComExchangeTrades_ImportType]-----------------------40
+						   ,[ComExchangeTrades_CreateUser]
+						   ,[ComExchangeTrades_CreateDateTime]
+						   ,[ComExchangeTrades_LastUpdateDate])-----------------------43
+
+				Select
+					@SETT_FY As FinYear
+					,@ExchangeTrades_CompanyID As Company
+					,@ExcSegmt As Segment
+					,BSECDXTrade_CustomerBranch As Branch
+					,(Select ltrim(rtrim(Settlements_Number)) 
+							from Master_Settlements where Settlements_ExchangeSegmentID=6
+							and	Settlements_TypeSuffix='F'
+							and @FY between Settlements_StartDateTime and Settlements_EndDateTime ) As SettlementNumber---------------5
+					,'F' As SettlementType
+					,@FY As TradeDate
+					,ltrim(rtrim(BSECDXTrade_TradeNo)) As TradeNumber
+					,BSECDXTrade_TradeStatus As TradeStatus
+					,BSECDXTrade_OrderDate As TradeEntryTime---------------10
+					,BSECDXTrade_ModifiedTime As TradeModifyTime
+					,BSECDXTrade_OrderNo As OrderNumber
+					,BSECDXTrade_OrderDate As OrderEntryTime
+					,BSECDXTrade_ModifiedTime As OrderModifyTime
+					,'Orgnl' As TransactionType---------------15
+					,NULL As OriginalTransactionID
+					,BSECDXTrade_ProCli As ProCli
+					,BSECDXTrade_UCC As CustomerUCC
+					,BSECDXTrade_TMCode As TradingMemberID
+					,BSECDXTrade_CustomerID As CustomerID---------------20
+					,(Case when BSECDXTrade_BrokerID like 'BO%' Then BSECDXTrade_BrokerID Else NULL End) As CounterPartyID
+					,BSECDXTrade_InstrumentType As SecurityType
+					,BSECDXTrade_TickerSymbol As SecuritySymbol
+					,(Case when (BSECDXTrade_OptionType IS NULL OR BSECDXTrade_OptionType='') then 'FF' Else BSECDXTrade_OptionType End) As SecuritySeries
+					,BSECDXTrade_ExpiryDate As SecurityExpiry---------------25
+					,BSECDXTrade_OptionType As SecOptType
+					,BSECDXTrade_StrikePrice As SecStrikePrice
+					,BSECDXTrade_ProductSeriesID As ProductSeries
+					,BSECDXTrade_BookType As BookType
+					,BSECDXTrade_MarketType As MarketType---------------30
+					,BSECDXTrade_DealerID As TerminalID
+					,BSECDXTrade_BranchID As ExchBranch
+					,BSECDXTrade_BuySell As BuySell
+					,BSECDXTrade_Qty As Lots
+					,BSECDXTrade_Price As UnitPrice---------------35
+					,UnitPriceQuantity As UnitPriceQty
+					,BSECDXTrade_Price*UnitPriceQuantity As MktValue
+					,'N' As NDFlag
+					,'N' As CustodialFlag
+					,'2' As ImportType---------------40
+					,@ModifyUser As CreateUser
+					,GETDATE() As CreateTime
+					,(Case when isnull([BSECDXTrade_BrokerID],'')='' then NULL else @UpdateDate End) As LastUpdTime--------------43
+				
+				from #tmpTrans_BSECDXTrade where BSECDXTrade_Exists is NULL
+
+-----------------------------------------------------Checking For Product SeriesID Is Null---------------------------------------------
+					Select cast(@FY as datetime) from Trans_ComExchangeTrades
+					where  cast(@FY as datetime)=ComExchangeTrades_TradeDate
+					and ComExchangeTrades_ProductSeriesID is null and ComExchangeTrades_Segment=@ExcSegmt
+					and ComExchangeTrades_CompanyID=@ExchangeTrades_CompanyID
+---------------------------------------------------Checking For CustomerID Is Null---------------------------------------------------
+					SELECT DISTINCT ComExchangeTrades_CustomerUcc FROM Trans_ComExchangeTrades,#tmpTrans_BSECDXTrade WHERE
+					ComExchangeTrades_Segment=@ExcSegmt AND  ComExchangeTrades_TradeDate=cast(@FY as datetime)
+					AND (ComExchangeTrades_CustomerID IS NULL or len(ComExchangeTrades_CustomerID)=0) and ComExchangeTrades_CompanyID=@ExchangeTrades_CompanyID
+
+---------------------------------------------------Showing the Import Summary --------------------------------------------------------
+				select ComExchangeTrades_SettlementNumber as [Sett.No],ComExchangeTrades_SettlementType as [Sett.Type],
+				sum(rowcnt) as Records,
+				sum(isnull(buy,0)) as [Buy Obligation],
+				sum(isnull(sell,0)) as [Sell Obligation],
+				(sum(isnull(sell,0))-sum(isnull(buy,0))) as [Net Obligation]
+				 from
+				(select ComExchangeTrades_SettlementNumber,ComExchangeTrades_SettlementType,COUNT(ComExchangeTrades_SettlementType) as rowcnt,
+				case when ComExchangeTrades_BuySellFlag=1 then sum(ComExchangeTrades_MarketValue) else null end buy,
+				case when  ComExchangeTrades_BuySellFlag=2 then sum(ComExchangeTrades_MarketValue)  else null end as sell
+				from Trans_ComExchangeTrades WHERE
+				ComExchangeTrades_Segment=@ExcSegmt AND  Trans_ComExchangeTrades.ComExchangeTrades_TradeDate=cast(@FY as datetime)
+				and ComExchangeTrades_CompanyID=@ExchangeTrades_CompanyID
+				and ComExchangeTrades_TransactionType='Orgnl'
+				group by ComExchangeTrades_SettlementNumber,ComExchangeTrades_SettlementType,ComExchangeTrades_BuySellFlag)as bb
+				group by ComExchangeTrades_SettlementNumber,ComExchangeTrades_SettlementType
+
+----------------------------------------------------Select Terminal ID not present in tradingterminal----------------------------------
+					SELECT DISTINCT	ComExchangeTrades_TerminalID as TERMINALID 
+					from Trans_ComExchangeTrades WHERE 
+					ComExchangeTrades_Segment=@ExcSegmt AND  Trans_ComExchangeTrades.ComExchangeTrades_TradeDate=cast(@FY as datetime)
+					and ComExchangeTrades_CompanyID=@ExchangeTrades_CompanyID
+					and ComExchangeTrades_TerminalID 
+					NOT IN (Select TradingTerminal_TerminalID from Master_tradingTerminal 
+					where tradingterminal_ExchangeSegmentID=@ExcSegmt AND tradingterminal_companyID=@ExchangeTrades_CompanyID)
+----------------------------------------------------------------------------------------------------------------
+					Select cast(@FY as datetime) as TradeDate
+----------------------------------------------------Select Terminal IDs ----------------------------------
+					SELECT DISTINCT	ComExchangeTrades_TerminalID from Trans_ComExchangeTrades WHERE
+						ComExchangeTrades_Segment=@ExcSegmt AND ComExchangeTrades_TradeDate=cast(@FY as datetime)
+						and ComExchangeTrades_CompanyID=@ExchangeTrades_CompanyID
+						and ComExchangeTrades_TransactionType='Orgnl'
+----------------------------------------------------------------------------------------------------------------
+----------------------------------------------------Select UCC----------------------------------
+						SELECT DISTINCT	ComExchangeTrades_CustomerUcc from Trans_ComExchangeTrades WHERE
+						ComExchangeTrades_Segment=@ExcSegmt AND ComExchangeTrades_TradeDate=cast(@FY as datetime)
+						and ComExchangeTrades_CompanyID=@ExchangeTrades_CompanyID
+						and ComExchangeTrades_TransactionType='Orgnl'
+						
+---- And now the brokers part -------
+			insert into Trans_ComExchangeTrades
+			(ComExchangeTrades_FinYear,ComExchangeTrades_CompanyID,ComExchangeTrades_Segment,ComExchangeTrades_BranchID,ComExchangeTrades_CustomerID,
+			ComExchangeTrades_TerminalID,ComExchangeTrades_CTCLID,ComExchangeTrades_SettlementNumber,ComExchangeTrades_SettlementType,ComExchangeTrades_TradeDate,
+			ComExchangeTrades_TradeNumber,ComExchangeTrades_TradeEntryTime,ComExchangeTrades_TradeModifyTime,ComExchangeTrades_OrderNumber,
+			ComExchangeTrades_OrderEntryTime,ComExchangeTrades_OrderModifyTime,ComExchangeTrades_TransactionType,ComExchangeTrades_ProCli,
+			ComExchangeTrades_CustomerUcc,ComExchangeTrades_CustodialParticipantCode,ComExchangeTrades_SecurityType,ComExchangeTrades_SecurityCode,
+			ComExchangeTrades_SecuritySymbol,ComExchangeTrades_SecuritySeries,ComExchangeTrades_SecurityExpiry,ComExchangeTrades_SecurityOptionType,
+			ComExchangeTrades_SecurityStrikePrice,ComExchangeTrades_ProductSeriesID,ComExchangeTrades_BuySellFlag,ComExchangeTrades_QuantityLots,
+			ComExchangeTrades_UnitPrice,ComExchangeTrades_UnitPriceQuantity,ComExchangeTrades_MarketValue,ComExchangeTrades_CustodialFlag,
+			ComExchangeTrades_CreateUser,ComExchangeTrades_CreateDateTime,ComExchangeTrades_TradingMemberID,
+			ComExchangeTrades_Remarks,ComExchangeTrades_ImportType,ComExchangeTrades_StrikePrice,ComExchangeTrades_ClearingMemberID,
+			ComExchangeTrades_TradeStatus,
+			ComExchangeTrades_OldCustodialParticipantCode,ComExchangeTrades_CounterPartyID,ComExchangeTrades_LastUpdateDate)
+
+			Select ComExchangeTrades_FinYear,ComExchangeTrades_CompanyID,ComExchangeTrades_Segment,ComExchangeTrades_BranchID,ComExchangeTrades_CounterPartyID,
+			ComExchangeTrades_TerminalID,ComExchangeTrades_CTCLID,ComExchangeTrades_SettlementNumber,ComExchangeTrades_SettlementType,ComExchangeTrades_TradeDate,
+			ComExchangeTrades_TradeNumber,ComExchangeTrades_TradeEntryTime,ComExchangeTrades_TradeModifyTime,ComExchangeTrades_OrderNumber,
+			ComExchangeTrades_OrderEntryTime,ComExchangeTrades_OrderModifyTime,ComExchangeTrades_TransactionType,ComExchangeTrades_ProCli,
+			ComExchangeTrades_CustomerUcc,ComExchangeTrades_CustodialParticipantCode,ComExchangeTrades_SecurityType,ComExchangeTrades_SecurityCode,
+			ComExchangeTrades_SecuritySymbol,ComExchangeTrades_SecuritySeries,ComExchangeTrades_SecurityExpiry,ComExchangeTrades_SecurityOptionType,
+			ComExchangeTrades_SecurityStrikePrice,ComExchangeTrades_ProductSeriesID,
+			Case When ComExchangeTrades_BuySellFlag=1 then 2 Else 1 End,
+			ComExchangeTrades_QuantityLots,ComExchangeTrades_UnitPrice,ComExchangeTrades_UnitPriceQuantity,ComExchangeTrades_MarketValue,
+			ComExchangeTrades_CustodialFlag,ComExchangeTrades_CreateUser,GETDATE(),ComExchangeTrades_TradingMemberID,
+			ComExchangeTrades_Remarks,ComExchangeTrades_ImportType,ComExchangeTrades_StrikePrice,ComExchangeTrades_ClearingMemberID,
+			ComExchangeTrades_TradeStatus,
+			ComExchangeTrades_OldCustodialParticipantCode,ComExchangeTrades_CustomerID,ComExchangeTrades_LastUpdateDate
+			From Trans_ComExchangeTrades
+			where ComExchangeTrades_CompanyID=@ExchangeTrades_CompanyID
+			and ComExchangeTrades_Segment=@ExcSegmt
+			and ComExchangeTrades_FinYear=@SETT_FY
+			and ComExchangeTrades_LastUpdateDate=@UpdateDate
+			and ComExchangeTrades_CreateUser=@ModifyUser
+			and ComExchangeTrades_TradeDate=cast(@FY as DateTime)
+			and LEFT(ISNULL(ComExchangeTrades_CounterPartyID,'NOR'),2)='BO'
+
+
+----------------------------------------------------------------------------------------------------------------
+					Set @LockMsg=''
+
+	end
+	Else
+	begin
+		Set @LockMsg= 'The Data is Locked' 
+
+	end
+
+
+
+END
+
+GO
+

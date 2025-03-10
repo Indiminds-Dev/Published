@@ -1,0 +1,48 @@
+#region UTILITY
+public string ConvertToZip(
+    string ExportedPath,//Full File Path {(FolderPath+FilePath)/FolderPath }
+    string FileName, //The Name of The File With Extension/Without Extension Which Will Be Exported
+    string ZipName, //The Name Of the Zip file/Folder To be made
+    ZipFileType IsDirectoryOrFile, //File or Folder
+    bool DelActualFile
+    )
+    {
+        zip = new ZipFile();
+        string inputPath = null;
+        string inputName = null;
+        string inputExt = null;
+        string compressPath = null;
+
+        inputName = Path.GetFileName(FileName);
+        inputPath = Path.GetDirectoryName(ExportedPath);
+        inputExt = Path.GetExtension(FileName).ToString();
+
+        if (inputExt != ".zip" && inputExt != ".rar")
+        {
+            //******Uploaded Normal  Save in Server Path With Formatted Compress *******
+            compressPath = inputPath + "\\" + ZipName + ".zip";
+            //using (Zip zip = new Zip())
+            //{
+            //// Sample===zip.Add("D:\\Reports\\2008-Regional-Sales-Report.pdf", "s");
+            if (IsDirectoryOrFile.ToString() == "File")
+                zip.AddFile(ExportedPath, ZipName);
+            else
+                zip.AddDirectory(ExportedPath, ZipName);
+            zip.Save(compressPath);
+            //}
+            //if (DelActualFile)
+            //{
+            //    if (IsDirectoryOrFile.ToString() == "File")
+            //        File.Delete(ExportedPath);
+            //    else
+            //    {
+            //        Array.ForEach(Directory.GetFiles(ExportedPath), delegate(string path)
+            //        {File.Delete(path);});
+            //    }
+            //    if(IsDirectoryEmpty(ExportedPath))
+            //        Directory.Delete(ExportedPath);
+            //}
+        }
+        return (compressPath); //Returning the Path Of the  which has been compressed
+    }
+#endregion

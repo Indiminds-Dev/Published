@@ -1,0 +1,92 @@
+
+
+ALTER procedure [dbo].[SP_BrokerageChangeDisplayNSECM]
+@segment int,
+@SettNo varchar(10),
+@SettType varchar(3),
+@date varchar(50),
+@Companyid varchar(50),
+@Client varchar(50),
+@Instrument varchar(max),
+@MasterSegment int
+
+AS
+BEGIN
+
+		Declare @Sql varchar(max)
+		select @Sql=''
+		If (@MasterSegment in (1,2,4,15))
+		Begin
+				select @Sql='select CustomerTrades_ProductSeriesID,CustomerTrades_ID,
+									case when isnull(Equity_StrikePrice,0.0)=0.0 and Equity_EffectUntil is null
+											then isnull(rtrim(Equity_TickerSymbol),'''')+'' ''+isnull(rtrim(Equity_Series),''[''+rtrim(Equity_tickercode)+'']'')
+										when isnull(Equity_StrikePrice,0.0)<>0.0 and Equity_EffectUntil is null
+											then isnull(rtrim(Equity_TickerSymbol),'''')+'' ''+isnull(rtrim(Equity_Series),''[''+rtrim(Equity_tickercode)+'']'')+'' ''+cast(cast(round(Equity_StrikePrice,2) as numeric(28,2)) as varchar)
+										when isnull(Equity_StrikePrice,0.0)=0.0 and Equity_EffectUntil is not null
+											then isnull(rtrim(Equity_TickerSymbol),'''')+'' ''+isnull(rtrim(Equity_Series),''[''+rtrim(Equity_tickercode)+'']'')+'' ''+convert(varchar(9),Equity_EffectUntil,6)
+									else isnull(rtrim(Equity_TickerSymbol),'''')+'' ''+isnull(rtrim(Equity_Series),''[''+rtrim(Equity_tickercode)+'']'')+'' ''+cast(cast(round(Equity_StrikePrice,2) as numeric(28,2)) as varchar)+'' ''+convert(varchar(9),Equity_EffectUntil,6)
+									end 
+									as TickerSymbol,
+									cast(CustomerTrades_UnitPriceQuantity as varchar) as CustomerTrades_UnitPriceQuantity,
+									cast(CustomerTrades_UnitPrice as varchar) as UnitPrice,
+									cast(CustomerTrades_UnitBrokerage as varchar) as UnitBrokerage,
+									cast(CustomerTrades_NetRatePerUnit as varchar) as NetRatePerUnit
+							from Trans_CustomerTrades,Master_Equity 
+							where CustomerTrades_ContractNoteNumber is null
+									and CustomerTrades_ProductSeriesID=Equity_SeriesID
+									and Equity_ExchSegmentID='''+cast(@MasterSegment as varchar)+'''
+									and CustomerTrades_ProductSeriesID in ('+@Instrument+')
+									and CustomerTrades_CustomerID='''+@Client+'''
+									and CustomerTrades_SettlementNumber='''+@SettNo+'''
+									and CustomerTrades_SettlementType='''+@SettType+'''
+									and CustomerTrades_TradeDate='''+@date+'''
+									and CustomerTrades_ExchangeSegment='''+cast(@segment as varchar)+'''
+									and CustomerTrades_CompanyID='''+@Companyid+'''
+							Order By TickerSymbol'
+		print (@Sql)		
+				exec(@Sql)
+		End
+		Else
+		Begin
+				select @Sql='select ComCustomerTrades_ProductSeriesID as CustomerTrades_ProductSeriesID,ComCustomerTrades_ID as CustomerTrades_ID,
+									case when isnull(Commodity_StrikePrice,0.0)=0.0 and Commodity_ExpiryDate is null
+											then isnull(rtrim(Commodity_TickerSymbol),'''')+'' ''+isnull(rtrim(Commodity_tickerSeries),''[''+rtrim(Commodity_tickercode)+'']'')
+										when isnull(Commodity_StrikePrice,0.0)<>0.0 and Commodity_ExpiryDate is null
+											then isnull(rtrim(Commodity_TickerSymbol),'''')+'' ''+isnull(rtrim(Commodity_tickerSeries),''[''+rtrim(Commodity_tickercode)+'']'')+'' ''+cast(cast(round(Commodity_StrikePrice,2) as numeric(28,2)) as varchar)
+										when isnull(Commodity_StrikePrice,0.0)=0.0 and Commodity_ExpiryDate is not null
+											then isnull(rtrim(Commodity_TickerSymbol),'''')+'' ''+isnull(rtrim(Commodity_tickerSeries),''[''+rtrim(Commodity_tickercode)+'']'')+'' ''+convert(varchar(9),Commodity_ExpiryDate,6)
+									else isnull(rtrim(Commodity_TickerSymbol),'''')+'' ''+isnull(rtrim(Commodity_tickerSeries),''[''+rtrim(Commodity_tickercode)+'']'')+'' ''+cast(cast(round(Commodity_StrikePrice,2) as numeric(28,2)) as varchar)+'' ''+convert(varchar(9),Commodity_ExpiryDate,6)
+									end 
+									as TickerSymbol,
+									cast(ComCustomerTrades_UnitPriceQuantity as varchar) as CustomerTrades_UnitPriceQuantity,
+									cast(ComCustomerTrades_UnitPrice as varchar) as UnitPrice,
+									cast(ComCustomerTrades_UnitBrokerage as varchar) as UnitBrokerage,
+									cast(ComCustomerTrades_NetRatePerUnit as varchar) as NetRatePerUnit
+							from Trans_ComCustomerTrades,Master_Commodity 
+							where ComCustomerTrades_ContractNoteNumber is null
+									and ComCustomerTrades_ProductSeriesID=Commodity_ProductSeriesID
+									and commodity_ExchangeSegmentID='''+cast(@MasterSegment as varchar)+'''
+									and ComCustomerTrades_ProductSeriesID in ('+@Instrument+')
+									and ComCustomerTrades_CustomerID='''+@Client+'''
+									and ComCustomerTrades_SettlementNumber='''+@SettNo+'''
+									and ComCustomerTrades_SettlementType='''+@SettType+'''
+									and ComCustomerTrades_TradeDate='''+@date+'''
+									and ComCustomerTrades_ExchangeSegment='''+cast(@segment as varchar)+'''
+									and ComCustomerTrades_CompanyID='''+@Companyid+'''
+							Order By TickerSymbol'
+print (@Sql)
+				exec(@Sql)
+		End
+END
+----declare @Instru varchar(max)
+----select @Instru='41497'
+----exec SP_BrokerageChangeDisplayNSECM '29','2010011','F','1/14/2011 12:00:00 AM','COG0000001','CLS0000562',@Instru,'7'
+
+
+--select * from Trans_CustomerTrades where CustomerTrades_ID='786689'
+
+
+
+
+
+

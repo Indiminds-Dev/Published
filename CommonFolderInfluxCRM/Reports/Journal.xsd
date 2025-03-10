@@ -1,0 +1,65 @@
+<?xml version="1.0" standalone="yes"?>
+<NewDataSet>
+  <Table>
+    <TranRefID>JV/310320220000001</TranRefID>
+  </Table>
+  <Table>
+    <TranRefID>JV/310320220000002</TranRefID>
+  </Table>
+  <Table1>
+    <AccountsLedger_TransactionReferenceID>JV/310320220000001</AccountsLedger_TransactionReferenceID>
+    <TranDate>31 Mar 2022 </TranDate>
+    <CompName>NAKAMICHI SECURITIES LIMITED</CompName>
+    <SegmentName>NSE-CM</SegmentName>
+    <BranchName>DIRECT                                             [DIR]</BranchName>
+    <AccountName>Clients - Trading A/c - P K BAGLA HUF   [LP95]</AccountName>
+    <AccountsLedger_Narration>test-</AccountsLedger_Narration>
+    <AmountDr>1,500.00</AmountDr>
+    <AmountCr>0.00</AmountCr>
+    <TotAmtDr>1,500.00</TotAmtDr>
+    <TotAmtCr>1,500.00</TotAmtCr>
+    <DotLine>- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -</DotLine>
+  </Table1>
+  <Table1>
+    <AccountsLedger_TransactionReferenceID>JV/310320220000001</AccountsLedger_TransactionReferenceID>
+    <TranDate>31 Mar 2022 </TranDate>
+    <CompName>NAKAMICHI SECURITIES LIMITED</CompName>
+    <SegmentName>NSE-CM</SegmentName>
+    <BranchName>DIRECT                                             [DIR]</BranchName>
+    <AccountName>Inter-Branch Transfer Control A/c - </AccountName>
+    <AccountsLedger_Narration>test-Inter Branch Transfer Control Entry</AccountsLedger_Narration>
+    <AmountDr>0.00</AmountDr>
+    <AmountCr>1,500.00</AmountCr>
+    <TotAmtDr>1,500.00</TotAmtDr>
+    <TotAmtCr>1,500.00</TotAmtCr>
+    <DotLine>- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -</DotLine>
+  </Table1>
+  <Table1>
+    <AccountsLedger_TransactionReferenceID>JV/310320220000002</AccountsLedger_TransactionReferenceID>
+    <TranDate>31 Mar 2022 </TranDate>
+    <CompName>NAKAMICHI SECURITIES LIMITED</CompName>
+    <SegmentName>NSE-CM</SegmentName>
+    <BranchName>RAMA AGARWAL [RMA]</BranchName>
+    <AccountName>Clients - Trading A/c - PIYUSH  AGARWAL [LP92]</AccountName>
+    <AccountsLedger_Narration>test-</AccountsLedger_Narration>
+    <AmountDr>0.00</AmountDr>
+    <AmountCr>1,500.00</AmountCr>
+    <TotAmtDr>1,500.00</TotAmtDr>
+    <TotAmtCr>1,500.00</TotAmtCr>
+    <DotLine>- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -</DotLine>
+  </Table1>
+  <Table1>
+    <AccountsLedger_TransactionReferenceID>JV/310320220000002</AccountsLedger_TransactionReferenceID>
+    <TranDate>31 Mar 2022 </TranDate>
+    <CompName>NAKAMICHI SECURITIES LIMITED</CompName>
+    <SegmentName>NSE-CM</SegmentName>
+    <BranchName>RAMA AGARWAL [RMA]</BranchName>
+    <AccountName>Inter-Branch Transfer Control A/c - </AccountName>
+    <AccountsLedger_Narration>test-Inter Branch Transfer Control Entry</AccountsLedger_Narration>
+    <AmountDr>1,500.00</AmountDr>
+    <AmountCr>0.00</AmountCr>
+    <TotAmtDr>1,500.00</TotAmtDr>
+    <TotAmtCr>1,500.00</TotAmtCr>
+    <DotLine>- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -</DotLine>
+  </Table1>
+</NewDataSet>

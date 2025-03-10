@@ -1,0 +1,50 @@
+<?xml version="1.0" standalone="yes"?>
+<xs:schema id="NewDataSet" xmlns="" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+  <xs:element name="NewDataSet" msdata:IsDataSet="true" msdata:MainDataTable="Table" msdata:UseCurrentLocale="true">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="Table">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="cmpname" type="xs:string" minOccurs="0" />
+              <xs:element name="FromDate" type="xs:string" minOccurs="0" />
+              <xs:element name="ToDate" type="xs:string" minOccurs="0" />
+              <xs:element name="NsdlTransaction_DrCr" type="xs:string" minOccurs="0" />
+              <xs:element name="NsdlClients_BenAccountID" type="xs:int" minOccurs="0" />
+              <xs:element name="NsdlClients_BenType" type="xs:int" minOccurs="0" />
+              <xs:element name="TypeSubtype" type="xs:string" minOccurs="0" />
+              <xs:element name="NsdlClients_BeneficiaryStatus" type="xs:string" minOccurs="0" />
+              <xs:element name="names" type="xs:string" minOccurs="0" />
+	      <xs:element name="Address" type="xs:string" minOccurs="0" />
+              <xs:element name="NSDLISIN_Number" type="xs:string" minOccurs="0" />
+              <xs:element name="ISINName" type="xs:string" minOccurs="0" />
+              <xs:element name="NsdlTransaction_Date" type="xs:string" minOccurs="0" />
+              <xs:element name="NsdlTransaction_SettlementNumber" type="xs:string" minOccurs="0" />
+              <xs:element name="credit" type="xs:decimal" minOccurs="0" />
+              <xs:element name="debit" type="xs:decimal" minOccurs="0" />
+              <xs:element name="NsdlTransaction_ID" type="xs:int" minOccurs="0" />
+              <xs:element name="NsdlTransaction_DPMTransactionReference" type="xs:string" minOccurs="0" />
+              <xs:element name="NsdlTransaction_Particulars" type="xs:string" minOccurs="0" />
+              <xs:element name="OpeningBalance" type="xs:decimal" minOccurs="0" />
+              <xs:element name="ClosingBalance" type="xs:decimal" minOccurs="0" />
+              <xs:element name="AccountType" type="xs:string" minOccurs="0" />
+              <xs:element name="NsdlTransaction_Quantity" type="xs:decimal" minOccurs="0" />
+              <xs:element name="orderByTransaction_Date" type="xs:string" minOccurs="0" />
+              <xs:element name="stdate" type="xs:string" minOccurs="0" />
+              <xs:element name="eddate" type="xs:string" minOccurs="0" />
+              <xs:element name="OpeningDate" type="xs:string" minOccurs="0" />
+              <xs:element name="ClosingDate" type="xs:string" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+	 <xs:element name="Table1">
+          <xs:complexType>
+            <xs:sequence>
+		 <xs:element name="Image" type="xs:string" minOccurs="0" />
+	</xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

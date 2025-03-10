@@ -1,0 +1,268 @@
+
+
+ALTER  procedure [dbo].[Contract_AnnextureExchnageTrades1]
+
+@CompanyID varchar(50),
+@DpId varchar(5),
+@CustomerID varchar(Max),
+@ContractNote varchar(MAX),
+@tradedate varchar(50),
+@SettlementNumber varchar(20),
+@SettlementType varchar(5),
+@Reporttype varchar(10)
+
+-- exec [Contract_AnnextureExchnageTrades1] 'COR0000001','16','''CLJ0000096''','6697','2013-09-06','2013172','N','print'
+as 
+begin
+Declare @sql varchar(MAX)
+Declare @sql1 VARCHAR(MAX)
+Declare @AverageType varchar(2)
+-- replicate(cast('simon,' as nvarchar(max)),2000) + cast('some more text'as nvarchar(max))
+
+Set @AverageType='1'
+		
+		if (@CustomerID='pdf')
+			Begin
+				select @CustomerID=coalesce(@CustomerID+''',''', '') + Convert(varchar,cnt_internalID) from 
+						(Select Distinct cnt_internalID from tbl_master_contact,trans_contractnotes WHERE  ContractNotes_TradeDate=@tradedate 
+						and ContractNotes_SegmentId=@DpId and ContractNotes_CompanyID=@CompanyID and ContractNotes_Status Is null 
+						and cnt_internalId=ContractNotes_CustomerID AND cnt_internalId like 'CL%' 
+						 ) rr
+						 
+				
+							set @CustomerID=''+@CustomerID+''
+							
+						select @ContractNote=coalesce(@ContractNote+''',''', '') + Convert(varchar,ContractNotes_Number) from 
+						(Select ContractNotes_Number from tbl_master_contact,trans_ContractNotes 
+							WHERE ContractNotes_TradeDate=@tradedate And ContractNotes_SegmentId=@DpId 
+							AND ContractNotes_CompanyID=@CompanyID AND cnt_internalId=ContractNotes_CustomerID 
+							AND cnt_internalId like 'CL%' and ContractNotes_CustomerID  
+							in ( select * from dbo.fnSplitReturnTable(@CustomerID,''',''') )
+							
+						 ) rr
+						set @ContractNote=''''+@ContractNote+''''
+						set @CustomerID=''''+@CustomerID+''''
+		
+			End
+--select @ContractNote
+--select @CustomerID
+                  CREATE TABLE #TEMPExchangetrades
+				(
+					ExchangeTrades_FinYear varchar(100),
+					CompanyName varchar(100),
+					cmp_panNo varchar(100),
+					cmp_serviceTaxNo varchar(100),
+					CompanyAddress varchar(100),
+					CompanyPin varchar(100),
+					Companyemail varchar(100),
+					exch_TMCode varchar(100),
+					exch_sebiNo varchar(100),
+					ExchangeTrades_CompanyID varchar(100),
+					ExchangeTrades_Segment varchar(100),
+                    ExchangeTrades_SettlementNumber varchar(100),
+					ExchangeTrades_SettlementType varchar(100),
+					ExchangeTrades_Tradedate datetime,
+					ExchangeTrades_Tradenumber varchar(100),
+					ExchangeTrades_TradeEntryTime datetime,
+					ExchangeTrades_TradeModifyTime datetime,
+					ExchangeTrades_OrderNumber varchar(100),				
+					ExchangeTrades_OrderEntryTime datetime,
+					ExchangeTrades_CustomerID varchar(100),
+					ExchangeTrades_SecuritySymbol varchar(100),
+                    ExchangeTrades_SecuritySeries varchar(100),
+                    ExchangeTrades_SecurityExpiry datetime,
+                    ExchangeTrades_StrikePrice varchar(100),
+					ExchangeTrades_SecurityType varchar(100),
+					ExchangeTrades_BuySellFlag varchar(100),
+					ExchangeTrades_CustTransactionID int,
+					ExchangeTrades_UnitPriceQuantity numeric(14, 4),
+					ExchangeTrades_UnitPrice numeric(14, 4),
+					ExchangeTrades_MarketValue numeric(28, 4),
+					ExchangeTrades_ProductSeriesID int,
+					CustomerTrades_ContractNoteNumber int,
+					CustomerTrades_BranchID int,
+					CustomerTrades_CustomerID varchar(100),
+					CustomerTrades_AverageType int,
+					CustomerTrades_TotalBrokerage numeric(18, 4),
+					CustomerTrades_UnitPrice numeric(14, 4),
+					CustomerTrades_BrokerageType varchar(10)
+				)
+        set @sql='select ExchangeTrades_FinYear,(Select cmp_name from tbl_master_company where cmp_internalID='''+@CompanyID+''') as CompanyName,
+		(Select cmp_panNo from tbl_master_company where cmp_internalID='''+@CompanyID+''') as cmp_panNo,
+		(Select cmp_serviceTaxNo from tbl_master_company where cmp_internalID='''+@CompanyID+''') as cmp_serviceTaxNo,
+		(Select isnull(add_address1,'+char(39)+''+char(39)+')+'+char(39)+' '+char(39)+'+isnull(add_address2,'+char(39)+''+char(39)+')+'+char(39)+' '+char(39)+'+isnull(add_address3,'+char(39)+''+char(39)+') as CompanyAddress from tbl_master_address where add_cntID='''+@CompanyID+''' and add_entity='+char(39)+'Company'+char(39)+' and add_addressType='+char(39)+'Office'+char(39)+') as CompanyAddress, 
+		(Select add_pin as CompanyPin from tbl_master_address where add_cntID='''+@CompanyID+''' and add_entity='+char(39)+'Company'+char(39)+' and add_addressType='+char(39)+'Office'+char(39)+') as CompanyPin,(Select eml_email from tbl_master_email where eml_cntID='''+@CompanyID+''' AND eml_entity='+char(39)+'Company'+char(39)+' and eml_type='+char(39)+'Official'+char(39)+') as Companyemail,
+		(Select exch_TMCode from tbl_master_companyExchange where exch_compID='''+@CompanyID+''' and exch_internalID='''+@DpId+''') as exch_TMCode,(Select exch_sebiNo from tbl_master_companyExchange where exch_compID='''+@CompanyID+''' and exch_internalID='''+@DpId+''') as exch_sebiNo,ExchangeTrades_CompanyID,ExchangeTrades_Segment,
+		ExchangeTrades_SettlementNumber,ExchangeTrades_SettlementType,ExchangeTrades_TradeDate,
+		ExchangeTrades_TradeNumber,ExchangeTrades_TradeEntryTime,ExchangeTrades_TradeModifyTime,
+		ExchangeTrades_OrderNumber,ExchangeTrades_OrderEntryTime,ExchangeTrades_CustomerID,
+		ExchangeTrades_SecuritySymbol,ExchangeTrades_SecuritySeries,ExchangeTrades_SecurityExpiry,ExchangeTrades_StrikePrice,ExchangeTrades_SecurityType,ExchangeTrades_BuySellFlag,
+       ExchangeTrades_CustTransactionID,
+		ExchangeTrades_UnitPriceQuantity,ExchangeTrades_UnitPrice,ExchangeTrades_MarketValue,ExchangeTrades_ProductSeriesID,
+		CustomerTrades_ContractNoteNumber,CustomerTrades_BranchID,CustomerTrades_CustomerID,CustomerTrades_AverageType,
+		CustomerTrades_TotalBrokerage,CustomerTrades_UnitPrice,CustomerTrades_BrokerageType
+		from Trans_ExchangeTrades,Trans_CustomerTrades
+		Where (ExchangeTrades_CustTransactionID=CustomerTrades_ID and CustomerTrades_OriginalTransactionID is null)
+		AND ExchangeTrades_Segment='''+@DpId+'''
+		AND ExchangeTrades_Segment=CustomerTrades_ExchangeSegment
+		AND ExchangeTrades_TradeDate=CustomerTrades_TradeDate
+		AND ExchangeTrades_CompanyID=CustomerTrades_CompanyID
+		AND ExchangeTrades_CustomerID=CustomerTrades_CustomerID   
+        AND ExchangeTrades_SettlementNumber=CustomerTrades_SettlementNumber
+        AND ExchangeTrades_SettlementType=CustomerTrades_SettlementType
+		AND ExchangeTrades_CompanyID='''+@CompanyID+'''  
+		AND CustomerTrades_CustomerID IN('+@CustomerID+')
+		AND ExchangeTrades_TradeDate='''+@tradedate+'''
+		--AND ExchangeTrades_SettlementNumber='''+@SettlementNumber+'''
+		--AND ExchangeTrades_SettlementType='''+@SettlementType+'''
+		AND CustomerTrades_AverageType<>'''+@AverageType+'''
+		AND CustomerTrades_ContractNoteNumber IN('+@ContractNote+')'
+		If(@Reporttype<>'Digital')
+			Begin
+				set @sql=@sql+' AND ExchangeTrades_SettlementNumber='''+@SettlementNumber+'''
+							    AND ExchangeTrades_SettlementType='''+@SettlementType+''' '
+			End
+		set @sql=@sql+' order by ExchangeTrades_TradeNumber asc'
+--	Select @sql
+        insert into #TEMPExchangetrades
+        exec (@sql)
+        
+		Select tab3.ExchangeTrades_FinYear,tab3.CompanyName,tab3.cmp_panNo,tab3.cmp_serviceTaxNo,tab3.CompanyAddress,
+		tab3.CompanyPin,tab3.Companyemail,tab3.exch_TMCode,tab3.exch_sebiNo,tab3.ExchangeTrades_CompanyID,tab3.ExchangeTrades_Segment,
+		tab3.ExchangeTrades_SettlementNumber,tab3.ExchangeTrades_SettlementType,tab3.ExchangeTrades_TradeDate,
+		tab3.ExchangeTrades_TradeNumber,tab3.ExchangeTrades_TradeEntryTime,tab3.ExchangeTrades_TradeModifyTime,
+		tab3.ExchangeTrades_OrderNumber,tab3.ExchangeTrades_OrderEntryTime,tab3.ExchangeTrades_CustomerID,
+		tab3.ExchangeTrades_SecuritySymbol,tab3.ExchangeTrades_SecuritySeries,tab3.ExchangeTrades_SecurityExpiry,
+        tab3.ExchangeTrades_StrikePrice,tab3.ExchangeTrades_SecurityType,tab3.ExchangeTrades_BuySellFlag,
+        tab3.ExchangeTrades_CustTransactionID,
+		tab3.ExchangeTrades_UnitPriceQuantity,tab3.ExchangeTrades_UnitPrice,
+        tab3.ExchangeTrades_MarketValue,tab3.ExchangeTrades_ProductSeriesID,
+		tab3.CustomerTrades_ContractNoteNumber,tab3.CustomerTrades_BranchID,
+        tab3.CustomerTrades_CustomerID,tab3.average,
+        tab3.CustomerTrades_TotalBrokerage,tab3.CustomerTrades_UnitPrice,tab3.CustomerTrades_BrokerageType,		
+        tab3.BranchAddress1,tab3.BranchAddress2,tab3.BranchAddress3,
+        tab3.CustAddress1,tab3.CustAddress2,tab3.CustAddress3,tab3.eml_email,
+		cnt_UCC,cnt_firstName,cnt_middleName,cnt_lastName
+
+
+		from
+		(Select tab2.ExchangeTrades_FinYear,tab2.CompanyName,tab2.cmp_panNo,tab2.cmp_serviceTaxNo,tab2.CompanyAddress,tab2.CompanyPin,
+		tab2.Companyemail,tab2.exch_TMCode,tab2.exch_sebiNo,tab2.ExchangeTrades_CompanyID,tab2.ExchangeTrades_Segment,
+		tab2.ExchangeTrades_SettlementNumber,tab2.ExchangeTrades_SettlementType,tab2.ExchangeTrades_TradeDate,
+		tab2.ExchangeTrades_TradeNumber,tab2.ExchangeTrades_TradeEntryTime,tab2.ExchangeTrades_TradeModifyTime,
+		tab2.ExchangeTrades_OrderNumber,tab2.ExchangeTrades_OrderEntryTime,tab2.ExchangeTrades_CustomerID,
+		tab2.ExchangeTrades_SecuritySymbol,tab2.ExchangeTrades_SecuritySeries,tab2.ExchangeTrades_SecurityExpiry,
+        tab2.ExchangeTrades_StrikePrice,tab2.ExchangeTrades_SecurityType,tab2.ExchangeTrades_BuySellFlag,
+        tab2.ExchangeTrades_CustTransactionID,
+		tab2.ExchangeTrades_UnitPriceQuantity,tab2.ExchangeTrades_UnitPrice,
+        tab2.ExchangeTrades_MarketValue,tab2.ExchangeTrades_ProductSeriesID,
+		tab2.CustomerTrades_ContractNoteNumber,tab2.CustomerTrades_BranchID,
+        tab2.CustomerTrades_CustomerID,tab2.average,
+        tab2.CustomerTrades_TotalBrokerage,tab2.CustomerTrades_UnitPrice,tab2.CustomerTrades_BrokerageType,		
+        tab2.BranchAddress1,tab2.BranchAddress2,tab2.BranchAddress3,
+        tab2.CustAddress1,tab2.CustAddress2,tab2.CustAddress3,eml_email
+        
+
+		from
+
+		(Select tab1.ExchangeTrades_FinYear,tab1.CompanyName,tab1.cmp_panNo,tab1.cmp_serviceTaxNo,tab1.CompanyAddress,tab1.CompanyPin,
+		tab1.Companyemail,tab1.exch_TMCode,tab1.exch_sebiNo,tab1.ExchangeTrades_CompanyID,tab1.ExchangeTrades_Segment,
+		tab1.ExchangeTrades_SettlementNumber,tab1.ExchangeTrades_SettlementType,tab1.ExchangeTrades_TradeDate,
+		tab1.ExchangeTrades_TradeNumber,tab1.ExchangeTrades_TradeEntryTime,tab1.ExchangeTrades_TradeModifyTime,
+		tab1.ExchangeTrades_OrderNumber,tab1.ExchangeTrades_OrderEntryTime,tab1.ExchangeTrades_CustomerID,
+		tab1.ExchangeTrades_SecuritySymbol,tab1.ExchangeTrades_SecuritySeries,tab1.ExchangeTrades_SecurityExpiry,
+        tab1.ExchangeTrades_StrikePrice,tab1.ExchangeTrades_SecurityType,tab1.ExchangeTrades_BuySellFlag,
+        tab1.ExchangeTrades_CustTransactionID,
+		tab1.ExchangeTrades_UnitPriceQuantity,tab1.ExchangeTrades_UnitPrice,tab1.CustomerTrades_BrokerageType,
+        tab1.ExchangeTrades_MarketValue,tab1.ExchangeTrades_ProductSeriesID,
+		tab1.CustomerTrades_ContractNoteNumber,tab1.CustomerTrades_BranchID,
+        tab1.CustomerTrades_CustomerID,tab1.average,
+        tab1.CustomerTrades_TotalBrokerage,tab1.CustomerTrades_UnitPrice,		
+        tab1.BranchAddress1,tab1.BranchAddress2,tab1.BranchAddress3,
+        (add_address1) as CustAddress1,(add_address2) as CustAddress2,(add_address3) as CustAddress3
+		FROM
+        (Select #TEMPExchangetrades.ExchangeTrades_FinYear,#TEMPExchangetrades.CompanyName,#TEMPExchangetrades.cmp_panNo,#TEMPExchangetrades.cmp_serviceTaxNo,#TEMPExchangetrades.CompanyAddress,#TEMPExchangetrades.CompanyPin,
+		#TEMPExchangetrades.Companyemail,#TEMPExchangetrades.exch_TMCode,#TEMPExchangetrades.exch_sebiNo,#TEMPExchangetrades.ExchangeTrades_CompanyID,#TEMPExchangetrades.ExchangeTrades_Segment,
+		#TEMPExchangetrades.ExchangeTrades_SettlementNumber,#TEMPExchangetrades.ExchangeTrades_SettlementType,#TEMPExchangetrades.ExchangeTrades_TradeDate,
+		#TEMPExchangetrades.ExchangeTrades_TradeNumber,#TEMPExchangetrades.ExchangeTrades_TradeEntryTime,#TEMPExchangetrades.ExchangeTrades_TradeModifyTime,
+		#TEMPExchangetrades.ExchangeTrades_OrderNumber,#TEMPExchangetrades.ExchangeTrades_OrderEntryTime,#TEMPExchangetrades.ExchangeTrades_CustomerID,
+		#TEMPExchangetrades.ExchangeTrades_SecuritySymbol,#TEMPExchangetrades.ExchangeTrades_SecuritySeries,#TEMPExchangetrades.ExchangeTrades_SecurityExpiry,
+        #TEMPExchangetrades.ExchangeTrades_StrikePrice,#TEMPExchangetrades.ExchangeTrades_SecurityType,#TEMPExchangetrades.ExchangeTrades_BuySellFlag,
+        #TEMPExchangetrades.ExchangeTrades_CustTransactionID,
+		#TEMPExchangetrades.ExchangeTrades_UnitPriceQuantity,#TEMPExchangetrades.ExchangeTrades_UnitPrice,
+        #TEMPExchangetrades.ExchangeTrades_MarketValue,#TEMPExchangetrades.ExchangeTrades_ProductSeriesID,
+		#TEMPExchangetrades.CustomerTrades_ContractNoteNumber,#TEMPExchangetrades.CustomerTrades_BranchID,
+        #TEMPExchangetrades.CustomerTrades_CustomerID,#TEMPExchangetrades.CustomerTrades_AverageType as average,
+        #TEMPExchangetrades.CustomerTrades_TotalBrokerage,#TEMPExchangetrades.CustomerTrades_UnitPrice,
+		#TEMPExchangetrades.CustomerTrades_BrokerageType,
+        (branch_address1) as BranchAddress1,branch_address2 as BranchAddress2,branch_address3 as BranchAddress3
+		from #TEMPExchangetrades
+		left outer join
+		tbl_master_branch
+		ON(tbl_master_branch.branch_id=#TEMPExchangetrades.CustomerTrades_BranchID)) as tab1
+        left outer join
+		tbl_master_address
+		ON(tbl_master_address.add_cntid=tab1.CustomerTrades_CustomerID AND tbl_master_address.add_addressType=(select top 1 add_addressType from 
+					(select add_addressType,
+					  case when rtrim(ltrim(add_addressType))='Correspondence' then 1
+						when rtrim(ltrim(add_addressType))='Registered' then 2
+						when rtrim(ltrim(add_addressType))='Residence' then 3
+						else 4 end as addreorder
+						from tbl_master_address where 
+						add_cntID=tab1.CustomerTrades_CustomerID
+						and add_entity='Customer/Client') tb
+						order by addreorder))) as tab2
+        left outer join
+		tbl_master_email
+		on (tbl_master_email.eml_cntId=tab2.CustomerTrades_CustomerID 
+		AND tbl_master_email.eml_entity='Customer/Client' and tbl_master_email.eml_type='official'
+		))as tab3
+        left outer join
+        tbl_master_contact
+		On(tbl_master_contact.cnt_internalID=tab3.CustomerTrades_CustomerID and tbl_master_contact.cnt_branchId=tab3.CustomerTrades_branchId)
+        order by CustomerTrades_ContractNoteNumber,ExchangeTrades_SecuritySymbol,ExchangeTrades_SecurityType,CustomerTrades_BrokerageType
+        
+    drop table #TEMPExchangetrades
+
+end
+--EXEC [Contract_AnnextureExchnageTrades1] 'COI0000001','1','''CLA0000060'',''CLA0000068''','2010-1-25'
+
+--EXEC [Contract_AnnextureExchnageTrades1] 'COI0000001','1','''CLA0000060'',''CLA0000068''','2781984,5,282,559,761,2782252','2009-10-23','2009197','N'
+
+--EXEC [Contract_AnnextureExchnageTrades1] 'COR0000001',17,'S','''CLP0000201''','3487,3488,3489','2010-11-18','2010011','F'
+
+--EXEC [Contract_AnnextureExchnageTrades1] 'COR0000001',16,'S','''CLN0000140''','6955','2010-5-20','2010093','N'
+--EXEC [Contract_AnnextureExchnageTrades1] 'COI0000001',1,'S','''CLS0000434''','2782464','2009-10-23','2009197','N'
+--EXEC [Contract_AnnextureExchnageTrades1] 'COR0000001',16,'D','''CLA0000413'',''CLA0000415'',''CLA0000442'',''CLA0000458'',''CLA0000482'',''CLA0000506'',''CLB0000219'',''CLC0000051'',''CLC0000062'',''CLC0000073'',''CLG0000085'',''CLG0000095'',''CLJ0000093'',''CLJ0000096'',''CLJ0000111'',''CLK0000164'',''CLK0000174'',''CLK0000188'',''CLK0000202'',''CLM0000239'',''CLM0000320'',''CLR0000238'',''CLR0000249'',''CLR0000261'',''CLS0000885'',''CLS0000919'',''CLS0000922'',''CLA0000060''','9714,9865,9895,9866,9869,9867,9870,9872,9873,9875,9876,9878,9877,9879,9880,9881,9883,9884,9888,9886,9887,9889,9891,9890,9871,9864,9874,9882,9885','2010-6-11','2010109','N'
+--2009-10-23
+--CLS0000434
+--2782464
+--2009197
+--Select * from trans_customertrades
+
+--Select * from tbl_master_contact where cnt_UCC='100001024'
+
+--Select * from tbl_master_address
+
+--Select * from trans_ExchangetRades where exchangetrades_tradedate='2010-11-12'
+
+----Select * from tbl_trans_lastsegment where ls_lastsettlementNo='2010218N 12-Nov-1'
+
+
+------Update tbl_trans_lastsegment  Set ls_lastsettlementNo='2010218',ls_lastSettlementType='N' where ls_lastsettlementNo='2010218N 12-Nov-1'
+
+
+--Select * from trans_exchangeTrades where ExchangeTrades_Tradedate='2010-11-12' And ExchangeTrades_Segment=16
+--
+--Select * from trans_CustomerTrades where CustomerTrades_Tradedate='2010-11-12' AND CustomerTrades_ExchangeSegment=16
+--
+--
+--Select * from Trans_ContractNotes where ContractNotes_Tradedate='2010-11-12' AND ContractNotes_SegmentID=16
+
+
+
+
+
+
+
+

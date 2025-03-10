@@ -1,0 +1,55 @@
+
+ALTER PROCEDURE [dbo].[GenericUpdate]
+@WhichCall Varchar(2000),
+@Parameters nVarchar(Max)
+As
+Begin
+	if(@WhichCall='MarkUnMarkCustodialFlag')
+	Begin
+		Declare @ExchangeID varchar(max),@TradeDate datetime,@Segment int,@Companyid varchar(10),@User int,
+		@SettlementNo varchar(10),@SettlementType char(1),@Client varchar(30)
+		
+		Select @ExchangeID=dbo.fnSplit(@Parameters,'~',1),
+		@TradeDate=dbo.fnSplit(@Parameters,'~',2),
+		@Segment=dbo.fnSplit(@Parameters,'~',3),
+		@Companyid=dbo.fnSplit(@Parameters,'~',4),
+		@User=dbo.fnSplit(@Parameters,'~',5),
+		@SettlementNo=dbo.fnSplit(@Parameters,'~',6),
+		@SettlementType=dbo.fnSplit(@Parameters,'~',7),
+		@Client=dbo.fnSplit(@Parameters,'~',8)
+		
+		set @ExchangeID=LEFT(@ExchangeID, LEN(@ExchangeID) - 1)
+		
+		Create Table #ExchangeIDSeries(AutoID int identity(1,1),ExchangeTradeID Varchar(Max))
+		
+		Insert into #ExchangeIDSeries
+		select col From fnSplitReturnTable(@ExchangeID,',')
+				
+		delete from Trans_CustomerTrades where CustomerTrades_ID 
+		in (select ExchangeTrades_CustTransactionID from Trans_ExchangeTrades
+		where ExchangeTrades_ID in (select ExchangeTradeID from #ExchangeIDSeries)
+		and ExchangeTrades_CompanyID=@Companyid
+		and ExchangeTrades_Segment=@Segment
+		and ExchangeTrades_SettlementNumber=@SettlementNo
+		and ExchangeTrades_SettlementType=@SettlementType
+		and ExchangeTrades_CustomerID=@Client)
+		
+		
+		Update Trans_ExchangeTrades set ExchangeTrades_CustodialFlag = 
+		case when ExchangeTrades_CustodialFlag='Y' then 'N' 
+		     when ExchangeTrades_CustodialFlag='N' then 'Y'
+		End,
+		ExchangeTrades_CustTransactionID=null
+		where ExchangeTrades_ID in (select ExchangeTradeID from #ExchangeIDSeries)
+		and ExchangeTrades_CompanyID=@Companyid
+		and ExchangeTrades_Segment=@Segment
+		and ExchangeTrades_SettlementNumber=@SettlementNo
+		and ExchangeTrades_SettlementType=@SettlementType
+		and ExchangeTrades_CustomerID=@Client
+		
+				
+		select @@ROWCOUNT
+		
+	
+	End
+End

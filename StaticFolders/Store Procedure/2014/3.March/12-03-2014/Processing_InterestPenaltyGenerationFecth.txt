@@ -1,0 +1,632 @@
+
+
+ALTER Procedure [dbo].[Processing_InterestPenaltyGenerationFecth]
+@FromDate varchar(30),
+@ToDate varchar(30),
+@MainAccount varchar(50),
+@MainAccountForInterest varchar(30),
+@MainAccountSubLedgerType varchar(50),
+@GroupType varchar(10),
+@GrpId varchar(max),
+@Client varchar(max),
+@SubAccount varchar(max),
+@Segment varchar(50),
+@CompanyId varchar(15),
+@FinYear varchar(12),
+@PreDefineRate varchar(5),
+@Rate numeric(28,2),
+@GracePeriod int,
+@BalnType varchar(10),
+@RptView varchar(10),
+@ConsiderInAmnt numeric(28,2),
+@Days int
+
+
+As
+Begin
+--declare @MainAc varchar(max),@Client  varchar(max)
+--select @MainAc='''SYSTM00001'',''SYSTM00002'''
+--select @Client='All'--'''CLA0000004'',''CLA0000006'''
+--exec Processing_InterestPenaltyGenerationFecth '2010-11-11','2011-01-11',@MainAc,'SYSTM00001','Customers','BRANCH','All',@Client,'All','24,30','COR0000002','2010-2011','UnChk',18.75,0,'Only Debit'
+
+Set nocount on 
+				-----------Temp Table Creation
+				Declare @SqlSelect varchar(max),@SqlWhere varchar(max)
+
+				CREATE TABLE #TABCLIENT (AccountId1 VARCHAR(15),AccountName1 varchar(100),Ucc varchar(15),
+				GROUPID1 VARCHAR(50),GRPNAME1 VARCHAR(500),AccountBranchId varchar(50))
+
+				Create Table #TempDataFetch(AccountId varchar(15),Date datetime,Description varchar(100),
+				Debit numeric(28,2),Credit numeric(28,2),OrderStatus int)
+
+				Create Table #TempFinal(AutoId int identity(1,1),OrderStatus int,OrderId int,TabName varchar(200),
+			    GrpName varchar(200),BranchId varchar(50),AccountName varchar(200),AccountId varchar(15),Date datetime,Description varchar(100),
+				Debit numeric(28,2),Credit numeric(28,2),Closing numeric(28,2),
+				InstRate numeric(28,2),DaysDiffFixedDate numeric(28,0),Days numeric(28,0),
+				IntAmnt numeric(28,2))	
+-------------------------------------************----------Account  Fetch
+				--If @MainAccountSubLedgerType='Customers'
+				If @MainAccountSubLedgerType in ('Customers','Creditors','Debtors')
+				Begin
+					print '123'
+						SELECT @SqlSelect='Select distinct CNT_INTERNALID,
+						(isnull(rtrim(cnt_firstName),'+char(39)+''+char(39)+') +'
+						+char(39)+' '+char(39)+ '+isnull(rtrim(cnt_middleName),'+char(39)+''+char(39)+')+'
+						+char(39)+' '+char(39)+ '+isnull(rtrim(cnt_lastName),'+char(39)+''+char(39)+')),
+						rtrim(cnt_Ucc),'
+						if(@GroupType IN ('BRANCH','BRANCHGROUP'))
+								BEGIN
+									Select @SqlSelect=@SqlSelect+' branch_id,isnull(rtrim(branch_description),'+char(39)+' '+char(39)+')+'' [''+isnull(rtrim(branch_code),'+char(39)+''+char(39)+')+'']'''
+								END
+						ELSE 
+							BEGIN
+									Select @SqlSelect=@SqlSelect+' gpm_id,isnull(rtrim(GPM_DESCRIPTION),'+char(39)+' '+char(39)+')+'' [''+isnull(rtrim(GPM_CODE),'+char(39)+''+char(39)+')+'']'''
+							END
+						Select @SqlWhere=',cnt_branchid From TBL_MASTER_CONTACT,'
+						IF(@GroupType='BRANCH')
+							BEGIN
+								Select @SqlWhere=@SqlWhere+' tbl_master_branch 
+								where cnt_branchid=branch_id'
+								IF(@GrpId<>'ALL')
+								BEGIN
+									Select @SqlWhere=@SqlWhere+' AND cnt_branchid IN ('+@grpid+')'	
+								END
+								
+							END
+						ELSE IF(@GroupType='BRANCHGROUP')
+							BEGIN
+								Select @SqlWhere=@SqlWhere+' tbl_master_branch  
+								where cnt_branchid=branch_id '
+								IF(@GrpId<>'ALL')
+									BEGIN
+										Select @SqlWhere=@SqlWhere+' AND cnt_branchid in(select distinct branchgroupmembers_branchid 
+														   from trans_branchgroupmembers where 
+														   branchgroupmembers_branchgroupid in('+@grpid+'))'	
+									END
+								ELSE 
+									BEGIN
+										Select @SqlWhere=@SqlWhere+' AND cnt_branchid in(select distinct branchgroupmembers_branchid 
+														   from trans_branchgroupmembers)'	
+									END
+								
+							END
+						ELSE
+							BEGIN
+								Select @SqlWhere=@SqlWhere+' tbl_master_groupmaster,tbl_trans_group
+								where gpm_type='''+@GroupType+'''
+								AND grp_groupmaster=gpm_id
+								and Grp_ContactId=CNT_INTERNALID
+								AND GRP_GROUPTYPE='''+@GroupType+''''
+								IF(@GrpId<>'ALL')
+								BEGIN
+									Select @SqlWhere=@SqlWhere+' AND grp_groupmaster IN ('+@grpid+')'	
+								END
+								
+							END
+						IF @Client='POA'
+						BEGIN
+							Select @SqlWhere=@SqlWhere+' AND CNT_INTERNALID IN  (select dpd_cntID from tbl_master_contactdpdetails where dpd_POA=1)'
+						END
+						IF @Client<>'POA' and @Client<>'ALL'
+						BEGIN
+							Select @SqlWhere=@SqlWhere+' AND CNT_INTERNALID IN ('+@Client+')'
+						END
+
+					INSERT INTO #TABCLIENT EXEC(@SqlSelect+@SqlWhere)
+					
+					
+				End
+				If @MainAccountSubLedgerType='NSDL Clients'
+				Begin
+						SELECT @SqlSelect='Select distinct nsdlclients_benaccountid,
+						rtrim(nsdlclients_benfirstholdername),
+						rtrim(nsdlclients_benaccountid),'
+						if(@GroupType IN ('BRANCH','BRANCHGROUP'))
+								BEGIN
+									Select @SqlSelect=@SqlSelect+' branch_id,isnull(rtrim(branch_description),'+char(39)+' '+char(39)+')+'' [''+isnull(rtrim(branch_code),'+char(39)+''+char(39)+')+'']'''
+								END
+						ELSE 
+							BEGIN
+									Select @SqlSelect=@SqlSelect+' gpm_id,isnull(rtrim(GPM_DESCRIPTION),'+char(39)+' '+char(39)+')+'' [''+isnull(rtrim(GPM_CODE),'+char(39)+''+char(39)+')+'']'''
+							END
+						Select @SqlWhere=',nsdlclients_branchid From master_nsdlclients,'
+						IF(@GroupType='BRANCH')
+							BEGIN
+								Select @SqlWhere=@SqlWhere+' tbl_master_branch 
+								where nsdlclients_branchid=branch_id'
+								IF(@GrpId<>'ALL')
+								BEGIN
+									Select @SqlWhere=@SqlWhere+' AND nsdlclients_branchid IN ('+@grpid+')'	
+								END
+								
+							END
+						ELSE IF(@GroupType='BRANCHGROUP')
+							BEGIN
+								Select @SqlWhere=@SqlWhere+' tbl_master_branch  
+								where nsdlclients_branchid=branch_id '
+								IF(@GrpId<>'ALL')
+									BEGIN
+										Select @SqlWhere=@SqlWhere+' AND nsdlclients_branchid in(select distinct branchgroupmembers_branchid 
+														   from trans_branchgroupmembers where 
+														   branchgroupmembers_branchgroupid in('+@grpid+'))'	
+									END
+								ELSE 
+									BEGIN
+										Select @SqlWhere=@SqlWhere+' AND nsdlclients_branchid in(select distinct branchgroupmembers_branchid 
+														   from trans_branchgroupmembers)'	
+									END
+								
+							END
+						ELSE
+							BEGIN
+								Select @SqlWhere=@SqlWhere+' tbl_master_groupmaster,tbl_trans_group
+								where gpm_type='''+@GroupType+'''
+								AND grp_groupmaster=gpm_id
+								and Grp_ContactId=rtrim(nsdlclients_DPID)+rtrim(nsdlclients_benaccountid)
+								AND GRP_GROUPTYPE='''+@GroupType+''''
+								IF(@GrpId<>'ALL')
+								BEGIN
+									Select @SqlWhere=@SqlWhere+' AND grp_groupmaster IN ('+@grpid+')'	
+								END
+								
+							END
+						IF @Client='POA'
+						BEGIN
+							Select @SqlWhere=@SqlWhere+' AND nsdlclients_DPID IN  (select dpd_dpcode from tbl_master_contactdpdetails where dpd_POA=1) 
+							AND nsdlclients_benaccountid IN  (select dpd_clientid from tbl_master_contactdpdetails where dpd_POA=1) '
+						END
+						IF @Client<>'POA' and @Client<>'ALL'
+						BEGIN
+							Select @SqlWhere=@SqlWhere+' AND rtrim(nsdlclients_DPID)+rtrim(nsdlclients_benaccountid) IN ('+@Client+')'
+						END
+					INSERT INTO #TABCLIENT EXEC(@SqlSelect+@SqlWhere)
+				End
+				If @MainAccountSubLedgerType='CDSL Clients'
+				Begin
+						SELECT @SqlSelect='Select distinct nsdlclients_benaccountid,
+						rtrim(cdslclients_firstholdername),
+						rtrim(cdslclients_benaccountnumber),'
+						if(@GroupType IN ('BRANCH','BRANCHGROUP'))
+								BEGIN
+									Select @SqlSelect=@SqlSelect+' branch_id,isnull(rtrim(branch_description),'+char(39)+' '+char(39)+')+'' [''+isnull(rtrim(branch_code),'+char(39)+''+char(39)+')+'']'''
+								END
+						ELSE 
+							BEGIN
+									Select @SqlSelect=@SqlSelect+' gpm_id,isnull(rtrim(GPM_DESCRIPTION),'+char(39)+' '+char(39)+')+'' [''+isnull(rtrim(GPM_CODE),'+char(39)+''+char(39)+')+'']'''
+							END
+						Select @SqlWhere=',cdslclients_branchid From master_cdslclients,'
+						IF(@GroupType='BRANCH')
+							BEGIN
+								Select @SqlWhere=@SqlWhere+' tbl_master_branch 
+								where cdslclients_branchid=branch_id'
+								IF(@GrpId<>'ALL')
+								BEGIN
+									Select @SqlWhere=@SqlWhere+' AND cdslclients_branchid IN ('+@grpid+')'	
+								END
+								
+							END
+						ELSE IF(@GroupType='BRANCHGROUP')
+							BEGIN
+								Select @SqlWhere=@SqlWhere+' tbl_master_branch  
+								where cdslclients_branchid=branch_id '
+								IF(@GrpId<>'ALL')
+									BEGIN
+										Select @SqlWhere=@SqlWhere+' AND cdslclients_branchid in(select distinct branchgroupmembers_branchid 
+														   from trans_branchgroupmembers where 
+														   branchgroupmembers_branchgroupid in('+@grpid+'))'	
+									END
+								ELSE 
+									BEGIN
+										Select @SqlWhere=@SqlWhere+' AND cdslclients_branchid in(select distinct branchgroupmembers_branchid 
+														   from trans_branchgroupmembers)'	
+									END
+								
+							END
+						ELSE
+							BEGIN
+								Select @SqlWhere=@SqlWhere+' tbl_master_groupmaster,tbl_trans_group
+								where gpm_type='''+@GroupType+'''
+								AND grp_groupmaster=gpm_id
+								and Grp_ContactId=rtrim(cdslclients_BOID)
+								AND GRP_GROUPTYPE='''+@GroupType+''''
+								IF(@GrpId<>'ALL')
+								BEGIN
+									Select @SqlWhere=@SqlWhere+' AND grp_groupmaster IN ('+@grpid+')'	
+								END
+								
+							END
+						IF @Client='POA'
+						BEGIN
+							Select @SqlWhere=@SqlWhere+' AND cdslclients_BOID IN  (select rtrim(dpd_dpcode)+rtrim(dpd_clientid) from tbl_master_contactdpdetails where dpd_POA=1) 
+							'
+						END
+						IF @Client<>'POA' and @Client<>'ALL'
+						BEGIN
+							Select @SqlWhere=@SqlWhere+' AND rtrim(cdslclients_BOID) IN ('+@Client+')'
+						END
+					INSERT INTO #TABCLIENT EXEC(@SqlSelect+@SqlWhere)
+				End
+				If @MainAccountSubLedgerType in ('Custom','Brokers','Sub Brokers')
+				Begin
+					SELECT @SqlSelect='Select subaccount_code,rtrim(subaccount_name),rtrim(subaccount_contactid),1'
+					Select @SqlWhere=' FROM master_subaccount  '
+					If @MainAccount<>'ALL'
+					Begin
+						Select @SqlWhere=@SqlWhere+' where  SubAccount_MainAcReferenceID in ('+@MainAccount+' ) '
+						If @SubAccount<>'ALL'
+						Begin
+							Select @SqlWhere=@SqlWhere+' and '
+						End
+					End
+					Else
+					Begin
+						Select @SqlWhere=@SqlWhere+' where '
+					End
+					If @SubAccount<>'ALL'
+					Begin
+						Select @SqlWhere=@SqlWhere+'  subaccount_code in ('+@SubAccount+') '
+					End
+					INSERT INTO #TABCLIENT(AccountId1,AccountName1,Ucc,AccountBranchId) EXEC(@SqlSelect+@SqlWhere)
+				End
+
+				-----------Opening Balance Fetch
+				Select @SqlSelect='Select '
+				If @MainAccountSubLedgerType='None'
+				Begin
+					Select @SqlSelect=@SqlSelect+' accountsledger_MainAccountID,'
+				End
+				Else 
+				Begin
+					Select @SqlSelect=@SqlSelect+' AccountsLedger_SubAccountID,'
+				End
+				Select @SqlSelect=@SqlSelect+' cast('''+@FromDate+''' as datetime),
+				''Opening Balance'',
+				case when Sum(abs(ISNULL(Accountsledger_AmountCr,0))-abs(ISNULL(Accountsledger_AmountDr,0)))<0 then abs(Sum(abs(ISNULL(Accountsledger_AmountCr,0))-abs(ISNULL(Accountsledger_AmountDr,0)))) else 0 end,
+				case when Sum(abs(ISNULL(Accountsledger_AmountCr,0))-abs(ISNULL(Accountsledger_AmountDr,0)))>0 then abs(Sum(abs(ISNULL(Accountsledger_AmountCr,0))-abs(ISNULL(Accountsledger_AmountDr,0)))) else 0 end
+				,3'
+				Select @SqlWhere=' FROM Trans_accountsledger where '
+				If @MainAccountSubLedgerType<>'None'
+				Begin
+					Select @SqlWhere=@SqlWhere+' AccountsLedger_SubAccountID IN (select distinct AccountId1 from #TABCLIENT) AND '
+				End
+				If @MainAccount<>'ALL'
+				Begin
+					Select @SqlWhere=@SqlWhere+' accountsledger_MainAccountID in ('+@MainAccount+') AND '
+				End
+				If @SubAccount<>'ALL'
+				Begin
+					Select @SqlWhere=@SqlWhere+' AccountsLedger_SubAccountID in ('+@SubAccount+') AND '
+				End
+				If @Segment<>'ALL'
+				Begin
+					Select @SqlWhere=@SqlWhere+' accountsledger_ExchangeSegmentID in ('+@Segment+') AND '
+				End
+				Select @SqlWhere=@SqlWhere+'
+				accountsledger_companyID='''+@CompanyId+''''
+				IF MONTH(CAST(@FROMDATE AS DATETIME))=4 AND  DAY(CAST(@FROMDATE AS DATETIME))=1
+				BEGIN
+						SELECT @SqlWhere=@SqlWhere +' AND accountsledger_transactiondate<='''+@FromDate+'''
+													  AND AccountsLedger_TransactionType=''OpeningBalance'''
+				END
+				ELSE
+				BEGIN
+						SELECT @SqlWhere=@SqlWhere +' AND accountsledger_transactiondate<'''+@FromDate+''''
+				END
+				Select @SqlWhere=@SqlWhere+' AND accountsledger_finyear='''+@FinYear+''' 
+				Group By'
+				If @MainAccountSubLedgerType='None'
+				Begin
+					Select @SqlWhere=@SqlWhere+' accountsledger_MainAccountID'
+				End
+				Else 
+				Begin
+					Select @SqlWhere=@SqlWhere+' AccountsLedger_SubAccountID'
+				End
+				Select @SqlWhere=@SqlWhere+'
+				Having Sum(abs(ISNULL(Accountsledger_AmountCr,0))-abs(ISNULL(Accountsledger_AmountDr,0)))<>0'
+
+				insert into  #TempDataFetch(AccountId,Date,DescripTion,Debit,Credit,OrderStatus)
+				exec(@SqlSelect+@SqlWhere)
+				
+				
+
+				-----------All Data Fetch
+				Select @SqlSelect='Select '
+				If @MainAccountSubLedgerType='None'
+				Begin
+					Select @SqlSelect=@SqlSelect+' accountsledger_MainAccountID,'
+				End
+				Else 
+				Begin
+					Select @SqlSelect=@SqlSelect+' AccountsLedger_SubAccountID,'
+				End
+				Select @SqlSelect=@SqlSelect+' accountsledger_transactiondate,
+				''Consolidated Entries For The Day'',
+				case when Sum(abs(ISNULL(Accountsledger_AmountCr,0))-abs(ISNULL(Accountsledger_AmountDr,0)))<0 then abs(Sum(abs(ISNULL(Accountsledger_AmountCr,0))-abs(ISNULL(Accountsledger_AmountDr,0)))) else 0 end,
+				case when Sum(abs(ISNULL(Accountsledger_AmountCr,0))-abs(ISNULL(Accountsledger_AmountDr,0)))>0 then abs(Sum(abs(ISNULL(Accountsledger_AmountCr,0))-abs(ISNULL(Accountsledger_AmountDr,0)))) else 0 end
+				,4'
+				Select @SqlWhere=' FROM Trans_accountsledger where '
+				If @MainAccountSubLedgerType<>'None'
+				Begin
+					Select @SqlWhere=@SqlWhere+' AccountsLedger_SubAccountID IN (select distinct AccountId1 from #TABCLIENT) AND '
+				End
+				If @MainAccount<>'ALL'
+				Begin
+					Select @SqlWhere=@SqlWhere+' accountsledger_MainAccountID in ('+@MainAccount+') AND'
+				End
+				If @SubAccount<>'ALL'
+				Begin
+					Select @SqlWhere=@SqlWhere+' AccountsLedger_SubAccountID in ('+@SubAccount+') AND '
+				End
+				If @Segment<>'ALL'
+				Begin
+					Select @SqlWhere=@SqlWhere+' accountsledger_ExchangeSegmentID in ('+@Segment+') AND'
+				End
+				Select @SqlWhere=@SqlWhere+'
+				accountsledger_transactiondate between '''+@FromDate+''' and '''+@ToDate+'''
+				and Left(AccountsLedger_TransactionReferenceID,2) not in (''YR'',''YZ'')
+				AND accountsledger_companyID='''+@CompanyId+'''
+				AND accountsledger_finyear='''+@FinYear+'''
+				And AccountsLedger_TransactionType<>''OpeningBalance''
+				Group By'
+				If @MainAccountSubLedgerType='None'
+				Begin
+					Select @SqlWhere=@SqlWhere+' accountsledger_MainAccountID'
+				End
+				Else 
+				Begin
+					Select @SqlWhere=@SqlWhere+' AccountsLedger_SubAccountID'
+				End
+				Select @SqlWhere=@SqlWhere+'
+				,accountsledger_transactiondate
+				Having Sum(abs(ISNULL(Accountsledger_AmountCr,0))-abs(ISNULL(Accountsledger_AmountDr,0)))<>0'
+
+
+				insert into  #TempDataFetch(AccountId,Date,DescripTion,Debit,Credit,OrderStatus)exec(@SqlSelect+@SqlWhere)
+				
+				print (@SqlSelect+@SqlWhere)
+		
+
+				---------------Opening  Balance
+				insert into  #TempDataFetch(AccountId,Date,DescripTion,Debit,Credit,OrderStatus)
+				Select Distinct AccountId,cast(@FromDate as datetime),'Opening Balance',0,0,3 From #TempDataFetch
+				WHERE  AccountId not in  (SELECT AccountId FROM #TempDataFetch AS TT WHERE 
+										 AccountId=TT.AccountId AND DescripTion='Opening Balance' 
+										 )
+
+
+				---------------Closing Balance
+				insert into  #TempDataFetch(AccountId,Date,DescripTion,Debit,Credit,OrderStatus)
+				Select Distinct AccountId,cast(@ToDate as datetime),'Closing Balance',0,0,5 From #TempDataFetch
+
+
+				------------TempFinal Data Insert
+				
+				insert into  #TempFinal(AccountId,Date,DescripTion,Debit,Credit,OrderStatus,OrderId,GrpName,AccountName,TabName)
+				Select AccountId,Date,DescripTion,Debit,Credit,OrderStatus,2,GRPNAME1,AccountName1+'['+Ucc+']',convert(varchar(11),Date,106)
+				From #TempDataFetch,#TABCLIENT
+				where AccountId=AccountId1 
+				and @MainAccountSubLedgerType in ('Customers','NSDL Clients','CDSL Clients','Creditors','Debtors')
+				Order By GRPNAME1,AccountId,Date,OrderStatus
+				
+				insert into  #TempFinal(AccountId,Date,DescripTion,Debit,Credit,OrderStatus,OrderId,AccountName,TabName)
+				Select AccountId,Date,DescripTion,Debit,Credit,OrderStatus,2,AccountName1+'['+Ucc+']',convert(varchar(11),Date,106)
+				From #TempDataFetch,#TABCLIENT
+				where AccountId=AccountId1 
+				and @MainAccountSubLedgerType in ('Custom','Brokers','Sub Brokers')
+				Order By AccountId,Date,OrderStatus
+
+				insert into  #TempFinal(AccountId,Date,DescripTion,Debit,Credit,OrderStatus,OrderId,AccountName,TabName)
+				Select AccountId,Date,DescripTion,Debit,Credit,OrderStatus,2,MainAccount_Name + ' ['+MainAccount_AccountCode+']',convert(varchar(11),Date,106)
+				From #TempDataFetch,master_mainaccount
+				where MainAccount_AccountCode=AccountId 
+				and @MainAccountSubLedgerType='None'
+				Order By AccountId,Date,OrderStatus
+				
+				----------Running Balnce Cal
+				UPDATE #TempFinal SET Closing=AccountRunningTotal FROM 
+				(SELECT td.AccountId AS CLIENT,
+				td.AutoId AS UID,
+				(--==== Triangular join to get the sum of previous rows for each row
+				SELECT SUM((ISNULL(Closing,0)+ISNULL(Credit,0)-ISNULL(Debit,0))) 
+				FROM #TempFinal td2 
+				WHERE td2.AccountId = td.AccountId
+				AND td2.AutoId <= td.AutoId
+				) AS AccountRunningTotal
+				
+				FROM #TempFinal td) AS JJ
+				WHERE AutoId=JJ.UID AND AccountId=JJ.CLIENT 
+
+				-----------Fixed Value Updates 
+				Update #TempFinal set DaysDiffFixedDate=datediff(dd,'1980-01-01',Date),Days=0
+
+				--------Update Days
+				
+				UPDATE #TempFinal SET Days=case when DaysCal<0 then 0 else abs(DaysCal-Fixed+1-@GracePeriod) end FROM 
+				(
+				SELECT td.AccountId AS CLIENT,
+				td.AutoId AS UID,
+				td.DaysDiffFixedDate AS Fixed,
+				(--==== Days Calculation
+				SELECT DaysDiffFixedDate-Days
+				FROM #TempFinal td2 
+				WHERE td2.AccountId = td.AccountId		
+				AND td2.AutoId = td.AutoId+1
+				) AS DaysCal
+				
+				FROM #TempFinal td ) AS JJ
+				WHERE AutoId=JJ.UID AND AccountId=JJ.CLIENT  And DescripTion<>'Closing Balance'
+				
+				
+				
+				
+				-----------Update Predefine Rate
+				-----*****If Sub-LedgerType='None'
+				Select @SqlWhere='
+				Update #TempFinal SET InstRate=mainaccount_rateofinterest
+				From master_mainaccount where '''+@PreDefineRate+'''=''Chk''
+				and '''+@MainAccountSubLedgerType+'''=''None''
+				and mainaccount_accountcode='''+@MainAccountForInterest+''''
+				exec(@SqlWhere)
+				print @SqlWhere
+				-----*****If Sub-LedgerType='Other'
+				Select @SqlWhere='
+				Update #TempFinal SET InstRate=SubAccount_rateofinterest
+				From master_subaccount where '''+@PreDefineRate+'''=''Chk'' 
+				and '''+@MainAccountSubLedgerType+'''<>''None''
+				and SubAccount_MainAcReferenceID='''+@MainAccountForInterest+'''
+				and SubAccount_Code=AccountId'
+				exec(@SqlWhere)
+				print @SqlWhere
+				
+				-----------Update fine Rate
+				Update #TempFinal SET InstRate=@Rate
+				where  InstRate is null
+				
+				-----------IntAmnt Calculation
+				Update #TempFinal  set IntAmnt=(((isnull(Closing,0)*isnull(InstRate,0))/100)/@Days)*Days
+				where isnull(Closing,0)<0 and 
+				@BalnType='Only Debit'
+
+				Update #TempFinal  set IntAmnt=(((isnull(Closing,0)*isnull(InstRate,0))/100)/@Days)*Days
+				where isnull(Closing,0)>0 and @BalnType='Only Credit'
+
+				Update #TempFinal  set IntAmnt=(((isnull(Closing,0)*isnull(InstRate,0))/100)/@Days)*Days
+				where @BalnType='Both'
+		
+
+				-----------------Update Total Interest Amnt
+				UPDATE #TempFinal SET IntAmnt=SumIntAmnt From
+				(Select sum(Isnull(IntAmnt,0)) as SumIntAmnt,AccountId as SumAccountId
+				From #TempFinal group by AccountId) as dd
+				Where AccountId=SumAccountId and DescripTion='Closing Balance'
+				
+
+				delete From #TempFinal where AccountId in (select AccountId From #TempFinal where isnull(IntAmnt,0)=0 and DescripTion='Closing Balance')
+
+
+
+				--------Interest Amnt Chking
+				If @ConsiderInAmnt<>0
+				Begin
+					delete From #TempFinal where AccountId in (select AccountId From #TempFinal where 
+															   abs(@ConsiderInAmnt)>abs(isnull(IntAmnt,0))
+															   and DescripTion='Closing Balance')
+				End
+				------------------AccountName Insert
+				insert into  #TempFinal(TabName,AccountName,DescripTion,InstRate,OrderStatus,OrderId)
+				Select Distinct 'Name :'+AccountName,AccountName,'Test',999999999999999.99,1,1
+				From #TempFinal where @MainAccountSubLedgerType in ('Custom','Brokers','Sub Brokers','None')
+				
+				insert into  #TempFinal(TabName,GrpName,AccountName,DescripTion,OrderStatus,OrderId)
+				Select Distinct 'Name :'+AccountName,GrpName,AccountName,'Test',1,1
+				From #TempFinal where @MainAccountSubLedgerType in ('Customers','NSDL Clients','CDSL Clients','Creditors','Debtors')
+
+				------------------GrpName Insert
+				insert into  #TempFinal(TabName,GrpName,AccountName,DescripTion,InstRate,OrderStatus,OrderId)
+				Select Distinct 'Branch/Group Name: ' +GrpName,GrpName,null,'Test',999999999999999.99,0,0
+				From #TempFinal where @MainAccountSubLedgerType in ('Customers','NSDL Clients','CDSL Clients','Creditors','Debtors')
+				
+
+				delete From #TempFinal where TabName is null
+
+
+				If @RptView='Detail'
+				Begin
+					-------------For Export
+					If(@MainAccountSubLedgerType in ('Customers','NSDL Clients','CDSL Clients','Creditors','Debtors'))
+					Begin
+
+						--------For Total
+						insert into  #TempFinal(TabName,GrpName,AccountName,OrderStatus,OrderId,IntAmnt)
+						Select 'Total',GrpName,'ZZZZZZ',6,1,Sum(isnull(IntAmnt,0)) From #TempFinal
+						Where OrderStatus=5 Group By GrpName
+
+						--------For Grand Total
+						insert into  #TempFinal(TabName,GrpName,AccountName,OrderStatus,OrderId,IntAmnt)
+						Select 'Grand Total','ZZZZZZ','ZZZZZZ',7,1,Sum(isnull(IntAmnt,0)) From #TempFinal
+						Where OrderStatus=5 
+
+						Select TabName as Deatils,DescripTion as [DescripTion],
+						CASE WHEN ISNULL(Debit,0)=0 THEN NULL WHEN Debit<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(Debit) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(Debit AS VARCHAR(8000)),'N') END AS [Debit],
+						CASE WHEN ISNULL(Credit,0)=0 THEN NULL WHEN Credit<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(Credit) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(Credit AS VARCHAR(8000)),'N') END AS [Credit],
+						CASE WHEN ISNULL(Closing,0)=0 THEN NULL WHEN Closing<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(Closing) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(Closing AS VARCHAR(8000)),'N') END AS [Closing],
+						CASE WHEN ISNULL(InstRate,0)=0 THEN NULL When InstRate='999999999999999.99' THEN NULL WHEN InstRate<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(InstRate) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(InstRate AS VARCHAR(8000)),'N') END AS [Rate],
+						Days as [Days],
+						CASE WHEN ISNULL(IntAmnt,0)=0 THEN NULL WHEN IntAmnt<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(IntAmnt) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(IntAmnt AS VARCHAR(8000)),'N') END AS [Int.Amnt]
+						From #TempFinal order By GrpName,AccountName,OrderStatus,OrderId
+					End
+					Else 
+					Begin
+						Select TabName as Deatils,DescripTion as [DescripTion],
+						CASE WHEN ISNULL(Debit,0)=0 THEN NULL WHEN Debit<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(Debit) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(Debit AS VARCHAR(8000)),'N') END AS [Debit],
+						CASE WHEN ISNULL(Credit,0)=0 THEN NULL WHEN Credit<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(Credit) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(Credit AS VARCHAR(8000)),'N') END AS [Credit],
+						CASE WHEN ISNULL(Closing,0)=0 THEN NULL WHEN Closing<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(Closing) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(Closing AS VARCHAR(8000)),'N') END AS [Closing],
+						CASE WHEN ISNULL(InstRate,0)=0 THEN NULL WHEN InstRate<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(InstRate) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(InstRate AS VARCHAR(8000)),'N') END AS [Rate],
+						Days as [Days],
+						CASE WHEN ISNULL(IntAmnt,0)=0 THEN NULL WHEN IntAmnt<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(IntAmnt) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(IntAmnt AS VARCHAR(8000)),'N') END AS [Int.Amnt]
+						From #TempFinal order By AccountName,OrderStatus,OrderId
+					End
+				End
+				If @RptView='Summary'
+				Begin
+					-------------For Export
+					If(@MainAccountSubLedgerType in ('Customers','NSDL Clients','CDSL Clients','Creditors','Debtors'))
+					Begin
+						--------For Total
+						insert into  #TempFinal(TabName,GrpName,AccountName,OrderStatus,OrderId,IntAmnt)
+						Select 'Total',GrpName,'ZZZZZZ',6,1,Sum(isnull(IntAmnt,0)) From #TempFinal
+						Where OrderStatus=5 Group By GrpName
+
+						--------For Grand Total
+						insert into  #TempFinal(TabName,GrpName,AccountName,OrderStatus,OrderId,IntAmnt)
+						Select 'Grand Total','ZZZZZZ','ZZZZZZ',7,1,Sum(isnull(IntAmnt,0)) From #TempFinal
+						Where OrderStatus=5 
+
+						Select Case When left(TabName,5) in ('Branc','Total','Grand') Then TabName Else AccountName End as [Name],
+						CASE WHEN ISNULL(InstRate,0)=0 THEN NULL When InstRate='999999999999999.99' THEN 'Test' WHEN InstRate<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(InstRate) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(InstRate AS VARCHAR(8000)),'N') END AS [Rate],
+						CASE WHEN ISNULL(IntAmnt,0)=0 THEN NULL WHEN IntAmnt<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(IntAmnt) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(IntAmnt AS VARCHAR(8000)),'N') END AS [Int.Amnt]
+						,null as Remarks
+						From #TempFinal where OrderStatus in (0,5,6,7) 
+						Order By GrpName,AccountName,OrderStatus,OrderId
+
+					End 
+					Else 
+					Begin
+						Select TabName as Deatils,DescripTion as [DescripTion],
+						CASE WHEN ISNULL(Debit,0)=0 THEN NULL WHEN Debit<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(Debit) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(Debit AS VARCHAR(8000)),'N') END AS [Debit],
+						CASE WHEN ISNULL(Credit,0)=0 THEN NULL WHEN Credit<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(Credit) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(Credit AS VARCHAR(8000)),'N') END AS [Credit],
+						CASE WHEN ISNULL(Closing,0)=0 THEN NULL WHEN Closing<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(Closing) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(Closing AS VARCHAR(8000)),'N') END AS [Closing],
+						CASE WHEN ISNULL(InstRate,0)=0 THEN NULL WHEN InstRate<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(InstRate) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(InstRate AS VARCHAR(8000)),'N') END AS [Rate],
+						Days as [Days],
+						CASE WHEN ISNULL(IntAmnt,0)=0 THEN NULL WHEN IntAmnt<0 THEN '-'+dbo.fn_FormatNumber(CAST(ABS(IntAmnt) AS VARCHAR(8000)),'N') ELSE dbo.fn_FormatNumber(CAST(IntAmnt AS VARCHAR(8000)),'N') END AS [Int.Amnt]
+						From #TempFinal order By AccountName,OrderStatus,OrderId
+					End
+				End
+				-----------For Calculation
+				----Update Branch
+				update #TempFinal set BranchId=AccountBranchId From #TABCLIENT
+				Where AccountId=AccountId1
+
+				If @MainAccountSubLedgerType='None'
+				Begin
+					update #TempFinal set BranchId=1
+				End
+				Select AccountId,InstRate,IntAmnt,@MainAccountForInterest as MainAc,BranchId
+				From #TempFinal 
+				Where DescripTion='Closing Balance' and isnull(IntAmnt,0)<>0
+
+
+drop table #TempFinal
+Drop Table #TABCLIENT
+Drop Table #TempDataFetch
+End
+
+
+
+
+
+
+
+
+

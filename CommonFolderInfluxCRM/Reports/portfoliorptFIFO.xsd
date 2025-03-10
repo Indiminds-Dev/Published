@@ -1,0 +1,44 @@
+<?xml version="1.0" standalone="yes"?>
+<xs:schema id="NewDataSet" xmlns="" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+  <xs:element name="NewDataSet" msdata:IsDataSet="true" msdata:MainDataTable="Table" msdata:UseCurrentLocale="true">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="Table">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="CUSTOMERID" type="xs:string" minOccurs="0" />
+              <xs:element name="CUSTOMERID_BOOKEDPL" type="xs:string" minOccurs="0" />
+              <xs:element name="CUSTOMERID_MTMINSTRUCLOSE" type="xs:string" minOccurs="0" />
+              <xs:element name="CUSTOMERID_MTMASSETCLOSE" type="xs:string" minOccurs="0" />
+              <xs:element name="CUSTOMERID_Exposure" type="xs:string" minOccurs="0" />
+              <xs:element name="CUSTOMERID_TOTALPLASSETCLOSE" type="xs:string" minOccurs="0" />
+              <xs:element name="CUSTOMERID_TOTALPLINSTRUCLOSE" type="xs:string" minOccurs="0" />
+              <xs:element name="GROUP_BOOKEDPL" type="xs:string" minOccurs="0" />
+              <xs:element name="GROUP_MTMINSTRUCLOSE" type="xs:string" minOccurs="0" />
+              <xs:element name="GROUP_MTMASSETCLOSE" type="xs:string" minOccurs="0" />
+              <xs:element name="GROUP_Exposure" type="xs:string" minOccurs="0" />
+              <xs:element name="GROUP_TOTALPLASSETCLOSE" type="xs:string" minOccurs="0" />
+              <xs:element name="GROUP_TOTALPLINSTRUCLOSE" type="xs:string" minOccurs="0" />
+              <xs:element name="CLIENTNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="UCC" type="xs:string" minOccurs="0" />
+              <xs:element name="GRPID" type="xs:string" minOccurs="0" />
+              <xs:element name="GRPNAME" type="xs:string" minOccurs="0" />
+              <xs:element name="DATE" type="xs:string" minOccurs="0" />
+              <xs:element name="DISTRIBUTION" type="xs:int" minOccurs="0" />
+              <xs:element name="cmppanno" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpphno" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpfax" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpemail" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpname" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpaddress" type="xs:string" minOccurs="0" />
+              <xs:element name="CLIENTADDRESS1" type="xs:string" minOccurs="0" />
+              <xs:element name="CLIENTADDRESS2" type="xs:string" minOccurs="0" />
+              <xs:element name="cmpservicetax" type="xs:string" minOccurs="0" />
+              <xs:element name="Image" type="xs:base64Binary" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

@@ -1,0 +1,134 @@
+<?xml version="1.0" standalone="yes"?>
+<xs:schema id="NewDataSet" xmlns="" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+  <xs:element name="NewDataSet" msdata:IsDataSet="true" msdata:UseCurrentLocale="true">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="Table">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="CustomerID" type="xs:string" minOccurs="0" />
+              <xs:element name="CustomerName" type="xs:string" minOccurs="0" />
+              <xs:element name="Security_x0020_Name_x002F_Description" type="xs:string" minOccurs="0" />
+              <xs:element name="Exchange" type="xs:string" minOccurs="0" />
+              <xs:element name="Purchase_x002F_Quantity" type="xs:int" minOccurs="0" />
+              <xs:element name="Purchase_x002F_Value_x0020__x0028_Dr._x0029_" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Sale_x002F_Quantity" type="xs:int" minOccurs="0" />
+              <xs:element name="Sale_x002F_Value_x0020__x0028_Cr._x0029_" type="xs:decimal" minOccurs="0" />
+              <xs:element name="Remarks" type="xs:string" minOccurs="0" />
+              <xs:element name="GroupBy" type="xs:string" minOccurs="0" />
+              <xs:element name="BranchName" type="xs:string" minOccurs="0" />
+              <xs:element name="GroupName" type="xs:string" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Table1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="AllSebNo" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_id" type="xs:decimal" minOccurs="0" />
+              <xs:element name="cmp_internalid" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_Name" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_parentid" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_natureOfBusiness" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_directors" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_authorizedSignatories" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_exchange" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_registrationNo" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_sebiRegnNo" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_panNo" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_serviceTaxNo" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_salesTaxNo" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_DateIncorporation" type="xs:dateTime" minOccurs="0" />
+              <xs:element name="cmp_CIN" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_CINdt" type="xs:dateTime" minOccurs="0" />
+              <xs:element name="cmp_VregisNo" type="xs:dateTime" minOccurs="0" />
+              <xs:element name="cmp_VPanNo" type="xs:dateTime" minOccurs="0" />
+              <xs:element name="cmp_OffRoleShortName" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_OnRoleShortName" type="xs:string" minOccurs="0" />
+              <xs:element name="com_Add" type="xs:string" minOccurs="0" />
+              <xs:element name="com_logopath" type="xs:string" minOccurs="0" />
+              <xs:element name="cmp_currencyid" type="xs:unsignedByte" minOccurs="0" />
+              <xs:element name="CmpPhone" type="xs:string" minOccurs="0" />
+              <xs:element name="phf_FaxNumber" type="xs:string" minOccurs="0" />
+              <xs:element name="Session_ExchangeSegmentID" type="xs:long" minOccurs="0" />
+              <xs:element name="Session_UserSegID" type="xs:int" minOccurs="0" />
+              <xs:element name="Exh_ShortName" type="xs:string" minOccurs="0" />
+              <xs:element name="Exch_SegmentID" type="xs:string" minOccurs="0" />
+              <xs:element name="Exch_SebiNo" type="xs:string" minOccurs="0" />
+              <xs:element name="exch_ComplianceOfficer" type="xs:string" minOccurs="0" />
+              <xs:element name="CmpOffcMob" type="xs:string" minOccurs="0" />
+              <xs:element name="CmpOffcEmail" type="xs:string" minOccurs="0" />
+              <xs:element name="exch_GrievanceID" type="xs:string" minOccurs="0" />
+              <xs:element name="exch_InvestorGrievanceID" type="xs:string" minOccurs="0" />
+              <xs:element name="add_addressType" type="xs:string" minOccurs="0" />
+              <xs:element name="CrpdsCity" type="xs:int" minOccurs="0" />
+              <xs:element name="CrpdsState" type="xs:int" minOccurs="0" />
+              <xs:element name="CrpdsPin" type="xs:string" minOccurs="0" />
+              <xs:element name="CrpdsCountry" type="xs:int" minOccurs="0" />
+              <xs:element name="CorrespondenceAddress" type="xs:string" minOccurs="0" />
+              <xs:element name="eml_type" type="xs:string" minOccurs="0" />
+              <xs:element name="eml_email" type="xs:string" minOccurs="0" />
+              <xs:element name="eml_Ccemail" type="xs:string" minOccurs="0" />
+              <xs:element name="eml_website" type="xs:string" minOccurs="0" />
+              <xs:element name="Image" type="xs:base64Binary" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Table2">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="RowID" type="xs:int" minOccurs="0" />
+              <xs:element name="cmp_Name" type="xs:string" minOccurs="0" />
+              <xs:element name="ExchSeg" type="xs:string" minOccurs="0" />
+              <xs:element name="TCode" type="xs:string" minOccurs="0" />
+              <xs:element name="ClntID" type="xs:string" minOccurs="0" />
+              <xs:element name="ClntAddType" type="xs:string" minOccurs="0" />
+              <xs:element name="ClientType" type="xs:string" minOccurs="0" />
+              <xs:element name="ClntUCC" type="xs:string" minOccurs="0" />
+              <xs:element name="Name" type="xs:string" minOccurs="0" />
+              <xs:element name="NamePrefix" type="xs:string" minOccurs="0" />
+              <xs:element name="FName" type="xs:string" minOccurs="0" />
+              <xs:element name="MName" type="xs:string" minOccurs="0" />
+              <xs:element name="LName" type="xs:string" minOccurs="0" />
+              <xs:element name="cnt_id" type="xs:int" minOccurs="0" />
+              <xs:element name="BranchID" type="xs:string" minOccurs="0" />
+              <xs:element name="BranchName" type="xs:string" minOccurs="0" />
+              <xs:element name="Gender" type="xs:string" minOccurs="0" />
+              <xs:element name="DOB" type="xs:dateTime" minOccurs="0" />
+              <xs:element name="CorrespondenceAddress" type="xs:string" minOccurs="0" />
+              <xs:element name="Address1" type="xs:string" minOccurs="0" />
+              <xs:element name="Address2" type="xs:string" minOccurs="0" />
+              <xs:element name="Address3" type="xs:string" minOccurs="0" />
+              <xs:element name="CrpdsCity" type="xs:int" minOccurs="0" />
+              <xs:element name="CrpdsState" type="xs:int" minOccurs="0" />
+              <xs:element name="CrpdsCountry" type="xs:int" minOccurs="0" />
+              <xs:element name="CrpdsPin" type="xs:string" minOccurs="0" />
+              <xs:element name="RegisteredAddress" type="xs:string" minOccurs="0" />
+              <xs:element name="PAddress1" type="xs:string" minOccurs="0" />
+              <xs:element name="PAddress2" type="xs:string" minOccurs="0" />
+              <xs:element name="PAddress3" type="xs:string" minOccurs="0" />
+              <xs:element name="RegCity" type="xs:int" minOccurs="0" />
+              <xs:element name="RegState" type="xs:int" minOccurs="0" />
+              <xs:element name="RegCountry" type="xs:int" minOccurs="0" />
+              <xs:element name="RegPin" type="xs:string" minOccurs="0" />
+              <xs:element name="Status" type="xs:string" minOccurs="0" />
+              <xs:element name="StatusID" type="xs:int" minOccurs="0" />
+              <xs:element name="MrgStatus" type="xs:string" minOccurs="0" />
+              <xs:element name="MrgStatusID" type="xs:int" minOccurs="0" />
+              <xs:element name="Proffession" type="xs:string" minOccurs="0" />
+              <xs:element name="ProffessionID" type="xs:int" minOccurs="0" />
+              <xs:element name="Email_Ids" type="xs:string" minOccurs="0" />
+              <xs:element name="ClientStatus" type="xs:string" minOccurs="0" />
+              <xs:element name="ContractDeliveryMode" type="xs:string" minOccurs="0" />
+              <xs:element name="PhoneMobile_Numbers" type="xs:string" minOccurs="0" />
+              <xs:element name="FatherName" type="xs:string" minOccurs="0" />
+              <xs:element name="PanCardNumber" type="xs:string" minOccurs="0" />
+              <xs:element name="AadharCard" type="xs:string" minOccurs="0" />
+              <xs:element name="MotherName" type="xs:string" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

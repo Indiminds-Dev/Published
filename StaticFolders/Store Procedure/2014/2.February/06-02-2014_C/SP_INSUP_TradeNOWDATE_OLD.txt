@@ -1,0 +1,83 @@
+
+ALTER PROCEDURE [dbo].[SP_INSUP_TradeNOWDATE_OLD]
+@Module varchar(100),
+@ModifyUser	varchar(10)=null,
+@ExcSegmt int,
+@FilePath varchar(250)=null,
+--@FileDate varchar(250),
+@ExchangeTrades_CompanyID char(10)=null,
+@LckTradeDate datetime,
+@ExpireDate datetime
+
+AS
+BEGIN
+
+
+		IF @Module='InsertTradeData'
+		BEGIN
+				declare @ReadFrom as int
+				declare @Q as varchar(250)
+				declare @P int 
+				Declare @Min as Int
+				Declare @Max As Int
+			
+	
+			CREATE TABLE  #tmpTrans_TradeNOW (
+
+				[TradeNOW_TradeNumber] varchar(100) null,
+				[TradeNOW_TradeStatus]  varchar(100) null,
+				[TradeNOW_SecuritySymbol] varchar(100) NULL,
+				[TradeNOW_SecurityType] varchar(100) null,
+				[TradeNOW_SecurityCode] varchar(100) NULL,
+				[TradeNOW_InstrumentType] varchar(150) null,
+				[TradeNOW_MarketType] varchar(100) null,
+				[TradeNOW_BookType] varchar(200) null,
+				[TradeNOW_CTCLID] varchar(100) null,
+--				[TradeNOW_ExpiryDate] varchar(100) null,
+				[TradeNOW_BranchID] varchar(100) null,
+				[TradeNOW_BuySellIndicator] varchar(100) null,
+				[TradeNOW_TradeQuantity] varchar(100) null,
+				[TradeNOW_TradePrice] varchar(100) null,
+				[TradeNOW_ProClient] varchar(100) null,
+				[TradeNOW_ClientAcc] varchar(100) null,
+				[TradeNOW_ParticipantCode] varchar(100) null, 
+				[TradeNOW_AuctionPartType] varchar(100) null,
+				[TradeNOW_AuctionNo] varchar(100) null,
+				[TradeNOW_Sett_Period] varchar(100) null,
+				[TradeNOW_TradeEntryTime] varchar(100) null,
+				[TradeNOW_TradeModifiedTime] varchar(100) null,
+				[TradeNOW_OrderNumber] varchar(100) null,
+--				[TradeNOW_CPID] varchar(100) null,
+--				[TradeNOW_Type] varchar(100) null,
+				[TradeNOW_OrderEntryTime] varchar(100) null,
+				[TradeNOW_OrderModifIedTime] varchar(100) null
+				)
+
+				set @ReadFrom=1
+				
+				set @Q='BULK INSERT #tmpTrans_TradeNOW FROM '+ char(39) + @FilePath + char(39) + ' with (firstrow = ' + convert(varchar,@ReadFrom) + ' , FIELDTERMINATOR = ' + char(39) + ',' + char(39) + ' , ROWTERMINATOR = ' + char(39) + char(10)+ + char(39) +')'
+				print @Q
+				exec (@Q)
+
+				Select TOP(1)[TradeNOW_TradeEntryTime] from #tmpTrans_TradeNOW
+          END
+
+END
+
+--truncate table trans_exchangetrades
+
+--exec [SP_INSUP_Trade] 'InsertTradeDataCSV',373,16,'COR0000001'
+
+--exec [SP_INSUP_TradeNOW] 'InsertTradeData',235,1,'\\server\\CommonFolderInfluxCRM\\2681_0302_FO.TXT','COI0000001'
+--exec [SP_INSUP_TradeNOWDATE] 'InsertTradeData',235,1,'\\server\CommonFolderInfluxCRM\26062_0302.txt','COI0000001','24'
+--exec [SP_INSUP_TradeNOW] 'InsertTradeData','235',1,'\\server\\CommonFolderInfluxCRM\\26062_0102.TXT','COI0000001',24
+--Select * from Trans_ExchangeTrades
+
+--SELECT * from Trans_ExchangeTrades where ExchangeTrades_TradeDate='2010-02-11' AND ExchangeTrades_Segment=1
+--AND ExchangeTRades_CTCLID is null
+
+--exec [SP_INSUP_TradeNOWDATE_OLD] 'InsertTradeData',235,26,'D:\CommonFolderInfluxCRM\\nowcm_pro1102010.txt','COR0000002'
+
+--Select * from master_Settlements where settlements_exchangesegmentID=1
+
+

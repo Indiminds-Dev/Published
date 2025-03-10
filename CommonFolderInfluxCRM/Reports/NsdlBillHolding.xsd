@@ -1,0 +1,29 @@
+<?xml version="1.0" standalone="yes"?>
+<xs:schema id="NewDataSet" xmlns="" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+  <xs:element name="NewDataSet" msdata:IsDataSet="true" msdata:UseCurrentLocale="true">
+    <xs:complexType>
+      <xs:choice minOccurs="0" maxOccurs="unbounded">
+        <xs:element name="Table">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="NsdlHolding_BenAccountNumber" type="xs:string" minOccurs="0" />
+              <xs:element name="NsdlHolding_ISIN" type="xs:string" minOccurs="0" />
+              <xs:element name="NsdlHolding_SettlementNumber" type="xs:string" minOccurs="0" />
+              <xs:element name="Free" type="xs:string" minOccurs="0" />
+              <xs:element name="Demat" type="xs:string" minOccurs="0" />
+              <xs:element name="Remat" type="xs:string" minOccurs="0" />
+              <xs:element name="Pledged" type="xs:string" minOccurs="0" />
+              <xs:element name="HoldingDate" type="xs:string" minOccurs="0" />
+              <xs:element name="Rate" type="xs:string" minOccurs="0" />
+              <xs:element name="ISINValue" type="xs:string" minOccurs="0" />
+              <xs:element name="TotalValue" type="xs:string" minOccurs="0" />
+              <xs:element name="BillNumber" type="xs:string" minOccurs="0" />
+              <xs:element name="NsdlHolding_DPID" type="xs:string" minOccurs="0" />
+              <xs:element name="CmpName" type="xs:string" minOccurs="0" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:choice>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

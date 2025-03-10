@@ -1,0 +1,418 @@
+
+--Exec [Import_DgcxTradeFiles_CTCL] "InsertTrade",'C:\nakamichi\dgdg\Copy of dinr01\110313\DINR01 A 11 03 2013.csv',21,'COR0000002',555
+--Exec [Import_DgcxTradeFiles_CTCL] "InsertTrade",'C:\kredent\dg\ctcl Admin trade file\dg12032013.csv',21,'COR0000002',555
+
+--Exec [Import_DgcxTradeFiles_CTCL] "InsertTrade",'C:\kredent\dg\0314TRDLOG_EXCH_new.TXT',21,'COR0000002',555
+
+ALTER procedure [dbo].[Import_DgcxTradeFiles_CTCL]
+	@Module as Varchar(255),
+	@FilePath as varchar(255)=null,
+	@SegmentId  int,
+	@COMPANY_ID varchar(255)=null,
+	@CreateUser int,
+	@LckTradeDate datetime,
+	@ExpireDate datetime
+AS
+BEGIN
+	If(@Module='InsertTrade')
+	
+	Begin
+	
+		Declare @filecontent varchar(max),@Cols int
+		
+		Create table #Cols (Content varchar(max) null)
+		
+		declare @ReadFrom as int
+		Declare @SqlBulkInsert Varchar(Max)
+		
+		Set @ReadFrom=1
+		set @SqlBulkInsert='BULK INSERT #Cols FROM '+ char(39) + @FilePath + char(39) + ' with (firstrow = ' + convert(varchar,@ReadFrom) + ' , ROWTERMINATOR = ' + char(39) + char(10)+ + char(39) +')' 
+		exec (@SqlBulkInsert)
+
+		Set @filecontent=(select top 1 * from #Cols)		
+		Set @Cols=(select COUNT(col) from dbo.fnSplitReturnTable(@filecontent,','))
+		
+		If @Cols=26
+		Begin
+			Exec [Import_DgcxTradeFiles_CTCL2] @Module,@FilePath,@SegmentId,@COMPANY_ID,@CreateUser
+		End
+	Else 
+	BEGIN
+		Create Table #RowData_DCGX
+		(	
+			UserID Varchar(20) null,
+			GroupID varchar(20) null,
+			TradingMemberID Varchar(20) null,
+			Exchange varchar(10) null,
+			ExchCode varchar(10) null,-------------------5
+			InstrumentID Varchar(20) null,
+			InstrumentName Varchar(20) null,
+			ContractCode Varchar(30) null,
+			SpreadCode Varchar(40) null,
+			ExpiryDate DateTime null,------------------10
+			StrikePrice numeric(22,6) null,
+			OptionType Varchar(10) null,
+			ContractDescription Varchar(100) null,
+			BookTypeName Varchar(10) null,
+			BuySellInd Varchar(2) null,--------------15
+			TradeQty numeric(12,0) null,
+			Price numeric(22,6) null,
+			SpreadPrice numeric(22,6) null,
+			SpreadType varchar(20) null,
+			ProOrClient Varchar(10) null,-----------------------20
+			Account Varchar(20) null,
+			AccountName varchar(100) null,
+			BrokerageRate numeric(8,6) null,
+			Intention varchar(40) null,
+			Settlor varchar(40) null,----------------------25
+			OrderNumber Varchar(80) null,			
+			TradeNumber Varchar(80) null,
+			TradedTime datetime null,
+			Misc varchar(40) null,
+			Lots numeric(12,0) null,-----------------------30
+			ProductType varchar(100) null)
+			--,
+			--SORId varchar(40) null)---------------------32
+			
+		Declare @TotalNoOfRecord int,@TotalNoOfRecordImport int,@TotalNoOfRecordNotImport int
+		
+		Declare @LastUpdateTime DateTime
+		DECLARE @FY VARCHAR(250) 
+		
+		Set @LastUpdateTime=GETDATE()
+
+		Set @ReadFrom=2
+		set @SqlBulkInsert='BULK INSERT #RowData_DCGX FROM '+ char(39) + @FilePath + char(39) + ' with (firstrow = ' + convert(varchar,@ReadFrom) + ' , FIELDTERMINATOR = ' + char(39) + ',' + char(39) + ' , ROWTERMINATOR = ' + char(39) + char(10)+ + char(39) +')' 
+		exec (@SqlBulkInsert)
+		select Top 1 @FY= TradedTime from #RowData_DCGX
+
+		
+If (@FY>=@LckTradeDate and @FY<=@ExpireDate)
+begin
+
+		------Delete Unidentified Records From ComExchangeTrade From This Segment and Date.
+		Declare @TradeDateForDelete DateTime
+		Select Top 1 @TradeDateForDelete=(DATEADD(dd, 0, DATEDIFF(dd, 0, TradedTime))) From #RowData_DCGX
+
+		--- Remove any blank entry if present in the file
+		Delete from #RowData_DCGX where TradedTime is NULL
+		
+		Delete From Trans_ComExchangeTrades Where ComExchangeTrades_Segment=@SegmentId and ComExchangeTrades_TradeDate=@TradeDateForDelete
+		and (ComExchangeTrades_CustomerID is Null Or ComExchangeTrades_BranchID is Null Or ComExchangeTrades_ProductSeriesID is Null
+		or ComExchangeTrades_SettlementNumber is Null Or ComExchangeTrades_SettlementType is Null)
+
+----		-------------------------------------------------------------------------------------
+
+		Select @TotalNoOfRecord=Count(OrderNumber) from #RowData_DCGX
+
+		Update #RowData_DCGX Set	OrderNumber=dbo.ReplaceSpecialCharsExcept(OrderNumber,'','-'),
+									TradeNumber=dbo.ReplaceSpecialCharsExcept(TradeNumber,'','-')
+		
+		Update #RowData_DCGX Set TradeNumber=substring(ltrim(rtrim(TradeNumber)),1,(LEN(ltrim(rtrim(TradeNumber)))-CHARINDEX('-',REVERSE(ltrim(rtrim(TradeNumber))),0)))
+		
+
+--		SELECT * FROM #RowData_DCGX
+
+		INSERT INTO Trans_ComExchangeTrades([ComExchangeTrades_FinYear],[ComExchangeTrades_CompanyID],[ComExchangeTrades_Segment]
+		,[ComExchangeTrades_BranchID],[ComExchangeTrades_TradeCategory],[ComExchangeTrades_SettlementNumber],[ComExchangeTrades_SettlementType]
+		,[ComExchangeTrades_TradeDate],[ComExchangeTrades_TradeNumber],[ComExchangeTrades_TradeStatus],[ComExchangeTrades_TradeEntryTime]
+		,[ComExchangeTrades_TradeModifyTime],[ComExchangeTrades_OrderNumber],[ComExchangeTrades_OrderStatus],[ComExchangeTrades_OrderEntryTime]
+		,[ComExchangeTrades_OrderModifyTime],[ComExchangeTrades_TransactionType],[ComExchangeTrades_OriginalTransactionID],[ComExchangeTrades_ProCli]
+		,[ComExchangeTrades_CustomerUcc],[ComExchangeTrades_TradingMemberID],[ComExchangeTrades_ClearingMemberID],[ComExchangeTrades_CustodialParticipantCode]
+		,[ComExchangeTrades_CustodianCode],[ComExchangeTrades_OldCustodialParticipantCode],[ComExchangeTrades_OldCustodianCode]
+		,[ComExchangeTrades_CustomerID],[ComExchangeTrades_OriginalCustomerUcc],[ComExchangeTrades_CounterPartyID],[ComExchangeTrades_SecurityType]
+		,[ComExchangeTrades_SecuritySymbol],[ComExchangeTrades_SecurityCode],[ComExchangeTrades_SecuritySeries],[ComExchangeTrades_SecurityGroup]
+		,[ComExchangeTrades_SecurityExpiry],[ComExchangeTrades_SecurityOptionType],[ComExchangeTrades_SecurityStrikePrice],[ComExchangeTrades_SecurityISIN]
+		,[ComExchangeTrades_ProductSeriesID],[ComExchangeTrades_BookType],[ComExchangeTrades_MarketType],[ComExchangeTrades_TerminalID],[ComExchangeTrades_OriginalTerminalID]
+		,[ComExchangeTrades_CTCLID],[ComExchangeTrades_OriginalCTCLID],[ComExchangeTrades_ExchangeBranchID],[ComExchangeTrades_BuySellFlag]
+		,[ComExchangeTrades_QuantityLots],[ComExchangeTrades_UnitPrice],[ComExchangeTrades_UnitPriceQuantity],[ComExchangeTrades_MarketValue]
+		,[ComExchangeTrades_NDFlag],[ComExchangeTrades_NDOpenSettNumber],[ComExchangeTrades_NDOPenSettType],[ComExchangeTrades_AuctionPartType]
+		,[ComExchangeTrades_AuctionNumber],[ComExchangeTrades_SettPeriod],[ComExchangeTrades_CustodialFlag]
+		,[ComExchangeTrades_CustTransactionID],[ComExchangeTrades_IsLocked],[ComExchangeTrades_ImportType],[ComExchangeTrades_CreateUser]
+		,[ComExchangeTrades_CreateDateTime],[ComExchangeTrades_LastUpdateUser],[ComExchangeTrades_LastUpdateDate],[ComExchangeTrades_ReferenceNumber]
+		,[ComExchangeTrades_SpreadPrice],[ComExchangeTrades_SettPrice],[ComExchangeTrades_StrikePrice],[ComExchangeTrades_ChangeCustomerID]
+		,[ComExchangeTrades_TradePrice],[ComExchangeTrades_Yield],[ComExchangeTrades_ContractPrice])
+
+		Select 
+		(Select FinYear_Code from Master_FinYear Where 
+		(DATEADD(dd, 0, DATEDIFF(dd, 0, TradedTime))) between FinYear_StartDate and FinYear_EndDate) as ComExchangeTrades_FinYear,
+		@COMPANY_ID as ComExchangeTrades_CompanyID,
+		@SegmentId as ComExchangeTrades_Segment,
+
+		(Select Cnt_BranchID From Tbl_Master_Contact Where Cnt_InternalID=
+		((Select
+		(Case 
+			When ((Select Case When Len(ISNULL(TradingTerminal_AllTradeID,''))>0 or Len(ISNULL(TradingTerminal_CliTradeID,''))>0 or Len(ISNULL(TradingTerminal_ProTradeID,''))>0 
+					Then 1 Else 2 End from Master_TradingTerminal where TradingTerminal_TerminalID=UserID 
+					and TradingTerminal_ExchangeSegmentID=@SegmentId)=1)
+			Then (Select 
+					Case
+						When ProOrClient='CLI' Then 
+							Case
+								When ltrim(rtrim(ISNULL(TradingTerminal_AllTradeID,'')))<>'' Then TradingTerminal_AllTradeID  
+								When ltrim(rtrim(ISNULL(TradingTerminal_AllTradeID,'')))='' And ltrim(rtrim(ISNULL(TradingTerminal_CliTradeID,'')))<>'' Then TradingTerminal_CliTradeID
+								Else (Select Crg_CntID from Tbl_Master_ContactExchange 
+									Where Crg_Company=@COMPANY_ID and Crg_Exchange='DGCX - COMM' 
+									and LTRIM(RTRIM(Crg_TCode))=LTRIM(RTRIM(Account))) 
+							End
+						When ProOrClient<>'CLI' Then
+							Case
+								When ltrim(rtrim(ISNULL(TradingTerminal_AllTradeID,'')))<>'' Then TradingTerminal_AllTradeID 
+								When ltrim(rtrim(ISNULL(TradingTerminal_AllTradeID,'')))='' And ltrim(rtrim(ISNULL(TradingTerminal_ProTradeID,'')))<>'' Then TradingTerminal_ProTradeID
+								Else (Select Crg_CntID from Tbl_Master_ContactExchange 
+									Where Crg_Company=@COMPANY_ID and Crg_Exchange='DGCX - COMM' 
+									and LTRIM(RTRIM(Crg_TCode))=LTRIM(RTRIM(Account))) 
+							End
+					End
+					from Master_TradingTerminal where TradingTerminal_TerminalID=UserID and TradingTerminal_ExchangeSegmentID=@SegmentId)
+					
+			Else
+				(Select Crg_CntID from Tbl_Master_ContactExchange 
+				Where Crg_Company=@COMPANY_ID and Crg_Exchange='DGCX - COMM' 
+				and LTRIM(RTRIM(Crg_TCode))=LTRIM(RTRIM(Account))) 
+		End))))as ComExchangeTrades_BranchID,
+
+		Null as ComExchangeTrades_TradeCategory,
+
+		(Select Settlements_Number from master_Settlements 
+		where ((DATEADD(dd, 0, DATEDIFF(dd, 0, TradedTime))) between Settlements_StartDateTime and Settlements_EndDateTime) and
+		Settlements_TypeSuffix='F' and Settlements_ExchangeSegmentID=10) as ComExchangeTrades_SettlementNumber,
+
+		'F' as ComExchangeTrades_SettlementType,
+		(DATEADD(dd, 0, DATEDIFF(dd, 0, TradedTime))) as ComExchangeTrades_TradeDate,
+
+		ltrim(rtrim(TradeNumber)) as ComExchangeTrades_TradeNumber,
+		11 as ComExchangeTrades_TradeStatus,
+		Cast(TradedTime as DateTime) as ComExchangeTrades_TradeEntryTime,
+		Cast(TradedTime as DateTime) as ComExchangeTrades_TradeModifyTime,
+		ltrim(rtrim(OrderNumber)) as ComExchangeTrades_OrderNumber,
+		Null as ComExchangeTrades_OrderStatus,
+		Cast(TradedTime as DateTime) as ComExchangeTrades_OrderEntryTime,
+		Cast(TradedTime as DateTime) as ComExchangeTrades_OrderModifyTime,
+		'Orgnl' as ComExchangeTrades_TransactionType,
+		Null as ComExchangeTrades_OriginalTransactionID,
+
+		Case when ProOrClient='CLI' then 1 Else 2 End as ComExchangeTrades_ProCli,
+		
+		ltrim(rtrim(Account)) as ComExchangeTrades_CustomerUcc,
+
+		TradingMemberID as ComExchangeTrades_TradingMemberID,
+		TradingMemberID as ComExchangeTrades_ClearingMemberID,
+		NULL as ComExchangeTrades_CustodialParticipantCode,
+		NULL as ComExchangeTrades_CustodianCode,
+		Null as ComExchangeTrades_OldCustodialParticipantCode,
+		Null as ComExchangeTrades_OldCustodianCode,
+		
+		(Select
+		(Case 
+			When ((Select Case When Len(ISNULL(TradingTerminal_AllTradeID,''))>0 or Len(ISNULL(TradingTerminal_CliTradeID,''))>0 or Len(ISNULL(TradingTerminal_ProTradeID,''))>0 
+					Then 1 Else 2 End from Master_TradingTerminal where TradingTerminal_TerminalID=UserID 
+					and TradingTerminal_ExchangeSegmentID=@SegmentId)=1)
+			Then (Select 
+					Case
+						When ProOrClient='CLI' Then 
+							Case
+								When ltrim(rtrim(ISNULL(TradingTerminal_AllTradeID,'')))<>'' Then TradingTerminal_AllTradeID  
+								When ltrim(rtrim(ISNULL(TradingTerminal_AllTradeID,'')))='' 
+								And ltrim(rtrim(ISNULL(TradingTerminal_CliTradeID,'')))<>'' Then TradingTerminal_CliTradeID
+								Else (Select Crg_CntID from Tbl_Master_ContactExchange 
+									Where Crg_Company=@COMPANY_ID and Crg_Exchange='DGCX - COMM' 
+									and LTRIM(RTRIM(Crg_TCode))=LTRIM(RTRIM(Account))) 
+							End
+						When ProOrClient<>'CLI' Then
+							Case
+								When ltrim(rtrim(ISNULL(TradingTerminal_AllTradeID,'')))<>'' Then TradingTerminal_AllTradeID 
+								When ltrim(rtrim(ISNULL(TradingTerminal_AllTradeID,'')))='' 
+								And ltrim(rtrim(ISNULL(TradingTerminal_ProTradeID,'')))<>'' Then TradingTerminal_ProTradeID
+								Else (Select Crg_CntID from Tbl_Master_ContactExchange 
+									Where Crg_Company=@COMPANY_ID and Crg_Exchange='DGCX - COMM' 
+									and LTRIM(RTRIM(Crg_TCode))=LTRIM(RTRIM(Account))) 
+							End
+					End
+					from Master_TradingTerminal where TradingTerminal_TerminalID=UserID and TradingTerminal_ExchangeSegmentID=@SegmentId)
+					
+			Else
+				(Select Crg_CntID from Tbl_Master_ContactExchange 
+				Where Crg_Company=@COMPANY_ID and Crg_Exchange='DGCX - COMM' 
+				and LTRIM(RTRIM(Crg_TCode))=LTRIM(RTRIM(Account))) 
+		End)) as ComExchangeTrades_CustomerID,
+		
+		Null as ComExchangeTrades_OriginalCustomerUcc,
+
+		(select Case When isnull(TradingTerminal_BrokerID,'')<>'' Then 
+					Ltrim(Rtrim(TradingTerminal_BrokerID)) Else NULL End 
+					From Master_TradingTerminal 
+					Where TradingTerminal_ExchangeSegmentID=@SegmentId 
+					and TradingTerminal_CompanyID=@COMPANY_ID
+					and TradingTerminal_TerminalID=UserID)
+		as ComExchangeTrades_CounterPartyID,
+
+		case when left(InstrumentName,3)='FUT' then 'FUTCOM' Else 'OPTCOM' End as ComExchangeTrades_SecurityType,
+		LTRIM(RTRIM(ContractCode)) as ComExchangeTrades_SecuritySymbol,
+		
+		(Select Commodity_TickerCode from Master_Commodity 
+		where Commodity_ExchangeSegmentID=10 and 
+		Commodity_Identifier=Case when left(InstrumentName,3)='FUT' then 'FUTCOM' Else 'OPTCOM' End and
+		isnull(Commodity_ExpiryDate,'')=Cast(ExpiryDate as DateTime) and
+		isnull(Commodity_StrikePrice,0.00)=isnull(StrikePrice,0.00) and
+		isnull(Commodity_TickerSeries,'FF')=isnull(OptionType,'FF') and
+		ltrim(rtrim(Commodity_TickerSymbol))=ltrim(rtrim(ContractCode))) as ComExchangeTrades_SecurityCode,
+
+		isnull(OptionType,'FF') as ComExchangeTrades_SecuritySeries,
+
+		Null as ComExchangeTrades_SecurityGroup,
+
+		Cast(ExpiryDate as DateTime) as ComExchangeTrades_SecurityExpiry,
+		
+		ISNULL(OptionType,'FF') as ComExchangeTrades_SecurityOptionType,
+		
+		isnull(StrikePrice,0.00) as ComExchangeTrades_SecurityStrikePrice,
+		
+		Null as ComExchangeTrades_SecurityISIN,
+		
+		(Select Commodity_ProductSeriesID from Master_Commodity 
+		where Commodity_ExchangeSegmentID=10 and 
+		Commodity_Identifier=case when left(InstrumentName,3)='FUT' then 'FUTCOM' Else 'OPTCOM' End and
+		Commodity_ExpiryDate=ExpiryDate and
+		isnull(Commodity_StrikePrice,0.00)=isnull(StrikePrice,0.00) and
+		isnull(Commodity_TickerSeries,'FF')=isnull(OptionType,'FF') and
+		ltrim(rtrim(Commodity_TickerSymbol))=ltrim(rtrim(ContractCode))) as ComExchangeTrades_ProductSeriesID,
+		
+		BookTypeName as ComExchangeTrades_BookType,
+		1 as ComExchangeTrades_MarketType,
+		UserID as ComExchangeTrades_TerminalID,
+		Null as ComExchangeTrades_OriginalTerminalID,
+		Null as ComExchangeTrades_CTCLID,
+		Null as ComExchangeTrades_OriginalCTCLID,
+		Null as ComExchangeTrades_ExchangeBranchID,
+		Case when BuySellInd='B' then 1 Else 2 End as ComExchangeTrades_BuySellFlag,
+		Cast(TradeQty as numeric(14,3)) as ComExchangeTrades_QuantityLots,
+
+		Cast((Price*
+		(Select (Commodity_PriceNumerator/Commodity_PriceDenominator) from Master_Commodity 
+		where Commodity_ExchangeSegmentID=10 and 
+		Commodity_Identifier=Case when left(InstrumentName,3)='FUT' then 'FUTCOM' Else 'OPTCOM' End and
+		Commodity_ExpiryDate=Cast(ExpiryDate as DateTime) and
+		isnull(Commodity_StrikePrice,0.00)=ISNULL(StrikePrice,0.00) and
+		isnull(Commodity_TickerSeries,'FF')=isnull(OptionType,'FF') and
+		ltrim(rtrim(Commodity_TickerSymbol))=ltrim(rtrim(ContractCode)))) as Numeric(22,6)) as ComExchangeTrades_UnitPrice,
+		
+		Cast(TradeQty *
+		(Select Cast((Commodity_ConvNumerator/Commodity_ConDenominator) as Numeric(18,3))
+		from Master_Commodity 
+		where Commodity_ExchangeSegmentID=10 and 
+		Commodity_Identifier=Case when left(InstrumentName,3)='FUT' then 'FUTCOM' Else 'OPTCOM' End and
+		Commodity_ExpiryDate=Cast(ExpiryDate as DateTime) and
+		isnull(Commodity_StrikePrice,0.00)=isnull(StrikePrice,0.00) and
+		isnull(Commodity_TickerSeries,'FF')=isnull(OptionType,'FF') and
+		ltrim(rtrim(Commodity_TickerSymbol))=ltrim(rtrim(ContractCode))) as Numeric(18,3)) as ComExchangeTrades_UnitPriceQuantity,---------50
+		
+		Cast(((Price*
+		(Select (Commodity_PriceNumerator/Commodity_PriceDenominator) from Master_Commodity 
+		where Commodity_ExchangeSegmentID=10 and 
+		Commodity_Identifier=case when left(InstrumentName,3)='FUT' then 'FUTCOM' Else 'OPTCOM' End and
+		Commodity_ExpiryDate=Cast(ExpiryDate as DateTime) and
+		isnull(Commodity_StrikePrice,0.00)=isnull(StrikePrice,0.00) and
+		isnull(Commodity_TickerSeries,'FF')=isnull(OptionType,'FF') and
+		ltrim(rtrim(Commodity_TickerSymbol))=ltrim(rtrim(ContractCode))))*(TradeQty *
+		(Select Cast((Commodity_ConvNumerator/Commodity_ConDenominator) as Numeric(18,3))
+		from Master_Commodity 
+		where Commodity_ExchangeSegmentID=10 and 
+		Commodity_Identifier=case when left(InstrumentName,3)='FUT' then 'FUTCOM' Else 'OPTCOM' End and
+		Commodity_ExpiryDate=Cast(ExpiryDate as DateTime) and
+		isnull(Commodity_StrikePrice,0.00)=isnull(StrikePrice,0.00) and
+		isnull(Commodity_TickerSeries,'FF')=isnull(OptionType,'FF') and
+		ltrim(rtrim(Commodity_TickerSymbol))=ltrim(rtrim(ContractCode))))) as Numeric(22,2)) as ComExchangeTrades_MarketValue,
+
+		'N' as ComExchangeTrades_NDFlag,
+		Null as ComExchangeTrades_NDOpenSettNumber,
+		Null as ComExchangeTrades_NDOPenSettType,
+		Null as ComExchangeTrades_AuctionPartType,
+		Null as ComExchangeTrades_AuctionNumber,
+		Null as ComExchangeTrades_SettPeriod,
+		'N' as ComExchangeTrades_CustodialFlag,
+		Null as ComExchangeTrades_CustTransactionID,
+		Null as ComExchangeTrades_IsLocked,
+		Null as ComExchangeTrades_ImportType,
+		@CreateUser as ComExchangeTrades_CreateUser,
+		GetDate() as ComExchangeTrades_CreateDateTime,
+		Null as ComExchangeTrades_LastUpdateUser,
+
+		(select Case When isnull(TradingTerminal_BrokerID,'')<>'' Then 
+						@LastUpdateTime Else NULL End 
+						From Master_TradingTerminal 
+						Where TradingTerminal_ExchangeSegmentID=@SegmentId 
+						and TradingTerminal_CompanyID=@COMPANY_ID
+						and TradingTerminal_TerminalID=UserID)
+		as ComExchangeTrades_LastUpdateDate,
+
+		Null as ComExchangeTrades_ReferenceNumber,
+		(Case When ltrim(rtrim(SpreadPrice))='' Then '0.00' Else Cast(SpreadPrice as Numeric(18,8)) End) as ComExchangeTrades_SpreadPrice,
+		Null as ComExchangeTrades_SettPrice,
+		(Case When ltrim(rtrim(StrikePrice))='' Then '0.00' Else Cast(StrikePrice as Numeric(18,8)) End) as ComExchangeTrades_StrikePrice,
+		Null as ComExchangeTrades_ChangeCustomerID,
+		Null as ComExchangeTrades_TradePrice,
+		Null as ComExchangeTrades_Yield,
+		Null as ComExchangeTrades_ContractPrice
+		from #RowData_DCGX AS a
+		WHERE Not EXISTS
+		(SELECT * 
+			FROM Trans_ComExchangeTrades
+			Where ltrim(rtrim(OrderNumber))=ltrim(rtrim(ComExchangeTrades_OrderNumber)) and
+			 ltrim(rtrim(TradeNumber))=ltrim(rtrim(ComExchangeTrades_TradeNumber)) and
+			 (DATEADD(dd, 0, DATEDIFF(dd, 0,TradedTime)))=ComExchangeTrades_TradeDate and
+			 ComExchangeTrades_Segment=@SegmentId);
+		Set @TotalNoOfRecordImport=@@RowCount
+		Set @TotalNoOfRecordNotImport=@TotalNoOfRecord-@TotalNoOfRecordImport
+		Select @TotalNoOfRecord as TotalRecord,@TotalNoOfRecordImport as ImportedRecord,@TotalNoOfRecordNotImport as NotImportedRecord,'You Just Imported Trades For : '+Convert(Varchar(11),@TradeDateForDelete,106)
+
+-------And Now trades for the Broker ------------
+	insert into Trans_ComExchangeTrades
+			(ComExchangeTrades_FinYear,ComExchangeTrades_CompanyID,ComExchangeTrades_Segment,ComExchangeTrades_BranchID,ComExchangeTrades_SettlementNumber,
+			ComExchangeTrades_SettlementType,ComExchangeTrades_ProductSeriesID,ComExchangeTrades_TradeDate,ComExchangeTrades_TradeNumber,
+			ComExchangeTrades_TradeEntryTime,ComExchangeTrades_OrderNumber,ComExchangeTrades_TransactionType,ComExchangeTrades_CustomerUcc,
+			ComExchangeTrades_CustomerID,ComExchangeTrades_SecuritySymbol,ComExchangeTrades_SecurityExpiry,ComExchangeTrades_MarketType,
+			ComExchangeTrades_Quantitylots,ComExchangeTrades_UnitPrice,ComExchangeTrades_ProCli,ComExchangeTrades_TradingMemberID,
+			ComExchangeTrades_SecurityType,ComExchangeTrades_TerminalID,ComExchangeTrades_CTCLID,ComExchangeTrades_BuySellFlag,
+			ComExchangeTrades_UnitPriceQuantity,ComExchangeTrades_CreateUser,ComExchangeTrades_CreateDateTime,ComExchangeTrades_MarketValue,
+			ComExchangeTrades_CustodialFlag,ComExchangeTrades_SecuritySeries,ComExchangeTrades_SecurityOptionType,ComExchangeTrades_SecurityStrikePrice,
+			ComExchangeTrades_StrikePrice,ComExchangeTrades_OrderEntryTime,ComExchangeTrades_OrderModifyTime,ComExchangeTrades_CounterPartyID,
+			ComExchangeTrades_LastUpdateDate)
+	Select	ComExchangeTrades_FinYear,ComExchangeTrades_CompanyID,ComExchangeTrades_Segment,ComExchangeTrades_BranchID,ComExchangeTrades_SettlementNumber,
+			ComExchangeTrades_SettlementType,ComExchangeTrades_ProductSeriesID,ComExchangeTrades_TradeDate,ComExchangeTrades_TradeNumber,
+			ComExchangeTrades_TradeEntryTime,ComExchangeTrades_OrderNumber,ComExchangeTrades_TransactionType,ComExchangeTrades_CustomerUcc,
+			ComExchangeTrades_CounterPartyID,ComExchangeTrades_SecuritySymbol,ComExchangeTrades_SecurityExpiry,ComExchangeTrades_MarketType,
+			ComExchangeTrades_Quantitylots,ComExchangeTrades_UnitPrice,ComExchangeTrades_ProCli,ComExchangeTrades_TradingMemberID,
+			ComExchangeTrades_SecurityType,ComExchangeTrades_TerminalID,ComExchangeTrades_CTCLID,
+			Case when ComExchangeTrades_BuySellFlag=1 then 2 Else 1 End,
+			ComExchangeTrades_UnitPriceQuantity,ComExchangeTrades_CreateUser,GETDATE(),ComExchangeTrades_MarketValue,
+			ComExchangeTrades_CustodialFlag,ComExchangeTrades_SecuritySeries,ComExchangeTrades_SecurityOptionType,ComExchangeTrades_SecurityStrikePrice,
+			ComExchangeTrades_StrikePrice,ComExchangeTrades_OrderEntryTime,ComExchangeTrades_OrderModifyTime,ComExchangeTrades_CustomerID,
+			ComExchangeTrades_LastUpdateDate
+		From Trans_ComExchangeTrades where
+		ComExchangeTrades_CompanyID=@COMPANY_ID
+		and ComExchangeTrades_FinYear=(select FinYear_Code from Master_FinYear where @TradeDateForDelete between FinYear_StartDate and FinYear_EndDate)
+		and ComExchangeTrades_Segment=@SegmentId
+		and ComExchangeTrades_TradeDate=@TradeDateForDelete
+		and ComExchangeTrades_CreateUser=@CreateUser
+		and ComExchangeTrades_LastUpdateDate=@LastUpdateTime
+		and LEFT(ISNULL(ComExchangeTrades_CounterPartyID,'NOR'),2)='BO'
+
+End	
+Else
+Begin
+	Select 'Data Is Locked'
+End		
+		Drop Table #RowData_DCGX
+	End
+	END
+End
+
+
+
+
+
+
+
+
+

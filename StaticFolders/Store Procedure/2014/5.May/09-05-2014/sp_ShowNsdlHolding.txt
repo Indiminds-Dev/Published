@@ -1,0 +1,278 @@
+
+ALTER PROCEDURE [dbo].[sp_ShowNsdlHolding]
+	@BenAccId varchar(max),
+	@where_NsdlHolding_HoldingDateTime varchar(30),
+	@BenType varchar(4),
+	@isin varchar(30),
+	@Settlement_Id varchar(30),
+	@branhid varchar(3000),
+	@user varchar(30)
+
+
+AS
+BEGIN
+	SET NOCOUNT ON;
+
+	----Start new Modified
+	Declare @ReportView char(1),@Selected_ISINID varchar(20)
+	Select @ReportView=dbo.fnSplit(@user,'~',2)
+	If @ReportView='S'
+		Select @Selected_ISINID=dbo.fnSplit(@user,'~',3)
+		
+	Select @user=dbo.fnSplit(@user,'~',1)	
+	----End new Modified
+			
+	declare @sql varchar(8000), @sql1 varchar(100), @sql2 varchar(500), @sql_qty varchar(8000)
+	declare @Price_HoldingDateTime varchar(30)
+
+	set @Price_HoldingDateTime = @where_NsdlHolding_HoldingDateTime + ' 23:59:59'
+
+	If @ReportView='C'
+		Begin
+			if @BenType = '6'
+				begin
+					set @sql_qty = ' Free = isnull((select sum(NsdlHolding_Free)
+												from Trans_NsdlHolding b
+												where b.NsdlHolding_BenAccountNumber = '+@BenAccId+
+														' and b.NsdlHolding_ISIN = a.NsdlHolding_ISIN 
+														and b.NsdlHolding_SettlementNumber=a.NsdlHolding_SettlementNumber
+
+														and NsdlHolding_HoldingDateTime='''+@where_NsdlHolding_HoldingDateTime+''''+
+														'),0.000),
+									Demat = 0.000,
+									Remat = 0.000,
+									Pledged = 0.000,
+									Total = isnull((select sum(NsdlHolding_Quantity) from Trans_NsdlHolding  b
+													where b.NsdlHolding_BenAccountNumber='+@BenAccId+
+													' and b.NsdlHolding_ISIN = a.NsdlHolding_ISIN
+													and b.NsdlHolding_SettlementNumber = a.NsdlHolding_SettlementNumber 
+
+													and NsdlHolding_HoldingDateTime='''+@where_NsdlHolding_HoldingDateTime+''''+
+													'),0.000), '
+
+				end
+			else
+				begin
+					set @sql_qty = ' Free = isnull((select sum(NsdlHolding_Free)
+												from Trans_NsdlHolding b
+												where b.NsdlHolding_BenAccountNumber = '+@BenAccId+
+												' and b.NsdlHolding_ISIN = a.NsdlHolding_ISIN 
+
+												and NsdlHolding_HoldingDateTime='''+@where_NsdlHolding_HoldingDateTime+''''+
+												'),0.000),
+
+									isnull(NsdlHolding_Demat,0) as Demat,  
+
+									isnull(NsdlHolding_Remat,0) as Remat,  
+
+									Pledged = isnull((select sum(NsdlHolding_Pledged) from Trans_NsdlHolding  b
+													  where b.NsdlHolding_BenAccountNumber='+@BenAccId+
+															' and b.NsdlHolding_ISIN = a.NsdlHolding_ISIN
+
+													and NsdlHolding_HoldingDateTime='''+@where_NsdlHolding_HoldingDateTime+''''+
+													'),0), 
+
+									Total = isnull((select sum(NsdlHolding_Quantity) from Trans_NsdlHolding  b
+													where b.NsdlHolding_BenAccountNumber='+@BenAccId+
+														' and b.NsdlHolding_ISIN = a.NsdlHolding_ISIN
+
+														and NsdlHolding_HoldingDateTime='''+@where_NsdlHolding_HoldingDateTime+''''+
+														'),0) ,	'
+
+				end
+
+			set @sql = ' select *, 
+							convert(varchar(50),cast(Rate*foo.Total as money),1) as ISINValue, '
+							+ @user + ' as UserID1
+						from
+							(select distinct  NsdlHolding_ISIN,
+							ltrim(rtrim(NSDLISIN_CompanyName))
+							as CmpName,
+							NsdlHolding_SettlementNumber ,
+
+						case when NsdlHolding_BenCategory = 3
+						  then 
+								case when NsdlHolding_BenAccountType = 20 then ''Normal''
+								when NsdlHolding_BenAccountType = 30 then ''Delivery''
+								when NsdlHolding_BenAccountType = 40 then ''Receipt''
+								else null end
+						  else null end as Type,'+@sql_qty+
+			           
+						' Rate=(select top 1 DPPrice_Price from Trans_DPPrice 
+						where DPPrice_ISIN = a.NsdlHolding_ISIN
+						and DPPrice_DP=''NSDL''
+						and DPPrice_Date <= '''+@Price_HoldingDateTime+''''+
+						' order by DPPrice_Date desc)
+
+			from Trans_NsdlHolding a join Master_NsdlClients 
+			on NsdlHolding_benaccountnumber=NsdlClients_benaccountid ,Master_NSDLISIN 
+			where NSDLISIN_Number=NsdlHolding_ISIN and NsdlHolding_BenAccountNumber='+@BenAccId+
+			' and NsdlHolding_HoldingDateTime='''+@where_NsdlHolding_HoldingDateTime+'''and nsdlClients_branchid in ('+@branhid+') '
+
+
+			set @sql1 = ')foo
+			order by CmpName,NsdlHolding_ISIN, NsdlHolding_SettlementNumber '
+
+			set @sql2=''
+
+			if @isin <> 'na'
+				begin
+					set @sql2=@sql2+' and NsdlHolding_ISIN='''+@isin+''''
+				end
+
+			if @Settlement_Id <> 'na'
+				begin
+					set @sql2=@sql2+' and NsdlHolding_SettlementNumber='''+@Settlement_Id+''''
+				end
+
+			--print (@sql + @sql2 + @sql1)	
+			--exec (@sql + @sql2 + @sql1)
+			----------------------Modifying For Rate_Date-------------------------
+											
+			Create Table #TmpResultTab(NsdlHolding_ISIN varchar(20),CmpName varchar(500),NsdlHolding_SettlementNumber Varchar(7)
+									   ,Type Varchar(50),Free Varchar(50),Demat Varchar(50),Remat Varchar(50),Pledged Varchar(50)
+									   ,Total Varchar(50),Rate Varchar(50),Rate_Date varchar(15),ISINValue Varchar(50),UserID1 varchar(10))
+				
+			Insert into #TmpResultTab(NsdlHolding_ISIN,CmpName,NsdlHolding_SettlementNumber,Type,Free,Demat,Remat,Pledged,Total,Rate,ISINValue,UserID1)
+			exec (@sql + @sql2 + @sql1)
+	
+			Update #TmpResultTab Set Rate_Date=DpPrice_Date
+			From    (Select CONVERT(VARCHAR(11),cast(DpPrice_Date as DateTime),106) DpPrice_Date From Trans_DPPrice,#TmpResultTab 
+					 Where DPPrice_ISIN = NsdlHolding_ISIN
+						   and DPPrice_DP='NSDL'
+						   and DPPrice_Date=(Select MAX(DpPrice_Date) from Trans_DPPrice,#TmpResultTab 
+											 Where DPPrice_ISIN = NsdlHolding_ISIN 
+												   and DPPrice_DP='NSDL'
+												   and DPPrice_Date<=@Price_HoldingDateTime)) DpRateDateTable
+			
+			Select * from #TmpResultTab			
+			
+			Drop table #TmpResultTab
+		End
+	Else
+		Begin
+						
+			Declare @DSql varchar(max),@DSqlWhere varchar(max)
+			
+			Set @DSqlWhere=' and NsdlHolding_HoldingDateTime='''+@where_NsdlHolding_HoldingDateTime+''''
+			
+			if(@BenAccId<>'')
+				Select @DSqlWhere=@DSqlWhere+' and NsdlHolding_BenAccountNumber in ('+@BenAccId+')'
+			
+			------@isin not important because sending filtered isin one by one from Page------
+			----Only For Client Wise
+			--if(@isin<>'na')
+			--	Select @DSqlWhere=@DSqlWhere+' and NsdlHolding_ISIN='''+@isin+''''
+			
+			if(@Selected_ISINID<>'')
+				Select @DSqlWhere=@DSqlWhere+' and NsdlHolding_ISIN='''+@Selected_ISINID+''''			
+			
+			if(@Settlement_Id<>'na')
+				Select @DSqlWhere=@DSqlWhere+' and NsdlHolding_SettlementNumber='''+@Settlement_Id+''''			
+			
+			Select @DSql=' 
+				Select NsdlHolding_ISIN,NsdlHolding_BenAccountNumber,isnull(NsdlHolding_Free,0),isnull(NsdlHolding_Pledged,0),
+					   isnull(NsdlHolding_Remat,0),isnull(NsdlHolding_Demat,0),isnull(NsdlHolding_Quantity,0),NsdlClients_BenType,NsdlHolding_SettlementNumber,
+					   NsdlHolding_BenCategory,NsdlHolding_BenAccountType
+				from Trans_NsdlHolding,Master_NsdlClients
+				Where NsdlHolding_DpID=NsdlClients_DpID
+					  and NsdlHolding_BenAccountNumber=NsdlClients_BenAccountID '+@DSqlWhere
+					
+					
+			Create Table #TmpHoldingDetail(ISIN_Number varchar(20),BenAccountID int,Free numeric(28,3),Pledged numeric(28,3)
+										   ,Remat numeric(28,3),Demat numeric(28,3),Total numeric(28,3)
+										   ,Rate numeric(28,4),Rate_Date DateTime,BenType int,SettlementNumber Varchar(7)
+										   ,BenCategory int,BenAccountType int)
+			
+			Create Table #TmpHoldingDetail_ForCM(ISIN_Number varchar(20),BenAccountID int,Free numeric(28,3),Pledged numeric(28,3)
+										   ,Remat numeric(28,3),Demat numeric(28,3),Total numeric(28,3)
+										   ,Rate numeric(28,4),Rate_Date DateTime,BenType int,SettlementNumber Varchar(7)
+										   ,BenCategory int,BenAccountType int)
+			
+			
+			Insert into #TmpHoldingDetail(ISIN_Number,BenAccountID,Free,Pledged,Remat,Demat,Total,BenType,SettlementNumber,BenCategory ,BenAccountType)
+			Exec (@DSql)
+	--Select * from #TmpHoldingDetail		
+			---Update For 'Clearing Member' Where BenType=6----
+			
+			Insert into #TmpHoldingDetail_ForCM 
+			Select * from #TmpHoldingDetail Where BenType=6
+			
+			Delete From #TmpHoldingDetail Where BenType=6
+					
+			-----Update Free and Total-----
+			Update #TmpHoldingDetail_ForCM 
+			Set Free=Free1, Pledged=0.000,Remat=0.000,Demat=0.000,Total=Total1
+			From 		
+				(select BenAccountID,ISIN_Number,SettlementNumber
+						,isnull(SUM(Free),0.000) Free1
+						,isnull(SUM(Total),0.000) Total1,
+						BenCategory,BenAccountType 
+				 From #TmpHoldingDetail
+				 Where BenType=6 
+				 Group By BenAccountID,ISIN_Number,SettlementNumber,BenCategory,BenAccountType) tt			 
+			Where #TmpHoldingDetail_ForCM.ISIN_Number=tt.ISIN_Number
+					and #TmpHoldingDetail_ForCM.BenAccountID=tt.BenAccountID
+					and #TmpHoldingDetail_ForCM.BenAccountType=tt.BenAccountType
+					and #TmpHoldingDetail_ForCM.BenCategory=tt.BenCategory	
+									 
+					
+			----Update Rate And RateDate--------------------------------			
+			Update #TmpHoldingDetail Set Rate=DPPrice_Price,
+										 Rate_Date=DpPrice_Date
+			From 
+				    (Select DpPrice_Date,DPPrice_Price 
+					 From Trans_DPPrice 
+					 Where DPPrice_ISIN = @Selected_ISINID 
+						   and DPPrice_DP='NSDL'
+						   and DPPrice_Date=(Select MAX(DpPrice_Date) from Trans_DPPrice 
+											 Where DPPrice_ISIN = @Selected_ISINID 
+												   and DPPrice_DP='NSDL'
+												   and DPPrice_Date<=@Price_HoldingDateTime)) DpRateTable
+			
+			Update #TmpHoldingDetail_ForCM Set Rate=DPPrice_Price,
+										 Rate_Date=DpPrice_Date
+			From 
+				    (Select DpPrice_Date,DPPrice_Price 
+					 From Trans_DPPrice 
+					 Where DPPrice_ISIN = @Selected_ISINID 
+						   and DPPrice_DP='NSDL'
+						   and DPPrice_Date=(Select MAX(DpPrice_Date) from Trans_DPPrice 
+											 Where DPPrice_ISIN = @Selected_ISINID 
+												   and DPPrice_DP='NSDL'
+												   and DPPrice_Date<=@Price_HoldingDateTime)) DpRateTable		
+
+
+--Select * From #TmpHoldingDetail	
+
+			Insert into #TmpHoldingDetail
+			Select ISIN_Number,BenAccountID,isnull(sum(Free),0),Pledged,Remat,Demat,isnull(sum(Total),0)
+					 ,Rate,Rate_Date,BenType,SettlementNumber,BenCategory,BenAccountType 
+			From #TmpHoldingDetail_ForCM
+			Group By ISIN_Number,BenAccountID,Pledged,Remat,Demat
+					 ,Rate,Rate_Date,BenType,SettlementNumber,BenCategory,BenAccountType
+	
+			select distinct  BenAccountID NsdlHolding_ISIN,
+							ltrim(rtrim(NsdlClients_BenFirstHolderName))
+							as CmpName,
+							SettlementNumber as NsdlHolding_SettlementNumber,
+						case when BenCategory = 3
+						  then 
+								case when BenAccountType = 20 then 'Normal'
+								when BenAccountType = 30 then 'Delivery'
+								when BenAccountType = 40 then 'Receipt'
+								else null end
+						  else null end as Type,
+						 Free,Demat,Remat,Pledged,Total,Rate,	
+						 convert(varchar(50),cast(Rate*Total as money),1) as ISINValue, 
+						 @user  as UserID1,CONVERT(VARCHAR(11),Rate_Date,106) Rate_Date					 
+			From #TmpHoldingDetail,Master_NsdlClients
+			where BenAccountID=NsdlClients_BenAccountID  
+		
+		----Delete Temporary Tables---------------------
+			Drop Table #TmpHoldingDetail
+			Drop Table #TmpHoldingDetail_ForCM
+				
+		End
+		
+	END

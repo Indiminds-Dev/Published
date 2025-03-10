@@ -1,0 +1,144 @@
+
+
+
+ALTER procedure [dbo].[KRA_Fetch_RegistrationForm]
+@FetchType varchar(10),--ADD,EDIT
+@GrpBy Varchar(20),    --BRANCH,GROUP,CLIENT
+@GrpByID Varchar(Max), -- IDS, ALL
+@GrpType Varchar(200), -- 'Sub Broker', etc
+@User varchar(10),
+@Company varchar(10),
+@ClntType char(1),
+@CreatedateTime datetime,
+@PageSize int,
+@PageNumber int,
+@FromDate datetime,
+@ToDate datetime
+As
+Begin
+     Create Table #FinalDisplay(RowID int,ClntID Varchar(100),FormNo varchar(16),ApplicatnNo varchar(16),ClientType Varchar(100),ClntUCC varchar(10),Name varchar(250),
+     FName varchar(150),MName varchar(150),LName varchar(150),cnt_id int,BranchName Varchar(500),BranchID varchar(max),Gender varchar(10),DOB datetime,CorrespondenceAddress Varchar(250),
+	 Address1 varchar(200),Address2 varchar(200),Address3 varchar(200),CrpdsCity int,CrpdsState int,CrpdsCountry int,CrpdsPin varchar(10),
+	 RegisteredAddress varchar(350),PAddress1 varchar(200),PAddress2 varchar(200),PAddress3 varchar(200),RegCity int,RegState int,RegCountry int,RegPin varchar(10),
+	 Status varchar(100),StatusID int,MrgStatus varchar(100),MrgStatusID int,Proffession varchar(100) ,ProffessionID int , Email_Ids Varchar(250),
+	 PhoneMobile_Numbers Varchar(100),FatherName Varchar(500),PanCardNumber Varchar(100),
+     CreatedBy varchar(100),CreateDateTime datetime)
+     
+     Create Table #FormNoGenerate(FormNo varchar(16))
+
+	 Declare @Param nvarchar(max),@MaxSerialNO int,@MinSerialNO int,@FormNo varchar(16),@ClientType varchar(10)
+	
+	 if(@FetchType = 'ADD')
+     Begin
+		
+		 select @Param = 'Detail~'	
+		 select @Param= coalesce(@Param + ',', '') + Convert(varchar,col1) from(select col1 From dbo.GenericTableValueFunction('CLIENT',@GrpBy+'~'+@GrpByID+'~'+@GrpType))T1
+		 
+         insert into #FinalDisplay
+         (RowID ,ClntID ,ClientType ,ClntUCC, Name ,FName ,MName ,LName ,cnt_id ,BranchID,BranchName ,Gender ,DOB ,CorrespondenceAddress ,
+		 Address1 ,Address2 ,Address3 ,CrpdsCity ,CrpdsState ,CrpdsCountry ,CrpdsPin ,RegisteredAddress ,
+		 PAddress1 ,PAddress2 ,PAddress3 ,RegCity ,RegState ,RegCountry ,RegPin ,Status ,StatusID ,
+		 MrgStatus ,MrgStatusID ,Proffession  ,ProffessionID , Email_Ids ,PhoneMobile_Numbers ,
+		 FatherName ,PanCardNumber)
+		 exec GenericStoreProcedure
+	     @WhichCall='Contact',
+	     @Parameters=@Param
+	     
+	     
+	     select @ClientType=ClientType from #FinalDisplay  
+	     select @MaxSerialNO=@PageNumber * @PageSize
+	     select @MinSerialNO=((@PageNumber- 1) * @PageSize)+ 1   
+		
+		 print @MaxSerialNO
+		 print @MinSerialNO
+		 While(@MinSerialNO<=@MaxSerialNO)
+		 Begin
+			 
+		     insert into #FormNoGenerate
+		     exec Update_KRADocID
+		     @Company= @Company,
+			 @User=@User,
+			 @CreatedateTime=@CreatedateTime,
+			 @AppliNo='Null',
+			 @ClientType=@ClientType
+			 
+			 select @FormNo = FormNo from #FormNoGenerate
+			 
+			 update #FinalDisplay set 
+			 ApplicatnNo='',
+			 FormNo=@FormNo, 
+			 CreateDateTime = Convert(Varchar,GETDATE(),106),
+			 CreatedBy =(Select Ltrim(Rtrim(isnull(User_Name,'')))+' ['+isnull(user_loginId,'') +']' from tbl_master_User 
+			 Where USER_ID=@User) where RowID = @MinSerialNO
+			 
+			 Set @MinSerialNO=@MinSerialNO+1
+			 Delete from #FormNoGenerate
+		 End   
+		 
+		 					 						 
+		 Select (Select COUNT(RowID) From #FinalDisplay) TotalRecord,* from #FinalDisplay
+		 Where RowID BETWEEN ((@PageNumber- 1) * @PageSize)+ 1 AND @PageNumber * @PageSize
+		 
+		
+	 End
+	 
+	 if(@FetchType = 'EDIT')
+     Begin
+		  Select * into #ClientData From
+		  (select ROW_NUMBER()  OVER (ORDER BY KYCMain_ID) as RowID ,KYCMain_Source,KYCMain_DocNo FormNo, KYCMain_ClientType ClientType,KYCMain_ClientUCC ClntUCC
+		   ,KYCMain_CompanyID,KYCMain_FirstName,KYCMain_MiddleName,KYCMain_LastName
+           ,Ltrim(Rtrim(isnull(KYCMain_FirstName,'')))+' '+Ltrim(Rtrim(isnull(KYCMain_MiddleName,'')))+' '+ Ltrim(Rtrim(isnull(KYCMain_LastName,''))) Name
+           ,KYCMain_FatherSpouseName,KYCMain_Gender,KYCMain_MaritalStatus
+           ,Convert(Varchar,KYCMain_DateOfBirth,106) DOB,KYCMain_DateOfInCorp,KYCMain_PlaceOfInCorp,KYCMain_Nationality,KYCMain_NationalityOther
+           ,KYCMain_TaxStatus,(select lgl_legalStatus from tbl_master_legalStatus where lgl_id = KYCMain_TaxStatus)Status
+           ,KYCMain_TaxStatusCompOther,KYCMain_NRIStatusProof,KYCMain_PANExempt,KYCMain_PAN,(Select LTRIM(Rtrim(Branch_Description))+'['+LTRIM(Rtrim(Branch_Code))+'] ' from tbl_master_branch Where branch_id=KYCMain_BranchID) BranchName,KYCMain_BranchID BranchID
+           ,KYCMain_UID,KYCMain_IdentityProof,KYCMain_IdentityProofOther,KYCMain_CompRegn,KYCMain_BusinessComDate,KYCMain_PanExemptProof
+           ,KYCMain_CAddress1 ,KYCMain_CAddress2,KYCMain_CAddress3
+           ,KYCMain_CPin,KYCMain_CCountry,KYCMain_CState,KYCMain_CStateOther,KYCMain_CCity
+           ,(select ISNULL( ltrim(rtrim(KYCMain_CAddress1))+' ','')+ISNULL( ltrim(rtrim(KYCMain_CAddress2))+' ','')
+			+ISNULL( ltrim(rtrim(KYCMain_CAddress3))+' ','')+(select ltrim(rtrim(city_name))+'-'+ltrim(rtrim(KYCMain_CPin))
+			+',' from tbl_master_city where city_id=KYCMain_CCity)+(select ltrim(rtrim(state))+',' from tbl_master_state where id=KYCMain_CState)
+			+(select LTRIM(rtrim(cou_country)) from tbl_master_country where cou_id=KYCMain_CCountry) )CorrespondenceAddress
+           ,KYCMain_OPhone,KYCMain_RPhone,KYCMain_Mobile,KYCMain_Fax,KYCMain_EmailID,KYCMain_CAddressProof
+           ,KYCMain_CAddressProofOther,KYCMain_CAddressProofValidity,KYCMain_CPSame,KYCMain_PAddress1,KYCMain_PAddress2
+           ,KYCMain_PAddress3,KYCMain_PPin,KYCMain_PCountry,KYCMain_PState,KYCMain_PStateOther,KYCMain_PCity
+           ,(select ISNULL( ltrim(rtrim(KYCMain_PAddress1))+' ','')+ISNULL( ltrim(rtrim(KYCMain_PAddress2))+' ','')
+			+ISNULL( ltrim(rtrim(KYCMain_PAddress3))+' ','')+(select ltrim(rtrim(city_name))+'-'+ltrim(rtrim(KYCMain_PPin))
+			+',' from tbl_master_city where city_id=KYCMain_PCity)+(select ltrim(rtrim(state))+',' from tbl_master_state where id=KYCMain_PState)
+			+(select LTRIM(rtrim(cou_country)) from tbl_master_country where cou_id=KYCMain_PCountry) )RegisteredAddress
+           ,KYCMain_PAddressProof,KYCMain_PAddressProofOther,KYCMain_PAddressProofValidity
+           ,KYCMain_GAIncome,KYCMain_NetWorth,KYCMain_NetWorthDate,KYCMain_Occupation
+           ,(select pro_professionName from tbl_master_profession where pro_id = KYCMain_Occupation)Proffession,KYCMain_OccupationOther
+           ,KYCMain_OccupationDetails,KYCMain_PeP,KYCMain_OtherInfo,KYCMain_ForexServices,KYCMain_Gaming
+           ,KYCMain_MoneyLending,KYCMain_IPVDone,KYCMain_IPVDate,KYCMain_IPVDoneBy,KYCMain_IPVContactType,KYCMain_RelationWithBroker
+           ,KYCMain_CntID ClntID,KYCMain_ExistingClient,KYCMain_ApplicationNumber ApplicatnNo,KYCMain_ApplicationDate,KYCMain_CreateUser CreatedBy,KYCMain_CreateDateTime CreateDateTime
+           ,(select user_EntryProfile from tbl_master_user where user_id=@User)EntryProfileStatus
+           from Master_KYCMain  
+           where KYCMain_CompanyID=@Company and KYCMain_ClientType=@ClntType and KYCMain_CreateUser in (select USER_ID from tbl_master_user where (user_EntryProfile='P' or user_EntryProfile='F' or user_EntryProfile='C'))
+           and ((DATEADD(dd, 0, DATEDIFF(dd, 0, KYCMain_CreateDateTime))) Between @FromDate and @ToDate))as T1
+      
+           Select (Select COUNT(RowID) From #ClientData) TotalRecord,* from #ClientData
+		   Where RowID BETWEEN ((@PageNumber- 1) * @PageSize)+ 1 AND @PageNumber * @PageSize
+		    
+		  		    
+     End 
+End
+
+--exec [dbo].[KRA_Fetch_RegistrationForm]
+--@FetchType ='ADD',
+--@GrpBy ='BRANCH',    --BRANCH,GROUP,CLIENT
+--@GrpByID ='192', -- IDS, ALL
+--@GrpType ='', -- 'Sub Broker', etc
+--@User='399',
+--@Company='COR0000002',
+--@ClntType='I',
+--@CreatedateTime='04-01-2013',
+--@PageSize =10,
+--@PageNumber=1,
+--@FromDate ='03-01-2013',
+--@ToDate = '04-01-2013'
+ 
+
+					 
+						
+				

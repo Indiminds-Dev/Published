@@ -1,0 +1,460 @@
+
+
+ALTER procedure [dbo].[ContactNumberGenarationCHECKING]
+@companyid char(10),
+@segment varchar(50),
+@settlementnom varchar(10),
+@settlementtype varchar(MAX),
+@DATE  varchar(50),
+@CreateUser VARCHAR(50),
+@FINYEAR char(10),
+@clients varchar(max),
+@instrument varchar(max),
+@MasterSegment VARCHAR(50),
+@REUSECHK VARCHAR(50)
+
+--declare @client varchar(max),@instru varchar(max),@SETTTYPE VARCHAR(MAX)
+--set @client='ALL'
+--SET @instru='ALL'
+--SET @SETTTYPE='''F'''
+--exec [ContactNumberGenarationCHECKING] 'COR0000002','25','2014049','All','2014-3-11','378','2013-2014','All','All','1','UNchk'
+
+
+AS
+BEGIN---------MAIN SP BEGIN
+SET NOCOUNT ON
+
+DECLARE @STATUS VARCHAR(50),@MAXID VARCHAR(50),@SQL VARCHAR(MAX)
+CREATE TABLE #STATSDISPLAY (CNTRSettlementType VARCHAR(20),TOTALNO VARCHAR(MAX),NORANGE VARCHAR(MAX))
+CREATE TABLE #DETAIL (ID INT IDENTITY(1,1),SETTTYPE VARCHAR(50))
+
+	SELECT @STATUS='0' 
+	IF not exists(select 'Y' from Config_CntrGenPattern where CntrGenPattern_Segment=@segment
+														   and CntrGenPattern_CompanyID=@companyid)
+	BEGIN----------CHCEK SETTINGS IS EXISTS BEGIN
+			SELECT @STATUS='3' 
+	END----------CHCEK SETTINGS IS EXISTS END
+	IF exists(select 'Y' from Config_CntrGenPattern where (CntrGenPattern_StartDate>cast(@DATE as datetime) or CntrGenPattern_StartNumber is null) 
+														   and CntrGenPattern_Segment=@segment
+														   and CntrGenPattern_CompanyID=@companyid)
+	BEGIN----------CHCEK SETTINGS BEGIN
+			SELECT @STATUS='3' 
+	END----------CHCEK SETTINGS END
+	IF exists(select 'Y' from Config_CntrGenPattern where CntrGenPattern_StartDate<=cast(@DATE as datetime) and CntrGenPattern_StartNumber is not null
+														   and CntrGenPattern_Segment=@segment
+														   and CntrGenPattern_CompanyID=@companyid)
+	BEGIN
+			
+		
+		-----------CONTRACT NUMBER GENERATION CALL
+		DECLARE @ORDER VARCHAR(50)
+		SELECT @ORDER= CntrGenPattern_type FROM Config_CntrGenPattern where CntrGenPattern_StartDate<=cast(@DATE as datetime) 
+					  and CntrGenPattern_Segment=@segment and CntrGenPattern_CompanyID=@companyid
+
+		IF (@MasterSegment IN(1,2,4,5,15,19,20))------[NSE-CM,BSE-CM,NSE-FO,BSE-FO,CSE-CM,MCXSX-CM,MCXSX-FO]
+		BEGIN
+
+			SELECT @SQL='	SELECT DISTINCT customertrades_SETTLEMENTTYPE
+							from Trans_customertrades
+							where '
+							IF @clients<>'ALL'
+							BEGIN
+								Select @sql=@sql+ '  customertrades_customerid IN ('+@clients+') AND'	
+							END
+							IF @instrument<>'ALL'
+							BEGIN
+								Select @sql=@sql+ '  customertrades_productseriesid IN('+@instrument+') AND'
+							END
+							IF @settlementtype<>'ALL'
+							BEGIN
+								Select @sql=@sql+ '  customertrades_SETTLEMENTTYPE IN('+@settlementtype+') AND'
+							END
+							Select @sql=@sql+ ' CustomerTrades_ContractNoteNumber is null
+							AND customertrades_SETTLEMENTNUMBER='''+@settlementnom+'''
+							AND customertrades_tradedate='''+@DATE+'''
+							AND customertrades_EXCHANGESEGMENT='''+@segment+'''
+							AND customertrades_COMPANYID='''+@companyid+''''
+		END
+		ELSE
+		BEGIN
+
+			SELECT @SQL='	SELECT DISTINCT COMCustomerTrades_SETTLEMENTTYPE
+							from Trans_COMCustomerTrades
+							where '
+							IF @clients<>'ALL'
+							BEGIN
+								Select @sql=@sql+ '  COMCustomerTrades_customerid IN ('+@clients+') AND'	
+							END
+							IF @instrument<>'ALL'
+							BEGIN
+								Select @sql=@sql+ '  COMCustomerTrades_productseriesid IN('+@instrument+') AND'
+							END
+							IF @settlementtype<>'ALL'
+							BEGIN
+								Select @sql=@sql+ '  COMCustomerTrades_SETTLEMENTTYPE IN('+@settlementtype+') AND'
+							END
+							Select @sql=@sql+ ' COMCustomerTrades_ContractNoteNumber is null
+							AND COMCustomerTrades_SETTLEMENTNUMBER='''+@settlementnom+'''
+							AND COMCustomerTrades_tradedate='''+@DATE+'''
+							AND COMCustomerTrades_EXCHANGESEGMENT='''+@segment+'''
+							AND COMCustomerTrades_COMPANYID='''+@companyid+''''
+		END
+		INSERT INTO #DETAIL (SETTTYPE) EXEC(@SQL)
+		Declare @TBMAXId int,@TBMINId  int,@SETTTYPE varchar(50)
+		Declare @PatternMAXID VARCHAR(50),@ContractMAXID VARCHAR(50)
+										
+		select @TBMAXId=MAX(ID) from #DETAIL 
+		select @TBMINId=MIN(ID) from #DETAIL
+
+		
+		WHILE @TBMAXId>=@TBMINId
+			BEGIN
+					Select @SETTTYPE=SETTTYPE from #DETAIL where ID=@TBMINId
+					--select @SETTTYPE,@TBMAXId,@TBMINId
+------**********-------CNTR NO GENERATE BEGIN
+					IF EXISTS(select 'Y' from Config_CntrGenPattern where CntrGenPattern_Reset='C')
+					 BEGIN-------------CALENDAR YEAR (GIVEN DATE YEAR)
+
+							IF EXISTS(SELECT 'Y' from Trans_ContractNotes where DATEPART(yyyy,ContractNotes_TradeDate)=DATEPART(yyyy,@DATE)
+																		 and ContractNotes_SegmentID=@segment
+																		 and ContractNotes_CompanyID=@companyid 
+																		)
+								BEGIN--------------------CHCEK CINTRACTNOTES TABEL BEGIN
+										SELECT @MAXID=isnull(max(ContractNotes_Number),0) from Trans_ContractNotes where 
+													  DATEPART(yyyy,ContractNotes_TradeDate)=DATEPART(yyyy,@DATE)
+													  and ContractNotes_CompanyID=@companyid and ContractNotes_SegmentID=@segment
+								END--------------------CHCEK CINTRACTNOTES TABEL END
+							ELSE
+								BEGIN
+										select @MAXID=ABS((select distinct CntrGenPattern_StartNumber from Config_CntrGenPattern where CntrGenPattern_StartDate<=cast(@DATE as datetime) 
+																		 and CntrGenPattern_Segment=@segment
+																		 and CntrGenPattern_CompanyID=@companyid)
+														-1)
+								END
+					
+					 END-------------CALENDAR YEAR (GIVEN DATE YEAR)
+			   ELSE
+					BEGIN-------------FINANCIAL YEAR (GIVEN DATE YEAR) BEGIN
+
+                       IF EXISTS(SELECT 'Y' from Trans_ContractNotes where ContractNotes_TradeDate=cast (@DATE as datetime)
+																		 and ContractNotes_CompanyID=@companyid 
+																		 and ContractNotes_SegmentID=@segment)
+								BEGIN--------------------CHCEK CINTRACTNOTES TABEL BEGIN
+										--SELECT @MAXID=isnull(max(ContractNotes_Number),0) from Trans_ContractNotes where 
+										--			  dbo.[fn_GetFinYear](ContractNotes_TradeDate)=[dbo].[fn_GetFinYear](@DATE)
+										--			  and ContractNotes_CompanyID=@companyid and ContractNotes_SegmentID=@segment
+										
+										select @PatternMAXID=ABS((select distinct CntrGenPattern_StartNumber from Config_CntrGenPattern 
+																	where CntrGenPattern_StartDate=cast (@DATE as datetime)
+																		 and CntrGenPattern_Segment=@segment
+																		 and CntrGenPattern_CompanyID=@companyid)
+														-1)										
+										
+										SELECT @ContractMAXID=isnull(max(ContractNotes_Number),0) from Trans_ContractNotes where 
+													  ContractNotes_TradeDate=cast (@DATE as datetime)
+													  and ContractNotes_CompanyID=@companyid and ContractNotes_SegmentID=@segment
+																
+										
+										Select @MAXID=case When @PatternMAXID>=@ContractMAXID Then @PatternMAXID
+																Else @ContractMAXID end	
+
+								END--------------------CHCEK CINTRACTNOTES TABEL END
+							ELSE
+								BEGIN
+										select @PatternMAXID=ABS((select distinct CntrGenPattern_StartNumber from Config_CntrGenPattern 
+																	where CntrGenPattern_StartDate=cast (@DATE as datetime)
+																		 and CntrGenPattern_Segment=@segment
+																		 and CntrGenPattern_CompanyID=@companyid)
+														-1)										
+										
+										SELECT @ContractMAXID=isnull(max(ContractNotes_Number),0) from Trans_ContractNotes 
+										where --ContractNotes_TradeDate=cast (@DATE as datetime) and 
+										ContractNotes_CompanyID=@companyid and ContractNotes_SegmentID=@segment
+																
+										
+										Select @MAXID=case When @PatternMAXID>=@ContractMAXID Then @PatternMAXID
+																Else @ContractMAXID end	
+																	 
+----										select @MAXID=ABS((select distinct CntrGenPattern_StartNumber from Config_CntrGenPattern where CntrGenPattern_StartDate<=cast(@DATE as datetime) 
+----																		 and CntrGenPattern_Segment=@segment
+----																		 and CntrGenPattern_CompanyID=@companyid)
+----														-1)
+
+--										select @MAXID=0
+								END
+					END	-------------FINANCIAL YEAR (GIVEN DATE YEAR) END
+------**********-------CNTR NO GENERATE END
+
+					IF (@MasterSegment IN(1,4,15,19))
+						BEGIN-----------IF SEGMENT CM BEGIN
+								EXEC [ContactNumberGenarationCM]@companyid,@segment,@settlementnom,@SETTTYPE,@DATE,@CreateUser,@FINYEAR,@clients,@instrument,@MasterSegment,@MAXID,@ORDER
+
+						END-----------IF SEGMENT CM END		
+				    IF (@MasterSegment IN(2,5,20))
+						BEGIN-----------IF SEGMENT FO BEGIN
+								EXEC [ContactNumberGenarationFO]@companyid,@segment,@settlementnom,@SETTTYPE,@DATE,@CreateUser,@FINYEAR,@clients,@instrument,@MasterSegment,@MAXID,@ORDER
+						END-----------IF SEGMENT FO END	
+					IF (@MasterSegment IN(3,6,7,8,9,10,11,12,13))
+						BEGIN-----------IF SEGMENT COMM/CURRENCY BEGIN
+								EXEC [ContactNumberGenarationCOMMCURRENCY]@companyid,@segment,@settlementnom,@SETTTYPE,@DATE,@CreateUser,@FINYEAR,@clients,@instrument,@MasterSegment,@MAXID,@ORDER
+						END-----------IF SEGMENT COMM/CURRENCY  END	
+					IF (@MasterSegment IN(14))
+						BEGIN-----------IF SEGMENT NSEL-SPOT BEGIN
+								EXEC [ContactNumberGenarationSPOT]@companyid,@segment,@settlementnom,@SETTTYPE,@DATE,@CreateUser,@FINYEAR,@clients,@instrument,@MasterSegment,@MAXID,@ORDER
+						END-----------IF SEGMENT NSEL-SPOT END		
+				
+				 select @TBMINId=@TBMINId+1
+			END
+
+	END
+
+		SELECT @SQL=''
+		SELECT @SQL='SELECT COUNT(ContractNotes_Number) AS CNTRNO,
+					ContractNotes_SettlementType AS CNTRSettlementType
+					FROM Trans_ContractNotes WHERE'
+					 IF @clients<>'ALL'
+						BEGIN
+							Select @sql=@sql+ ' ContractNotes_CustomerID IN ('+@clients+') AND'	
+						END
+					 IF @settlementtype<>'ALL'
+						BEGIN
+								Select @sql=@sql+ ' ContractNotes_SettlementType IN('+@settlementtype+') AND'
+						END
+					Select @sql=@sql+ ' ContractNotes_GeneratedBy='''+@CreateUser+'''
+					AND cast(DATEADD(dd, 0, DATEDIFF(dd, 0,ContractNotes_GenerateDateTime)) as datetime) =cast(DATEADD(dd, 0, DATEDIFF(dd, 0,GETDATE())) as datetime) 
+					AND ContractNotes_SettlementNumber='''+@settlementnom+'''
+					AND ContractNotes_TradeDate='''+@DATE+'''
+					AND ContractNotes_SegmentID='''+@segment+'''
+					AND ContractNotes_CompanyID='''+@companyid+'''
+					GROUP BY ContractNotes_SettlementType'
+		
+		INSERT INTO #STATSDISPLAY(TOTALNO,CNTRSettlementType)EXEC (@SQL)
+		SELECT @SQL=''
+		SELECT @SQL='UPDATE #STATSDISPLAY SET NORANGE=RANGECNTRNO FROM
+					 (SELECT CAST(MIN(ContractNotes_Number) AS VARCHAR(800))+ '' To '' + CAST(MAX(ContractNotes_Number) AS VARCHAR(800)) AS RANGECNTRNO,
+					 ContractNotes_SettlementType AS SettlementType
+					 FROM Trans_ContractNotes WHERE '
+					 IF @clients<>'ALL'
+						BEGIN
+							Select @sql=@sql+ ' ContractNotes_CustomerID IN ('+@clients+') AND'	
+						END
+					  IF @settlementtype<>'ALL'
+						BEGIN
+								Select @sql=@sql+ '  ContractNotes_SettlementType IN('+@settlementtype+') AND'
+						END
+					Select @sql=@sql+ '  ContractNotes_GeneratedBy='''+@CreateUser+'''
+					AND cast(DATEADD(dd, 0, DATEDIFF(dd, 0,ContractNotes_GenerateDateTime)) as datetime) =cast(DATEADD(dd, 0, DATEDIFF(dd, 0,GETDATE())) as datetime) 
+					AND ContractNotes_SettlementNumber='''+@settlementnom+'''
+					AND ContractNotes_TradeDate='''+@DATE+'''
+					AND ContractNotes_SegmentID='''+@segment+'''
+					AND ContractNotes_CompanyID='''+@companyid+'''
+					GROUP BY ContractNotes_SettlementType) AS KK
+					WHERE SettlementType=CNTRSettlementType'
+		EXEC (@SQL)
+		DECLARE @ROWCOUNT VARCHAR(50)
+		SELECT @ROWCOUNT='0'
+		SELECT @ROWCOUNT=COUNT(CNTRSettlementType) FROM #STATSDISPLAY
+
+		IF (@ROWCOUNT='0')
+			BEGIN
+				SELECT 'OTHER' AS CNTRSettlementType
+			END
+		ELSE
+			BEGIN
+				SELECT CNTRSettlementType,TOTALNO,NORANGE FROM #STATSDISPLAY order by CNTRSettlementType
+			END
+		SELECT @STATUS AS CNTRSTATUS
+
+
+		-------CNTRNO REUSE(@REUSECHK)
+	IF (@REUSECHK='CHK')
+	BEGIN
+			CREATE TABLE #TEMPCNTR(CLIENTID VARCHAR(50),CNTRNO VARCHAR(50),CNTRSTATUS VARCHAR(50))
+
+				SELECT @SQL=''
+				SELECT @SQL='SELECT DISTINCT ContractNotes_CustomerID,ContractNotes_Number AS CNTRNO,
+							 ContractNotes_Status
+							 FROM Trans_ContractNotes WHERE'
+							 IF @clients<>'ALL'
+								BEGIN
+									Select @sql=@sql+ ' ContractNotes_CustomerID IN ('+@clients+') AND'	
+								END
+							 IF @settlementtype<>'ALL'
+								BEGIN
+										Select @sql=@sql+ ' ContractNotes_SettlementType IN('+@settlementtype+') AND'
+								END
+							Select @sql=@sql+ ' ContractNotes_Status=2
+							AND ContractNotes_SettlementNumber='''+@settlementnom+'''
+							AND ContractNotes_TradeDate='''+@DATE+'''
+							AND ContractNotes_SegmentID='''+@segment+'''
+							AND ContractNotes_CompanyID='''+@companyid+''''
+				
+				INSERT INTO #TEMPCNTR(CLIENTID,CNTRNO,CNTRSTATUS)EXEC (@SQL)
+
+
+			    INSERT INTO #TEMPCNTR(CLIENTID,CNTRNO,CNTRSTATUS)
+				SELECT DISTINCT ContractNotes_CustomerID,ContractNotes_Number AS CNTRNO,
+				ContractNotes_Status FROM Trans_ContractNotes,#TEMPCNTR WHERE
+				ContractNotes_Status is null
+				AND ContractNotes_CustomerID=CLIENTID
+				AND ContractNotes_SettlementNumber=@settlementnom
+				AND ContractNotes_TradeDate=@DATE
+				AND ContractNotes_SegmentID=@segment
+				AND ContractNotes_CompanyID=@companyid
+				
+
+
+				-----------STATUS 3
+				SELECT @SQL=''
+				SELECT @SQL='UPDATE Trans_ContractNotes SET ContractNotes_Status=3
+							 FROM #TEMPCNTR WHERE CLIENTID=ContractNotes_CustomerID
+							 AND CNTRSTATUS=2 AND ContractNotes_Status=2
+							 AND ContractNotes_Number=CNTRNO'
+							 IF @settlementtype<>'ALL'
+								BEGIN
+										Select @sql=@sql+ ' AND ContractNotes_SettlementType IN('+@settlementtype+') '
+								END
+							Select @sql=@sql+ '
+							AND ContractNotes_SettlementNumber='''+@settlementnom+'''
+							AND ContractNotes_TradeDate='''+@DATE+'''
+							AND ContractNotes_SegmentID='''+@segment+'''
+							AND ContractNotes_CompanyID='''+@companyid+'''
+							'
+
+			   EXEC (@SQL)
+				-----------REUSE CNTR NO. IN CONTRACT NOTES
+				SELECT @SQL=''
+				SELECT @SQL='UPDATE Trans_ContractNotes SET ContractNotes_Number=CNTRNO
+							 FROM #TEMPCNTR WHERE CLIENTID=ContractNotes_CustomerID
+							 AND CNTRSTATUS=2 AND ContractNotes_Status is null'
+							 IF @settlementtype<>'ALL'
+								BEGIN
+										Select @sql=@sql+ ' AND ContractNotes_SettlementType IN('+@settlementtype+') '
+								END
+							Select @sql=@sql+ '
+							AND ContractNotes_SettlementNumber='''+@settlementnom+'''
+							AND ContractNotes_TradeDate='''+@DATE+'''
+							AND ContractNotes_SegmentID='''+@segment+'''
+							AND ContractNotes_CompanyID='''+@companyid+'''
+							'
+			   EXEC (@SQL)
+				-----------REUSE CNTR NO. IN CUSTOMERTRADES
+				IF (@MasterSegment IN(1,2,4,5,15,19,20))------[NSE-CM,BSE-CM,NSE-FO,BSE-FO,CSE-CM,MCXSX-CM,MCXSX-FO]
+				BEGIN
+						SELECT @SQL=''
+						SELECT @SQL='UPDATE Trans_CustomerTrades SET CustomerTrades_ContractNoteNumber=CNTRNO
+									 FROM #TEMPCNTR WHERE CLIENTID=CustomerTrades_CustomerID
+									 AND CNTRSTATUS=2'
+									 IF @settlementtype<>'ALL'
+										BEGIN
+												Select @sql=@sql+ ' AND CustomerTrades_SettlementType IN('+@settlementtype+') '
+										END
+									Select @sql=@sql+ '
+									AND CustomerTrades_SettlementNumber='''+@settlementnom+'''
+									AND CustomerTrades_TradeDate='''+@DATE+'''
+									AND CustomerTrades_EXCHANGESegment='''+@segment+'''
+									AND CustomerTrades_CompanyID='''+@companyid+'''
+									'
+
+					   EXEC (@SQL)
+				END
+				ELSE
+				BEGIN
+						SELECT @SQL=''
+						SELECT @SQL='UPDATE Trans_COMCustomerTrades SET COMCustomerTrades_ContractNoteNumber=CNTRNO
+									 FROM #TEMPCNTR WHERE CLIENTID=COMCustomerTrades_CustomerID
+									 AND CNTRSTATUS=2'
+									 IF @settlementtype<>'ALL'
+										BEGIN
+												Select @sql=@sql+ ' AND COMCustomerTrades_SettlementType IN('+@settlementtype+') '
+										END
+									Select @sql=@sql+ '
+									AND COMCustomerTrades_SettlementNumber='''+@settlementnom+'''
+									AND COMCustomerTrades_TradeDate='''+@DATE+'''
+									AND COMCustomerTrades_EXCHANGESegment='''+@segment+'''
+									AND COMCustomerTrades_CompanyID='''+@companyid+'''
+									'
+
+					   EXEC (@SQL)
+				END
+				
+			DROP TABLE #TEMPCNTR
+	END
+-----------Sttax and SttaxSummary Update
+	Select @sql='Update Trans_Sttax Set Sttax_ContractNoteNumber=CustomerTrades_ContractNoteNumber
+	From Trans_CustomerTrades 
+	Where '
+	IF @clients<>'ALL'
+	BEGIN
+		Select @sql=@sql+ '  customertrades_customerid IN ('+@clients+') AND'	
+	END
+	IF @instrument<>'ALL'
+	BEGIN
+		Select @sql=@sql+ '  customertrades_productseriesid IN('+@instrument+') AND'
+	END
+	IF @settlementtype<>'ALL'
+	BEGIN
+		Select @sql=@sql+ '  customertrades_SETTLEMENTTYPE IN('+@settlementtype+') AND'
+	END
+	Select @sql=@sql+ ' 
+	Sttax_CompanyID=customertrades_COMPANYID and CustomerTrades_ContractNoteNumber is not null
+	and Sttax_SegmentID=customertrades_EXCHANGESEGMENT
+	and Sttax_STTDate=customertrades_tradedate
+	and Sttax_SettlementNumber=customertrades_SETTLEMENTNUMBER
+	and Sttax_SettlementType=customertrades_SETTLEMENTTYPE
+	and Sttax_Type=''Prov''
+	and Sttax_CustomerID=CustomerTrades_CustomerID
+	AND customertrades_SETTLEMENTNUMBER='''+@settlementnom+'''
+	AND customertrades_tradedate='''+@DATE+'''
+	AND customertrades_EXCHANGESEGMENT='''+@segment+'''
+	AND customertrades_COMPANYID='''+@companyid+''''
+	exec(@sql)
+
+	Select @sql='Update Trans_SttaxSummary Set SttaxSummary_CntrNo=CustomerTrades_ContractNoteNumber
+	From Trans_CustomerTrades 
+	Where '
+	IF @clients<>'ALL'
+	BEGIN
+		Select @sql=@sql+ '  customertrades_customerid IN ('+@clients+') AND'	
+	END
+	IF @instrument<>'ALL'
+	BEGIN
+		Select @sql=@sql+ '  customertrades_productseriesid IN('+@instrument+') AND'
+	END
+	IF @settlementtype<>'ALL'
+	BEGIN
+		Select @sql=@sql+ '  customertrades_SETTLEMENTTYPE IN('+@settlementtype+') AND'
+	END
+	Select @sql=@sql+ ' 
+	SttaxSummary_CompanyID=customertrades_COMPANYID and CustomerTrades_ContractNoteNumber is not null
+	and SttaxSummary_SegmentID=customertrades_EXCHANGESEGMENT
+	and SttaxSummary_STTDate=customertrades_tradedate
+	and SttaxSummary_SettlementNumber=customertrades_SETTLEMENTNUMBER
+	and SttaxSummary_SettlementType=customertrades_SETTLEMENTTYPE
+	and SttaxSummary_Type=''Prov''
+	and SttaxSummary_CustomerID=CustomerTrades_CustomerID
+	AND customertrades_SETTLEMENTNUMBER='''+@settlementnom+'''
+	AND customertrades_tradedate='''+@DATE+'''
+	AND customertrades_EXCHANGESEGMENT='''+@segment+'''
+	AND customertrades_COMPANYID='''+@companyid+''''
+	exec(@sql)
+DROP TABLE #STATSDISPLAY
+END---------MAIN SP END
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

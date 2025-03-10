@@ -1,0 +1,972 @@
+
+
+ALTER procedure [dbo].[sp_CdslDematTransaction_Report]
+@batch varchar(30),
+@slip varchar(30),
+@type varchar(30),
+@ExchSegId varchar(10),
+@AccountID bigint,
+@TransDate DateTime
+
+as
+BEGIN
+
+
+if (@type = 'InterDP-CDSL')or(@type = 'OffMarket-CDSL')or(@type = 'Combined-CDSL')
+begin
+
+	Declare @Dsql_Part1 Varchar(Max),@Dsql_Part2 Varchar(Max)
+	Set @Dsql_Part1='select '''+
+	Case 
+		When @type = 'Combined-CDSL' 
+		Then 
+			Case When CHARINDEX(':',@batch)=0 Then @batch Else 'Still Not Export as Combined Batch.' End
+		Else @batch 
+	End+''' as batch, 
+	case '''+@type+''' when ''InterDP-CDSL'' then ''[ INTER DEPOSITORY ]'' 
+			   when ''OffMarket-CDSL'' then ''[ OFF MARKET ]'' 
+			   when ''Combined-CDSL'' then ''[ Combined(InterDp/OffMkt ]''
+	end as RptType, 
+
+	rank() over (order by CMBP_Client,DematTransactions_TargetDPID,MarketTypeS,
+	DematTransactions_SettlementNumberS,MarketTypeT,DematTransactions_SettlementNumberT,DematTransactions_ISIN
+--	DematTransactions_Quantity
+) as Id,
+
+	(select case when add_address1 is not null or len(ltrim(rtrim(add_address1))) <> 0
+			then add_address1 +
+				case when add_address2 is not null or len(ltrim(rtrim(add_address2))) <> 0
+				then '', '' + add_address2 +
+					case when add_address3 is not null or len(ltrim(rtrim(add_address3))) <> 0
+					then '', '' + add_address3
+					else '''' end
+				else '''' end
+			else '''' end +
+		'', '' + city_name + '' - '' + left(ltrim(add_pin),3) + '' '' + right(rtrim(add_pin),3)
+	from tbl_master_address a, tbl_master_city
+	where a.add_cntid = foo.add_cntid and a.add_city = city_id
+	)as addr,
+
+	(select phf_PhoneNumber from tbl_master_phonefax where foo.add_cntid = phf_cntid and phf_type=''Work'')as phone,
+
+	(select phf_PhoneNumber from tbl_master_phonefax where foo.add_cntid = phf_cntid and phf_type=''Fax'')as fax,
+
+	foo.DP_Name, foo.HeaderText1, foo.DematTransactions_SourceDPID, foo.DematTransactions_SlipNumber,
+	foo.DematTransactions_Date, foo.DematTransactions_ExecutionDate, foo.SourceClientName, foo.SourceDPIDClientID,
+	foo.CMBP_Client, foo.TargetClientName, foo.DematTransactions_TargetDPID, foo.TargetDP_Name, foo.MarketTypeS,
+	foo.DematTransactions_SettlementNumberS, foo.MarketTypeT, foo.DematTransactions_SettlementNumberT,
+	foo.DematTransactions_ISIN, foo.SecurityName,
+	foo.QtyWords, 
+	foo.DematTransactions_Quantity
+
+	from
+	(
+		select 
+		(select dp_dpname from tbl_master_depositoryparticipants where dp_dpid=DematTransactions_SourceDPID)as DP_Name,
+
+		case when 
+		(select count(*) from tbl_master_address 
+			where add_cntid = 
+			(select ltrim(rtrim(dp_cntid)) from tbl_master_depositoryparticipants where dp_dpid=DematTransactions_SourceDPID
+			)
+		)>1 then
+		(
+			select add_cntid
+			from tbl_master_address, tbl_master_depositoryparticipants
+			where dp_dpid = trans.DematTransactions_SourceDPID
+			and add_cntid = ltrim(rtrim(dp_cntid))
+			and add_addressType = ''Office'' 
+		)
+
+		else
+		(
+			select top 1 add_cntid
+			from tbl_master_address, tbl_master_depositoryparticipants
+			where dp_dpid = trans.DematTransactions_SourceDPID
+			and add_cntid = ltrim(rtrim(dp_cntid))
+		) 
+
+		end as add_cntid,
+
+		''DEPOSITORY PARTICIPANT OF ''+ 
+		case when left(ltrim(DematTransactions_SourceDPID),2) <> ''IN'' then ''CDSL''
+		else ''NSDL'' end as HeaderText1,
+
+		DematTransactions_SourceDPID, DematTransactions_SlipNumber, 
+		convert(varchar,DematTransactions_Date,106) as DematTransactions_Date,
+		convert(varchar,isnull(DematTransactions_ExecutionDate,DematTransactions_Date),106) as DematTransactions_ExecutionDate,
+
+		(select DPAccounts_AccountName from Master_DPAccounts where DPAccounts_DPID = DematTransactions_SourceDPID
+		and DPAccounts_ClientID = DematTransactions_SourceClientID) as SourceClientName,
+
+		ltrim(rtrim(DematTransactions_SourceDPID))+ltrim(rtrim(DematTransactions_SourceClientID)) as SourceDPIDClientID, 
+
+		case when DematTransactions_TargetCMBPID is not null or len(ltrim(rtrim(DematTransactions_TargetCMBPID)))<>0
+		then DematTransactions_TargetCMBPID
+		else DematTransactions_TargetClientID end as CMBP_Client,
+
+		case when DematTransactions_OwnAccountT is not null
+		then (select DPAccounts_AccountName from Master_DPAccounts where DPAccounts_ID = DematTransactions_OwnAccountT)
+		else 
+			(select isnull(cnt_firstName,'''') + '' '' + isnull(cnt_middleName,'''') + '' '' + isnull(cnt_lastName,'''')
+			from tbl_master_contactdpdetails, tbl_master_contact
+			where trans.DematTransactions_CustomerAccountT = dpd_id
+			and dpd_cntid = cnt_internalid
+			) 
+		end as TargetClientName,
+
+		DematTransactions_TargetDPID,
+
+		(select dp_dpname from tbl_master_depositoryparticipants 
+		where left(dp_dpid,8)=DematTransactions_TargetDPID)as TargetDP_Name,
+
+		case when DematTransactions_SettlementNumberS <> ''MARGIN''
+		and DematTransactions_SettlementNumberS <> ''Hldbk''
+		and DematTransactions_SettlementNumberS <> ''OWN''
+		and DematTransactions_SettlementNumberS is not null
+		then
+			case DematTransactions_SettlementTypeS when ''N'' then ''Normal''
+			when ''A'' then ''Auction Normal''
+			when ''Z'' then ''Trade For Trade''
+			when ''D'' then ''Auction''
+			when ''W'' 
+				then 
+
+						case when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberS and Settlements_TypeSuffix=''W'')= 1
+						then ''Trade For Trade''
+
+						when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberS and Settlements_TypeSuffix=''W'') = 4
+						then ''Normal-Rolling''
+						end
+
+		else null end 
+		
+		else null end as MarketTypeS,
+
+		case when DematTransactions_SettlementNumberS <> ''MARGIN''
+		and DematTransactions_SettlementNumberS <> ''Hldbk''
+		and DematTransactions_SettlementNumberS <> ''OWN''
+		and DematTransactions_SettlementNumberS is not null
+		then DematTransactions_SettlementNumberS
+		else null end as DematTransactions_SettlementNumberS,
+
+		case when DematTransactions_SettlementNumberT <> ''MARGIN''
+		and DematTransactions_SettlementNumberT <> ''Hldbk''
+		and DematTransactions_SettlementNumberT <> ''OWN''
+		and DematTransactions_SettlementNumberT is not null
+		then
+			case DematTransactions_SettlementTypeT when ''N'' then ''Normal''
+			when ''A'' then ''Auction Normal''
+			when ''Z'' then ''Trade For Trade''
+			when ''D'' then ''Auction''
+			when ''W'' 
+				then 
+
+						case when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberT And Settlements_TypeSuffix=''W'') = 1
+						then ''Trade For Trade''
+
+						when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberT And Settlements_TypeSuffix=''W'') = 4
+						then ''Normal-Rolling''
+						end
+
+		else null end 
+
+		else null end as MarketTypeT,
+
+		case when DematTransactions_SettlementNumberT <> ''MARGIN''
+		and DematTransactions_SettlementNumberT <> ''Hldbk''
+		and DematTransactions_SettlementNumberT <> ''OWN''
+		and DematTransactions_SettlementNumberT is not null
+		then DematTransactions_SettlementNumberT
+		else null end as DematTransactions_SettlementNumberT,
+
+		DematTransactions_ISIN,
+
+		(select top 1 Products_Name from Master_products prod, Master_ISIN eq
+		where prod.Products_ID = eq.ISIN_productid
+		and eq.ISIN_number = trans.DematTransactions_ISIN) as SecurityName,
+
+		ltrim(rtrim(replace(replace(dbo.fNumToWords(sum(isnull(DematTransactions_Quantity,0))),''Rupees'',''''),''paise'',''''))) as QtyWords,
+
+		dbo.fn_FormatNumber(convert(varchar,sum(isnull(DematTransactions_Quantity,0))),''N'') as DematTransactions_Quantity
+
+		from Trans_DematTransactions trans
+		where DematTransactions_BatchNumber in  ('+@batch+')
+		and DematTransactions_SlipNumber = '''+@slip+''''
+		
+		Set @Dsql_Part2=isnull(@Dsql_Part2,'')+' and DematTransactions_OwnAccountS=Cast('''+Cast(@AccountID as Varchar(20))+''' as Int)
+		and DematTransactions_Date=Cast('''+Cast(@TransDate as Varchar(25))+''' as DateTime)
+		and 
+		(
+			(
+				'''+@type+''' = ''InterDP-CDSL''
+				and DematTransactions_TargetDPID like ''IN%''
+				and ltrim(rtrim(DematTransactions_Nature)) = ''P''
+			)
+			or
+			(
+				'''+@type+''' = ''OffMarket-CDSL''
+				and DematTransactions_TargetDPID not like ''IN%''
+				and ltrim(rtrim(DematTransactions_Nature)) = ''P''
+			)
+			or
+			(
+				'''+@type+''' = ''Combined-CDSL''
+				and ltrim(rtrim(DematTransactions_Nature)) = ''P''
+			)
+			
+		)
+		group by DematTransactions_SourceDPID,DematTransactions_SourceClientID,DematTransactions_SlipNumber,
+		DematTransactions_Date,DematTransactions_ExecutionDate,DematTransactions_TargetCMBPID,
+		DematTransactions_TargetDPID,DematTransactions_TargetClientID,DematTransactions_OwnAccountT,
+		DematTransactions_CustomerAccountT,DematTransactions_SettlementTypeS,DematTransactions_SettlementNumberS,
+		DematTransactions_SettlementTypeT,DematTransactions_SettlementNumberT,DematTransactions_ISIN
+		
+
+	) foo'
+	
+	--print SubString(@Dsql_Part1,0,4000)
+	--print SubString(@Dsql_Part1,4000,4000)
+	--print SubString(@Dsql_Part2,0,4000)
+	Exec (@Dsql_Part1+@Dsql_Part2)
+
+end
+
+else if (@type = 'POA-CDSL')or(@type = 'POA-NSDL')
+begin
+	select @batch as batch, '[ Delivery Instruction By Client ]' as RptType, 
+
+	rank() over (order by foo.DematTransactions_SourceClientID, 
+	foo.SourceClientName, foo.DematTransactions_ISIN, foo.DematTransactions_Quantity) as Id,
+
+	(select case when add_address1 is not null or len(ltrim(rtrim(add_address1))) <> 0
+			then add_address1 +
+				case when add_address2 is not null or len(ltrim(rtrim(add_address2))) <> 0
+				then ', ' + add_address2 +
+					case when add_address3 is not null or len(ltrim(rtrim(add_address3))) <> 0
+					then ', ' + add_address3
+					else '' end
+				else '' end
+			else '' end +
+		', ' + city_name + ' - ' + left(ltrim(add_pin),3) + ' ' + right(rtrim(add_pin),3)
+	from tbl_master_address a, tbl_master_city
+	where a.add_cntid = foo.add_cntid and a.add_city = city_id
+	)as addr,
+
+	(select phf_PhoneNumber from tbl_master_phonefax where foo.add_cntid = phf_cntid and phf_type='Work')as phone,
+
+	(select phf_PhoneNumber from tbl_master_phonefax where foo.add_cntid = phf_cntid and phf_type='Fax')as fax,
+
+	foo.DP_Name, foo.HeaderText1, foo.DematTransactions_SourceDPID, foo.DematTransactions_SlipNumber,
+	foo.DematTransactions_Date, foo.DematTransactions_ExecutionDate, foo.DematTransactions_TargetCMBPID,
+	foo.TargetClientName, foo.MarketTypeT,
+	foo.DematTransactions_SettlementNumberT, foo.DematTransactions_TargetClientID, 
+	foo.DematTransactions_SourceClientID, foo.SourceClientName,
+	foo.DematTransactions_ISIN, foo.CompanyName, foo.QtyWords, foo.DematTransactions_Quantity
+
+	from
+	(
+		select 
+		(select dp_dpname from tbl_master_depositoryparticipants 
+		where left(ltrim(rtrim(dp_dpid)),8) = DematTransactions_TargetDPID)as DP_Name,
+
+		case when 
+		(select count(*) from tbl_master_address 
+			where add_cntid = 
+			(select ltrim(rtrim(dp_cntid)) from tbl_master_depositoryparticipants 
+				where left(ltrim(rtrim(dp_dpid)),8) = DematTransactions_TargetDPID
+			)
+		)>1 then
+		(
+			select add_cntid
+			from tbl_master_address, tbl_master_depositoryparticipants
+			where left(ltrim(rtrim(dp_dpid)),8) = trans.DematTransactions_TargetDPID
+			and add_cntid = ltrim(rtrim(dp_cntid))
+			and add_addressType = 'Office' 
+		)
+
+		else
+		(
+			select top 1 add_cntid
+			from tbl_master_address, tbl_master_depositoryparticipants
+			where left(ltrim(rtrim(dp_dpid)),8) = trans.DematTransactions_TargetDPID
+			and add_cntid = ltrim(rtrim(dp_cntid))
+		) 
+
+		end as add_cntid,
+
+		'DEPOSITORY PARTICIPANT OF '+ 
+		case when left(ltrim(DematTransactions_SourceDPID),2) <> 'IN' then 'CDSL'
+		else 'NSDL' end as HeaderText1,
+
+		DematTransactions_SourceDPID, DematTransactions_SlipNumber, 
+		convert(varchar,DematTransactions_Date,106) as DematTransactions_Date,
+		convert(varchar,isnull(DematTransactions_ExecutionDate,DematTransactions_Date),106) as DematTransactions_ExecutionDate,
+
+		DematTransactions_TargetCMBPID,
+
+		(select DPAccounts_AccountName from Master_DPAccounts where DPAccounts_DPID = DematTransactions_TargetDPID
+		and DPAccounts_ClientID = DematTransactions_TargetClientID) as TargetClientName,
+
+		case when DematTransactions_SettlementNumberT <> 'MARGIN'
+		and DematTransactions_SettlementNumberT <> 'Hldbk'
+		and DematTransactions_SettlementNumberT <> 'OWN'
+		and DematTransactions_SettlementNumberT is not null
+		then 
+			case DematTransactions_SettlementTypeT when 'N' then 'Normal'
+			when 'A' then 'Auction Normal'
+			when 'Z' then 'Normal-Rolling'
+			when 'D' then 'Auction'
+			when 'W' 
+				then 
+
+						case when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberT And Settlements_TypeSuffix='W') = 1
+						then 'Trade For Trade'
+
+						when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberT And Settlements_TypeSuffix='W') = 4
+						then 'Normal-Rolling'
+						end
+
+		else null end 
+		else null end as MarketTypeT,
+
+		case when DematTransactions_SettlementNumberT <> 'MARGIN'
+		and DematTransactions_SettlementNumberT <> 'Hldbk'
+		and DematTransactions_SettlementNumberT <> 'OWN'
+		and DematTransactions_SettlementNumberT is not null
+		then DematTransactions_SettlementNumberT
+		else null end as DematTransactions_SettlementNumberT, 
+
+		DematTransactions_TargetClientID,
+
+		DematTransactions_SourceClientID,
+
+		(select isnull(cnt_firstName,'') + ' ' + isnull(cnt_middleName,'') + ' ' + isnull(cnt_lastName,'')
+		from tbl_master_contactdpdetails, tbl_master_contact
+		where trans.DematTransactions_CustomerAccountS = dpd_id
+		and dpd_cntid = cnt_internalid
+		) 
+		as SourceClientName,
+
+		DematTransactions_ISIN,
+
+		(select top 1 Products_Name from Master_products prod, Master_ISIN eq
+		where prod.Products_ID = eq.ISIN_productid
+		and eq.ISIN_number = trans.DematTransactions_ISIN) as CompanyName,
+
+--		dbo.fNumToWords (DematTransactions_Quantity) as QtyWords,
+--		dbo.fn_FormatNumber(convert(varchar,DematTransactions_Quantity)) as DematTransactions_Quantity
+
+		ltrim(rtrim(replace(replace(dbo.fNumToWords(sum(isnull(DematTransactions_Quantity,0))),'Rupees',''),'paise',''))) as QtyWords,
+
+		dbo.fn_FormatNumber(convert(varchar,sum(isnull(DematTransactions_Quantity,0))),'N') as DematTransactions_Quantity
+
+
+		from Trans_DematTransactions trans
+		where DematTransactions_BatchNumber = @batch
+		and DematTransactions_SlipNumber = @slip
+		and DematTransactions_OwnAccountT = @AccountID
+		and DematTransactions_Date = @TransDate
+		and 
+		(
+			(
+				@type = 'POA-CDSL'
+				and DematTransactions_SourceDPID not like 'IN%'
+				and ltrim(rtrim(DematTransactions_Nature)) = 'P'
+			)
+			or
+			(
+				@type = 'POA-NSDL'
+				and DematTransactions_SourceDPID like 'IN%'
+				and ltrim(rtrim(DematTransactions_Nature)) = 'P'
+			)
+		)
+		group by DematTransactions_TargetDPID,DematTransactions_TargetClientID,DematTransactions_SourceDPID,
+		DematTransactions_SourceClientID,DematTransactions_SlipNumber,
+		DematTransactions_Date,DematTransactions_ExecutionDate,DematTransactions_TargetCMBPID,
+		DematTransactions_CustomerAccountS,
+		DematTransactions_SettlementTypeT,DematTransactions_SettlementNumberT,DematTransactions_ISIN
+		
+	) foo
+
+
+end
+
+else if (@type = 'IntraDP-NSDL')or(@type = 'InterDP-NSDL')
+begin
+
+	select @batch as batch, 
+	'[ Delivery Instruction By Clearing Members on Pay Out ]' as RptType, 
+
+	rank() over (order by DematTransactions_TargetDPID,
+	--DematTransactions_TargetClientID,MarketTypeS,
+	--DematTransactions_SettlementNumberS,
+	DematTransactions_ISIN,
+	DematTransactions_Quantity) as Id,
+
+	(select case when add_address1 is not null or len(ltrim(rtrim(add_address1))) <> 0
+			then add_address1 +
+				case when add_address2 is not null or len(ltrim(rtrim(add_address2))) <> 0
+				then ', ' + add_address2 +
+					case when add_address3 is not null or len(ltrim(rtrim(add_address3))) <> 0
+					then ', ' + add_address3
+					else '' end
+				else '' end
+			else '' end +
+		', ' + city_name + ' - ' + left(ltrim(add_pin),3) + ' ' + right(rtrim(add_pin),3)
+	from tbl_master_address a, tbl_master_city
+	where a.add_cntid = foo.add_cntid and a.add_city = city_id
+	)as addr,
+
+	(select phf_PhoneNumber from tbl_master_phonefax where foo.add_cntid = phf_cntid and phf_type='Work')as phone,
+
+	(select phf_PhoneNumber from tbl_master_phonefax where foo.add_cntid = phf_cntid and phf_type='Fax')as fax,
+
+	foo.DP_Name, foo.HeaderText1, foo.DematTransactions_SourceDPID, foo.DematTransactions_SlipNumber,
+	foo.DematTransactions_Date, foo.DematTransactions_ExecutionDate, foo.SourceClientName,
+	foo.DematTransactions_SourceClientID, foo.DematTransactions_TargetDPID, foo.DematTransactions_TargetClientID,
+	foo.Target_DP_Name, foo.TargetClientName, foo.MarketTypeS, foo.DematTransactions_SettlementNumberS,
+	foo.DematTransactions_ISIN, foo.SecurityName, foo.QtyWords, foo.DematTransactions_Quantity
+
+	from
+	(
+		select 
+		(select dp_dpname from tbl_master_depositoryparticipants 
+			where left(ltrim(rtrim(dp_dpid)),8) = DematTransactions_SourceDPID)as DP_Name,
+
+		case when 
+		(select count(*) from tbl_master_address 
+			where add_cntid = 
+			(select ltrim(rtrim(dp_cntid)) from tbl_master_depositoryparticipants 
+				where left(ltrim(rtrim(dp_dpid)),8) = DematTransactions_SourceDPID
+			)
+		)>1 then
+		(
+			select add_cntid
+			from tbl_master_address, tbl_master_depositoryparticipants
+			where left(ltrim(rtrim(dp_dpid)),8) = trans.DematTransactions_SourceDPID
+			and add_cntid = ltrim(rtrim(dp_cntid))
+			and add_addressType = 'Office' 
+		)
+
+		else
+		(
+			select top 1 add_cntid
+			from tbl_master_address, tbl_master_depositoryparticipants
+			where left(ltrim(rtrim(dp_dpid)),8) = trans.DematTransactions_SourceDPID
+			and add_cntid = ltrim(rtrim(dp_cntid))
+		) 
+
+		end as add_cntid,
+
+		'DEPOSITORY PARTICIPANT OF '+ 
+		case when left(ltrim(DematTransactions_SourceDPID),2) <> 'IN' then 'CDSL'
+		else 'NSDL' end as HeaderText1,
+
+		DematTransactions_SourceDPID, DematTransactions_SlipNumber, 
+		convert(varchar,DematTransactions_Date,106) as DematTransactions_Date,
+		convert(varchar,isnull(DematTransactions_ExecutionDate,DematTransactions_Date),106) as DematTransactions_ExecutionDate,
+
+		(select DPAccounts_AccountName from Master_DPAccounts where DPAccounts_DPID = DematTransactions_SourceDPID
+		and DPAccounts_ClientID = DematTransactions_SourceClientID) as SourceClientName,
+
+		DematTransactions_SourceClientID,
+		DematTransactions_TargetDPID,
+--		case when @type = 'IntraDP-NSDL' then DematTransactions_TargetClientID
+--			 when @type = 'InterDP-NSDL' then DematTransactions_TargetDPID+DematTransactions_TargetClientID
+--		end as 
+		(Case when DematTransactions_TargetCMBPID is null then DematTransactions_TargetClientID
+		When len(DematTransactions_TargetCMBPID)=0 then DematTransactions_TargetClientID
+		else DematTransactions_TargetCMBPID end) as DematTransactions_TargetClientID,
+
+		(select dp_dpname from tbl_master_depositoryparticipants 
+		where left(ltrim(rtrim(dp_dpid)),8) = DematTransactions_TargetDPID)as Target_DP_Name,
+
+		case when DematTransactions_OwnAccountT is not null
+		then (select DPAccounts_AccountName from Master_DPAccounts where DPAccounts_ID = DematTransactions_OwnAccountT)
+		else 
+			(select isnull(cnt_firstName,'') + ' ' + isnull(cnt_middleName,'') + ' ' + isnull(cnt_lastName,'')
+			from tbl_master_contactdpdetails, tbl_master_contact
+			where trans.DematTransactions_CustomerAccountT = dpd_id
+			and dpd_cntid = cnt_internalid
+			) 
+		end as TargetClientName,
+
+		case when (select ltrim(rtrim(DPAccounts_AccountType)) from master_DPAccounts
+					where DPAccounts_ID = DematTransactions_OwnAccountS)='[POOL]'
+		then
+			case when DematTransactions_SettlementNumberS <> 'MARGIN'
+			and DematTransactions_SettlementNumberS <> 'Hldbk'
+			and DematTransactions_SettlementNumberS <> 'OWN'
+			and DematTransactions_SettlementNumberS is not null
+			then 
+				case DematTransactions_SettlementTypeS when 'N' then 'Normal'
+				when 'A' then 'Auction Normal'
+			when 'Z' then 'Trade For Trade'
+			when 'D' then 'Auction'
+			when 'W' 
+				then 
+
+						case when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberS And Settlements_TypeSuffix='W') = 1
+						then 'Trade For Trade'
+
+						when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberS And Settlements_TypeSuffix='W') = 4
+						then 'Normal-Rolling'
+						end
+
+		else null end 
+			else null end
+
+		when (select ltrim(rtrim(DPAccounts_AccountType)) from master_DPAccounts
+					where DPAccounts_ID = DematTransactions_OwnAccountT)='[POOL]'
+		then
+			case when DematTransactions_SettlementNumberT <> 'MARGIN'
+			and DematTransactions_SettlementNumberT <> 'Hldbk'
+			and DematTransactions_SettlementNumberT <> 'OWN'
+			and DematTransactions_SettlementNumberT is not null
+			then 
+				case DematTransactions_SettlementTypeT when 'N' then 'Normal'
+				when 'A' then 'Auction Normal'
+			when 'Z' then 'Trade For Trade'
+			when 'D' then 'Auction'
+			when 'W' 
+				then 
+
+						case when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberT And Settlements_TypeSuffix='W') = 1
+						then 'Trade For Trade'
+
+						when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberT And Settlements_TypeSuffix='W') = 4
+						then 'Normal-Rolling'
+						end
+
+		else null end 
+			else null end
+		end as MarketTypeS,
+
+--		case when DematTransactions_SettlementNumberS <> 'MARGIN'
+--		and DematTransactions_SettlementNumberS <> 'Hldbk'
+--		and DematTransactions_SettlementNumberS <> 'OWN'
+--		and DematTransactions_SettlementNumberS is not null
+--		then 
+--			case DematTransactions_SettlementTypeS when 'N' then 'Normal'
+--			when 'A' then 'Auction'
+--			when 'W' then 'Trade For Trade' else null end 
+--		else null end as MarketTypeS,
+
+			case when (select ltrim(rtrim(DPAccounts_AccountType)) from master_DPAccounts
+							where DPAccounts_ID = DematTransactions_OwnAccountS)='[POOL]'
+				then
+					case when DematTransactions_SettlementNumberS <> 'MARGIN'
+					and DematTransactions_SettlementNumberS <> 'Hldbk'
+					and DematTransactions_SettlementNumberS <> 'OWN'
+					and DematTransactions_SettlementNumberS is not null
+					then DematTransactions_SettlementNumberS
+					else null end
+					
+				when (select ltrim(rtrim(DPAccounts_AccountType)) from master_DPAccounts
+							where DPAccounts_ID = DematTransactions_OwnAccountT)='[POOL]'
+				then
+					case when DematTransactions_SettlementNumberT <> 'MARGIN'
+					and DematTransactions_SettlementNumberT <> 'Hldbk'
+					and DematTransactions_SettlementNumberT <> 'OWN'
+					and DematTransactions_SettlementNumberT is not null
+					then DematTransactions_SettlementNumberT
+					else null end
+				else null end as DematTransactions_SettlementNumberS,
+
+--		case when DematTransactions_SettlementNumberS <> 'MARGIN'
+--		and DematTransactions_SettlementNumberS <> 'Hldbk'
+--		and DematTransactions_SettlementNumberS <> 'OWN'
+--		and DematTransactions_SettlementNumberS is not null
+--		then DematTransactions_SettlementNumberS
+--		else null end as DematTransactions_SettlementNumberS,
+
+		DematTransactions_ISIN,
+
+		(select top 1 Products_Name from Master_products prod, Master_ISIN eq
+		where prod.Products_ID = eq.ISIN_productid
+		and eq.ISIN_number = trans.DematTransactions_ISIN) as SecurityName,
+
+--		dbo.fNumToWords (DematTransactions_Quantity) as QtyWords,
+		
+--		dbo.fn_FormatNumber(convert(varchar,DematTransactions_Quantity)) as DematTransactions_Quantity
+
+		ltrim(rtrim(replace(replace(dbo.fNumToWords(sum(isnull(DematTransactions_Quantity,0))),'Rupees',''),'paise',''))) as QtyWords,
+
+		dbo.fn_FormatNumber(convert(varchar,sum(isnull(DematTransactions_Quantity,0))),'N') as DematTransactions_Quantity
+
+
+		from Trans_DematTransactions trans
+		where DematTransactions_BatchNumber = @batch
+		and DematTransactions_SlipNumber = @slip
+		and DematTransactions_OwnAccountS=@AccountID
+		and DematTransactions_Date=@TransDate
+		and 
+		(
+			(
+				@type = 'IntraDP-NSDL'
+				and DematTransactions_TargetDPID like 'IN%'
+				and ltrim(rtrim(DematTransactions_Nature)) = 'P'
+			)
+			or
+			(
+				@type = 'InterDP-NSDL'
+				and DematTransactions_TargetDPID not like 'IN%'
+				and ltrim(rtrim(DematTransactions_Nature)) = 'P'
+			)
+		)
+		group by DematTransactions_TargetDPID,DematTransactions_TargetClientID,DematTransactions_SourceDPID,
+		DematTransactions_SourceClientID,DematTransactions_SlipNumber,
+		DematTransactions_Date,DematTransactions_ExecutionDate,DematTransactions_OwnAccountS,
+		DematTransactions_OwnAccountT,DematTransactions_CustomerAccountT,
+		DematTransactions_SettlementTypeS,DematTransactions_SettlementNumberS,
+		DematTransactions_SettlementNumberT,DematTransactions_SettlementTypeT,
+		DematTransactions_ISIN,DematTransactions_TargetCMBPID
+
+	) foo
+
+end
+
+else if (@type = 'InterSettlement-NSDL')
+begin
+
+	select @batch as batch, 
+	'[ INTER SETTLEMENT ]' as RptType, 
+
+	rank() over (order by MarketTypeS,DematTransactions_SettlementNumberS,
+	MarketTypeT,DematTransactions_SettlementNumberT,
+	DematTransactions_ISIN,
+	DematTransactions_Quantity) as Id,
+
+	(select case when add_address1 is not null or len(ltrim(rtrim(add_address1))) <> 0
+			then add_address1 +
+				case when add_address2 is not null or len(ltrim(rtrim(add_address2))) <> 0
+				then ', ' + add_address2 +
+					case when add_address3 is not null or len(ltrim(rtrim(add_address3))) <> 0
+					then ', ' + add_address3
+					else '' end
+				else '' end
+			else '' end +
+		', ' + city_name + ' - ' + left(ltrim(add_pin),3) + ' ' + right(rtrim(add_pin),3)
+	from tbl_master_address a, tbl_master_city
+	where a.add_cntid = foo.add_cntid and a.add_city = city_id
+	)as addr,
+
+	(select phf_PhoneNumber from tbl_master_phonefax where foo.add_cntid = phf_cntid and phf_type='Work')as phone,
+
+	(select phf_PhoneNumber from tbl_master_phonefax where foo.add_cntid = phf_cntid and phf_type='Fax')as fax,
+
+	case @ExchSegId when '1' then 'IN001002' end as CCID,
+	case @ExchSegId when '1' then 'NSCCL-CC' end as CCName,
+
+	foo.DP_Name, foo.HeaderText1, foo.DematTransactions_SourceDPID, foo.DematTransactions_SlipNumber,
+	foo.DematTransactions_Date, foo.DematTransactions_ExecutionDate, foo.SourceClientName, foo.declaration,
+	foo.DematTransactions_SourceClientID, foo.DematTransactions_SourceCMBPID, 
+	foo.MarketTypeS, foo.DematTransactions_SettlementNumberS,
+	foo.MarketTypeT, foo.DematTransactions_SettlementNumberT,
+	foo.DematTransactions_ISIN, foo.SecurityName, foo.QtyWords, foo.DematTransactions_Quantity
+
+	from
+	(
+		select 
+		(select dp_dpname from tbl_master_depositoryparticipants 
+			where left(ltrim(rtrim(dp_dpid)),8) = DematTransactions_SourceDPID)as DP_Name,
+
+		case when 
+		(select count(*) from tbl_master_address 
+			where add_cntid = 
+			(select ltrim(rtrim(dp_cntid)) from tbl_master_depositoryparticipants 
+				where left(ltrim(rtrim(dp_dpid)),8) = DematTransactions_SourceDPID
+			)
+		)>1 then
+		(
+			select add_cntid
+			from tbl_master_address, tbl_master_depositoryparticipants
+			where left(ltrim(rtrim(dp_dpid)),8) = trans.DematTransactions_SourceDPID
+			and add_cntid = ltrim(rtrim(dp_cntid))
+			and add_addressType = 'Office' 
+		)
+
+		else
+		(
+			select top 1 add_cntid
+			from tbl_master_address, tbl_master_depositoryparticipants
+			where left(ltrim(rtrim(dp_dpid)),8) = trans.DematTransactions_SourceDPID
+			and add_cntid = ltrim(rtrim(dp_cntid))
+		) 
+
+		end as add_cntid,
+
+		'DEPOSITORY PARTICIPANT OF '+ 
+		case when left(ltrim(DematTransactions_SourceDPID),2) <> 'IN' then 'CDSL'
+		else 'NSDL' end as HeaderText1,
+
+		DematTransactions_SourceDPID, DematTransactions_SlipNumber, 
+		convert(varchar,DematTransactions_Date,106) as DematTransactions_Date,
+		convert(varchar,isnull(DematTransactions_ExecutionDate,DematTransactions_Date),106) as DematTransactions_ExecutionDate,
+		'I / We hereby request you to move securities in my / our account as per the following details :' as declaration,
+
+		(select DPAccounts_AccountName from Master_DPAccounts where DPAccounts_DPID = DematTransactions_SourceDPID
+		and DPAccounts_ClientID = DematTransactions_SourceClientID) as SourceClientName,
+
+		DematTransactions_SourceClientID,DematTransactions_SourceCMBPID,
+		
+		case when DematTransactions_SettlementNumberS <> 'MARGIN'
+		and DematTransactions_SettlementNumberS <> 'Hldbk'
+		and DematTransactions_SettlementNumberS <> 'OWN'
+		and DematTransactions_SettlementNumberS is not null
+		then 
+			case DematTransactions_SettlementTypeS when 'N' then 'Normal'
+			when 'A' then 'Auction Normal'
+			when 'Z' then 'Trade For Trade'
+			when 'D' then 'Auction'
+			when 'W' 
+				then 
+
+						case when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberS And Settlements_TypeSuffix='W') = 1
+						then 'Trade For Trade'
+
+						when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberS And Settlements_TypeSuffix='W') = 4
+						then 'Normal-Rolling'
+						end
+
+		else null end 
+		else null end as MarketTypeS,
+
+		case when DematTransactions_SettlementNumberS <> 'MARGIN'
+		and DematTransactions_SettlementNumberS <> 'Hldbk'
+		and DematTransactions_SettlementNumberS <> 'OWN'
+		and DematTransactions_SettlementNumberS is not null
+		then DematTransactions_SettlementNumberS
+		else null end as DematTransactions_SettlementNumberS,
+
+		case when DematTransactions_SettlementNumberT <> 'MARGIN'
+		and DematTransactions_SettlementNumberT <> 'Hldbk'
+		and DematTransactions_SettlementNumberT <> 'OWN'
+		and DematTransactions_SettlementNumberT is not null
+		then 
+			case DematTransactions_SettlementTypeT when 'N' then 'Normal'
+			when 'A' then 'Auction Normal'
+			when 'Z' then 'Trade For Trade'
+			when 'D' then 'Auction'
+			when 'W' 
+				then 
+
+						case when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberT And Settlements_TypeSuffix='W') = 1
+						then 'Trade For Trade'
+
+						when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberT And Settlements_TypeSuffix='W') = 4
+						then 'Normal-Rolling'
+						end
+
+		else null end 
+		else null end as MarketTypeT,
+
+		case when DematTransactions_SettlementNumberT <> 'MARGIN'
+		and DematTransactions_SettlementNumberT <> 'Hldbk'
+		and DematTransactions_SettlementNumberT <> 'OWN'
+		and DematTransactions_SettlementNumberT is not null
+		then DematTransactions_SettlementNumberT
+		else null end as DematTransactions_SettlementNumberT,
+
+		DematTransactions_ISIN,
+
+		(select top 1 Products_Name from Master_products prod, Master_ISIN eq
+		where prod.Products_ID = eq.ISIN_productid
+		and eq.ISIN_number = trans.DematTransactions_ISIN) as SecurityName,
+
+--		dbo.fNumToWords (DematTransactions_Quantity) as QtyWords,
+		
+--		dbo.fn_FormatNumber(convert(varchar,DematTransactions_Quantity)) as DematTransactions_Quantity
+
+		ltrim(rtrim(replace(replace(dbo.fNumToWords(sum(isnull(DematTransactions_Quantity,0))),'Rupees',''),'paise',''))) as QtyWords,
+
+		dbo.fn_FormatNumber(convert(varchar,sum(isnull(DematTransactions_Quantity,0))),'N') as DematTransactions_Quantity
+
+
+
+		from Trans_DematTransactions trans
+		where DematTransactions_BatchNumber = @batch
+		and DematTransactions_SlipNumber = @slip
+		and DematTransactions_OwnAccountS=@AccountID
+		and DematTransactions_Date=@TransDate
+		group by DematTransactions_SourceDPID,DematTransactions_SourceClientID,DematTransactions_SourceCMBPID,
+		DematTransactions_SlipNumber,DematTransactions_Date,DematTransactions_ExecutionDate,
+		DematTransactions_SettlementTypeS,DematTransactions_SettlementNumberS,
+		DematTransactions_SettlementTypeT,DematTransactions_SettlementNumberT,
+		DematTransactions_ISIN
+	) foo order by DematTransactions_ISIN
+
+end
+else if (@type = 'EarlyPayIn')
+begin
+
+	select @batch as batch, 
+	'[ Delivery-Out Instruction By Clearing Members For Early Pay In ]' as RptType, 
+	rank() over (order by DematTransactions_ISIN, DematTransactions_Quantity) as Id,
+
+	(select case when add_address1 is not null or len(ltrim(rtrim(add_address1))) <> 0
+			then add_address1 +
+				case when add_address2 is not null or len(ltrim(rtrim(add_address2))) <> 0
+				then ', ' + add_address2 +
+					case when add_address3 is not null or len(ltrim(rtrim(add_address3))) <> 0
+					then ', ' + add_address3
+					else '' end
+				else '' end
+			else '' end +
+		', ' + city_name + ' - ' + left(ltrim(add_pin),3) + ' ' + right(rtrim(add_pin),3)
+	from tbl_master_address a, tbl_master_city
+	where a.add_cntid = foo.add_cntid and a.add_city = city_id
+	)as addr,
+
+	(select phf_PhoneNumber from tbl_master_phonefax where foo.add_cntid = phf_cntid and phf_type='Work')as phone,
+
+	(select phf_PhoneNumber from tbl_master_phonefax where foo.add_cntid = phf_cntid and phf_type='Fax')as fax,
+
+	case @ExchSegId when '1' then 'IN001002' 
+					when '4' then 'IN001019' end as CCID,
+	case @ExchSegId when '1' then 'NSCCL-CC'
+					when '4' then 'BOI SHAREHOLDING LIMITED' end as CCName,
+
+	foo.DP_Name, foo.HeaderText1, foo.DematTransactions_SourceDPID, foo.DematTransactions_SlipNumber,
+	foo.DematTransactions_Date, foo.DematTransactions_ExecutionDate, foo.declaration, 
+	foo.SourceClientName, foo.DematTransactions_SourceClientID, null as DematTransactions_SourceCMBPID,
+	foo.MarketTypeS, foo.DematTransactions_SettlementNumberS,
+	null as MarketTypeT, null as DematTransactions_SettlementNumberT,
+	foo.DematTransactions_ISIN, foo.SecurityName, foo.QtyWords, foo.DematTransactions_Quantity
+
+	from
+	(
+		select 
+		(select dp_dpname from tbl_master_depositoryparticipants 
+			where left(ltrim(rtrim(dp_dpid)),8) = DematTransactions_SourceDPID)as DP_Name,
+
+		case when 
+		(select count(*) from tbl_master_address 
+			where add_cntid = 
+			(select ltrim(rtrim(dp_cntid)) from tbl_master_depositoryparticipants 
+				where left(ltrim(rtrim(dp_dpid)),8) = DematTransactions_SourceDPID
+			)
+		)>1 then
+		(
+			select add_cntid
+			from tbl_master_address, tbl_master_depositoryparticipants
+			where left(ltrim(rtrim(dp_dpid)),8) = trans.DematTransactions_SourceDPID
+			and add_cntid = ltrim(rtrim(dp_cntid))
+			and add_addressType = 'Office' 
+		)
+
+		else
+		(
+			select top 1 add_cntid
+			from tbl_master_address, tbl_master_depositoryparticipants
+			where left(ltrim(rtrim(dp_dpid)),8) = trans.DematTransactions_SourceDPID
+			and add_cntid = ltrim(rtrim(dp_cntid))
+		) 
+
+		end as add_cntid,
+
+		'DEPOSITORY PARTICIPANT OF '+ 
+		case when left(ltrim(DematTransactions_SourceDPID),2) <> 'IN' then 'CDSL'
+		else 'NSDL' end as HeaderText1,
+
+		DematTransactions_SourceDPID, DematTransactions_SlipNumber, 
+		convert(varchar,DematTransactions_Date,106) as DematTransactions_Date,
+		convert(varchar,isnull(DematTransactions_ExecutionDate,DematTransactions_Date),106) as DematTransactions_ExecutionDate,
+		'I / We request to debit my / our 01 Account as per the following details :' as declaration,
+
+		(select DPAccounts_AccountName from Master_DPAccounts where DPAccounts_DPID = DematTransactions_SourceDPID
+		and DPAccounts_ClientID = DematTransactions_SourceClientID) as SourceClientName,
+
+		DematTransactions_SourceClientID,
+		
+		case when DematTransactions_SettlementNumberS <> 'MARGIN'
+		and DematTransactions_SettlementNumberS <> 'Hldbk'
+		and DematTransactions_SettlementNumberS <> 'OWN'
+		and DematTransactions_SettlementNumberS is not null
+		then 
+			case DematTransactions_SettlementTypeS when 'N' then 'Normal'
+			when 'A' then 'Auction Normal'
+			when 'Z' then 'Trade For Trade'
+			when 'D' then 'Auction'
+			when 'W' 
+				then 
+
+						case when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberS And Settlements_TypeSuffix='W') = 1
+						then 'Trade For Trade'
+
+						when (select distinct Settlements_ExchangeSegmentID from Master_Settlements
+									where Settlements_Number = DematTransactions_SettlementNumberS And Settlements_TypeSuffix='W') = 4
+						then 'Normal-Rolling'
+						end
+
+		else null end 
+		else null end as MarketTypeS,
+
+		case when DematTransactions_SettlementNumberS <> 'MARGIN'
+		and DematTransactions_SettlementNumberS <> 'Hldbk'
+		and DematTransactions_SettlementNumberS <> 'OWN'
+		and DematTransactions_SettlementNumberS is not null
+		then DematTransactions_SettlementNumberS
+		else null end as DematTransactions_SettlementNumberS,		
+
+		DematTransactions_ISIN,
+
+		(select top 1 Products_Name from Master_products prod, Master_ISIN eq
+		where prod.Products_ID = eq.ISIN_productid
+		and eq.ISIN_number = trans.DematTransactions_ISIN) as SecurityName,
+
+--		dbo.fNumToWords (DematTransactions_Quantity) as QtyWords,
+		
+--		dbo.fn_FormatNumber(convert(varchar,DematTransactions_Quantity)) as DematTransactions_Quantity
+
+		ltrim(rtrim(replace(replace(dbo.fNumToWords(sum(isnull(DematTransactions_Quantity,0))),'Rupees',''),'paise',''))) as QtyWords,
+
+		dbo.fn_FormatNumber(convert(varchar,sum(isnull(DematTransactions_Quantity,0))),'N') as DematTransactions_Quantity
+
+
+
+		from Trans_DematTransactions trans
+		where DematTransactions_BatchNumber = @batch
+		and DematTransactions_SlipNumber = @slip
+		and DematTransactions_OwnAccountS=@AccountID
+		and DematTransactions_Date=@TransDate
+		group by DematTransactions_SourceDPID,DematTransactions_SourceClientID,
+		DematTransactions_SlipNumber,DematTransactions_Date,DematTransactions_ExecutionDate,
+		DematTransactions_SettlementTypeS,DematTransactions_SettlementNumberS,
+		DematTransactions_ISIN
+	) foo
+
+
+end
+
+END
+
+
+
+
+
+
+
+
+
+
+
+
+
+

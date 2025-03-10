@@ -1,0 +1,28 @@
+#region SearchDpAccount
+        {
+            if (Request.QueryString["SearchDpAccount"] == "1")
+            {
+                string parameter = Request.QueryString["search_param"].ToString();
+                string reqStr = Request.QueryString["letters"].ToString();
+                if (parameter == "P")
+                    DT = oDBEngine.GetDataTable("Master_DPAccounts", " top 10 DPAccounts_ID,DPAccounts_ShortName+' ['+DPAccounts_ClientID+']'", " rtrim(DPAccounts_AccountType) in ('[POOL]','[PLPAYIN]','[PLPAYOUT]') and DPAccounts_CompanyID='" + Session["LastCompany"].ToString() + "' and (DPAccounts_ExchangeSegmentID=" + Session["usersegid"].ToString() + " Or DPAccounts_ExchangeSegmentID=0) and (DPAccounts_ShortName like '" + reqStr + "%' or DPAccounts_ClientID like '" + reqStr + "%')");
+                else if (parameter == "M")
+                    DT = oDBEngine.GetDataTable("Master_DPAccounts", " top 10 DPAccounts_ID,DPAccounts_ShortName+' ['+DPAccounts_ClientID+']'", " (Left(DPAccounts_AccountType,6)='[MRGIN' or Left(DPAccounts_AccountType,7)='[HOLDBK') and DPAccounts_CompanyID='" + Session["LastCompany"].ToString() + "' and (DPAccounts_ExchangeSegmentID=" + Session["usersegid"].ToString() + " Or DPAccounts_ExchangeSegmentID=0) and (DPAccounts_ShortName like '" + reqStr + "%' or DPAccounts_ClientID like '" + reqStr + "%')");
+                else if (parameter == "O")
+                    DT = oDBEngine.GetDataTable("Master_DPAccounts", " top 10 DPAccounts_ID,DPAccounts_ShortName+' ['+DPAccounts_ClientID+']'", " Left(DPAccounts_AccountType,4)='[OWN' and DPAccounts_CompanyID='" + Session["LastCompany"].ToString() + "' and (DPAccounts_ExchangeSegmentID=" + Session["usersegid"].ToString() + " Or DPAccounts_ExchangeSegmentID=0)  and (DPAccounts_ShortName like '" + reqStr + "%' or DPAccounts_ClientID like '" + reqStr + "%')");
+
+                if (DT.Rows.Count != 0)
+                {
+
+                    for (int i = 0; i < DT.Rows.Count; i++)
+                    {
+
+                        Response.Write(DT.Rows[i][0].ToString() + "###" + DT.Rows[i][1].ToString() + "|");
+                    }
+                }
+                else
+                    Response.Write("No Record Found###No Record Found|");
+
+            }
+        }
+        #endregion

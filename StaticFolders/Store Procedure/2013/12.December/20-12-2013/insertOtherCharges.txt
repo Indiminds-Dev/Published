@@ -1,0 +1,39 @@
+
+ALTER procedure [dbo].[insertOtherCharges]
+@OtherChargeMember_CustomerID varchar(10),
+@OtherChargeMember_OtherChargeCode varchar(10),
+@OtherChargeMember_DateFrom datetime,
+@OtherChargeMember_CreateUser varchar(10),
+@OtherChargeMember_CompanyID char(10),
+@OtherChargeMember_SegmentID int
+
+As
+declare @PDate datetime,@id int,@untill datetime,@untill1 datetime,@PDate1 datetime
+Begin
+	select @PDate=dateadd(day,-1,@OtherChargeMember_DateFrom)
+	select @id=OtherChargeMember_ID from Trans_OtherChargeMember where OtherChargeMember_CustomerID=@OtherChargeMember_CustomerID and OtherChargeMember_DateTo is null and OtherChargeMember_CompanyID=@OtherChargeMember_CompanyID and OtherChargeMember_SegmentID=@OtherChargeMember_SegmentID
+	if(@id is null)
+	begin
+		insert into Trans_OtherChargeMember(OtherChargeMember_CustomerID,OtherChargeMember_OtherChargeCode,OtherChargeMember_DateFrom,OtherChargeMember_CreateUser,OtherChargeMember_CreateDateTime,OtherChargeMember_CompanyID,OtherChargeMember_SegmentID)
+		values(@OtherChargeMember_CustomerID,@OtherChargeMember_OtherChargeCode,@OtherChargeMember_DateFrom,@OtherChargeMember_CreateUser,getdate(),@OtherChargeMember_CompanyID,@OtherChargeMember_SegmentID)
+	end
+	else
+	begin
+		select @untill=OtherChargeMember_DateFrom from Trans_OtherChargeMember where OtherChargeMember_CustomerID=@OtherChargeMember_CustomerID and OtherChargeMember_DateTo is null and cast(OtherChargeMember_DateFrom as datetime)>cast(@OtherChargeMember_DateFrom as datetime) and OtherChargeMember_CompanyID=@OtherChargeMember_CompanyID and OtherChargeMember_SegmentID=@OtherChargeMember_SegmentID
+		if(@untill is null)
+		begin
+			update Trans_OtherChargeMember set OtherChargeMember_DateTo=@PDate where OtherChargeMember_ID=@id
+			insert into Trans_OtherChargeMember(OtherChargeMember_CustomerID,OtherChargeMember_OtherChargeCode,OtherChargeMember_DateFrom,OtherChargeMember_CreateUser,OtherChargeMember_CreateDateTime,OtherChargeMember_CompanyID,OtherChargeMember_SegmentID)
+			values(@OtherChargeMember_CustomerID,@OtherChargeMember_OtherChargeCode,@OtherChargeMember_DateFrom,@OtherChargeMember_CreateUser,getdate(),@OtherChargeMember_CompanyID,@OtherChargeMember_SegmentID)
+		end
+		else
+		begin
+			select @untill1=OtherChargeMember_DateFrom from Trans_OtherChargeMember where OtherChargeMember_CustomerID=@OtherChargeMember_CustomerID and OtherChargeMember_DateTo is null
+			select @PDate1=dateadd(day,-1,@untill1)
+			insert into Trans_OtherChargeMember(OtherChargeMember_CustomerID,OtherChargeMember_OtherChargeCode,OtherChargeMember_DateFrom,OtherChargeMember_CreateUser,OtherChargeMember_CreateDateTime,OtherChargeMember_DateTo,OtherChargeMember_CompanyID,OtherChargeMember_SegmentID)
+			values(@OtherChargeMember_CustomerID,@OtherChargeMember_OtherChargeCode,@OtherChargeMember_DateFrom,@OtherChargeMember_CreateUser,getdate(),@PDate1,@OtherChargeMember_CompanyID,@OtherChargeMember_SegmentID)
+		end
+	end
+end
+
+

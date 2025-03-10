@@ -1,0 +1,1128 @@
+
+--Exec [ContactNumberGenarationCOMMCURRENCY] 'COR0000002','30','2013001','F','2013-07-01','6666','2013-2014','ALL','ALL','7','1',2
+--Exec [ContactNumberGenarationCOMMCURRENCY] 'COR0000002','23','2013001','F','2014-02-25','378','2013-2014','ALL','ALL','8','265',2
+ALTER procedure [dbo].[ContactNumberGenarationCOMMCURRENCY]----------FOR COMM AND CURRENCY
+@companyid char(10),
+@segment varchar(50),
+@settlementnom varchar(10),
+@settlementtype varchar(10),
+@DATE  varchar(50),
+@CreateUser VARCHAR(50),
+@FINYEAR char(10),
+@clients varchar(max),
+@instrument varchar(max),
+@MasterSegment VARCHAR(50),
+@MAXID VARCHAR(50),
+@ORDERTYPE INT
+
+AS
+BEGIN---------MAIN SP BEGIN
+SET NOCOUNT ON
+
+			-----------FETCH SEGMENTNAME BEGIN
+
+			DECLARE @SEGMENTNAME VARCHAR(50)
+			SELECT @SEGMENTNAME=CASE WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXM0000001' THEN 'MCX - COMM'
+									 WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXI0000001' THEN 'ICEX - COMM'
+									 WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXN0000004' THEN 'NCDEX - COMM'
+									 WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXN0000005' THEN 'NMCE - COMM'
+									 WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXD0000001' THEN 'DGCX - COMM'
+									 WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXA0000002' THEN 'ACE - COMM'
+									 WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXU0000002' THEN 'UCX - COMM'
+									 WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXB0000002' THEN 'BFX - COMM'
+									 WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXI0000002' THEN 'INMX - COMM'
+									 WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXI0000003' THEN 'INSX - COMM'
+									 WHEN EXCH_SEGMENTID='COMM' AND EXCH_EXCHID='EXI0000004' THEN 'INFX - COMM'
+
+									 WHEN EXCH_SEGMENTID='CDX' AND EXCH_EXCHID='EXM0000002' THEN 'MCXSX - CDX'
+									 WHEN EXCH_SEGMENTID='CDX' AND EXCH_EXCHID='EXU0000001' THEN 'USE - CDX'
+									 WHEN EXCH_SEGMENTID='CDX' AND EXCH_EXCHID='EXB0000001' THEN 'BSE - CDX'
+									 WHEN EXCH_SEGMENTID='CDX' AND EXCH_EXCHID='EXN0000002' THEN 'NSE - CDX'
+
+									 WHEN EXCH_SEGMENTID='SPOT' AND EXCH_EXCHID='EXN0000006' THEN 'NSEL - SPOT'
+								ELSE NULL END
+			FROM TBL_MASTER_COMPANYEXCHANGE WHERE EXCH_INTERNALID=@segment AND EXCH_COMPID=@companyid
+			
+			-----------FETCH SEGMENTNAME END	
+
+			DECLARE @sql VARCHAR(MAX),@sql1 VARCHAR(MAX),@sql2 VARCHAR(MAX),@sql3 VARCHAR(MAX),
+			@sql4 VARCHAR(MAX),@sql5 VARCHAR(MAX),@sql6 VARCHAR(MAX),@sql7 VARCHAR(MAX),@sql8 VARCHAR(MAX)
+
+
+			--------------CREATE TEMP TABLE
+			CREATE TABLE #TAB			 
+							(CUSTOMERID VARCHAR(50),PRODUCTID VARCHAR(50),BRANCHCODE VARCHAR(50),
+							  ContractPattern VARCHAR(50),BRANCH VARCHAR(50),
+							  NetValue NUMERIC(28,6),
+							  ServiceTaxOnBrkg numeric(28,6),EduCessOnBrkg numeric(28,6),
+							  HgrEduCessOnBrkg numeric(28,6),
+							  CLIENTNAME VARCHAR(800),UCC VARCHAR(50),
+							  NetNDAmount NUMERIC(28,6))
+
+			CREATE TABLE #TempCntrBRKGPATTERN
+							(CLIENT VARCHAR(50),ContractPattern VARCHAR(50),BrokerageId varchar(50),NETROUNDPATTERN INT)
+
+
+---- For Transaction Charges Calculation. 06.05.2013. The existing method was not considering OPTION instruments all these days.
+
+			Create table #tmpCustomerTrades 
+			(
+			CustomerID varchar(10) null,TrdDate Datetime null,TradeCategory varchar(5) null,SegID int null,ProductSeriesID bigint null,Series varchar(3) null,
+			StrikePrice numeric(12,2) null,Lots numeric(18,0),Units numeric(20,3) null,MktValue numeric(28,2) null,Brokrg numeric(18,2) null,NetValue numeric(18,2) null,
+			ExpiryDate DateTime null,ServTaxOnBrkg numeric(12,2) null,EduCessOnBrkg numeric(12,2)null,HEduCessOnBrkg numeric(12,2) null,
+			ServTaxMode varchar(2) null,SettlePrice numeric(12,4) null,CustodialFlag varchar(2) null
+			)
+
+
+			Create Table #TmpCustomerSummary 
+			(
+			CustomerID varchar(10),TrDate DateTime null,BrokGroup varchar(15) null,StateID int null,ClientType varchar(3) null,
+			ServTaxMode varchar(2) null,CustodialFlag varchar(2) null,TurnOver numeric(24,2) null,Exposure numeric(24,2) null,
+			FutureTO numeric(22,2) null,OptionStrkTO numeric(22,2) null,OptionPrmTO numeric(22,2) null,
+			FutureEXPTO numeric(22,2) null,OptionFSStrkTO numeric(22,2) null,OptionFSSpotTO numeric(22,2) null,OptionFSTO numeric(22,2) null,
+			TXChargeGroup varchar(15) null,TXBasis tinyint null,TXStaxBasis varchar(10) null,
+			TXRateFut numeric(10,6) null,TXRateFutExp numeric(10,6) null,TXRateOpt numeric(10,6) null,TXRateOptBasis varchar(20) null,
+			TXRateOptFS numeric(10,6) null,TXRateOptFSBasis varchar(15) null,TXAmount numeric(12,2) null,STaxOnTXAmount numeric(12,2) null,
+			EduCessOnTXAmount numeric(12,2) null,HEduCessOnTXAmount numeric(12,2) null,
+			OtherChargeID int null,OtherChargeCode varchar(15) null,OTCStaxBasis varchar(10) null,OtherRate numeric(10,6) null,OtherAmount numeric(12,2) null,
+			STaxOnOtherAmount numeric(12,2) null,EduCessOnOtherAmount numeric(12,2) null,HEduCessOnOtherAmount numeric(12,2) null,
+			SEBIChargeGroup varchar(15) null,SEBIBasis tinyint null,SEBIRateFut numeric(10,6) null,SEBIRateOpt numeric(10,6) null,SEBIAmount numeric(12,2) null,
+			CLChargeGroup varchar(15) null,CLBasis tinyint null,CLStaxBasis varchar(10) null,
+			CLRateFut numeric(10,6) null,CLRateFutExp numeric(10,6) null,CLRateOpt numeric(10,6) null,CLRateOptBasis varchar(20) null,
+			CLRateOptFS numeric(10,6) null,CLRateOptFSBasis varchar(20) null,CLAmount numeric(12,2) null,
+			STaxOnCLAmount numeric(12,2) null,EduCessOnCLAmount numeric(12,2) null,HEduCessOnCLAmount numeric(12,2) null,
+			SDChargeGroup varchar(15) null,SDBasis tinyint null,SDCalBasis varchar(20) null,SDOptBasis varchar(20) null,SDFSBasis varchar(20) null,
+			SDRateCLFut numeric(10,6) null,SDMinCLFut numeric(10,6) null,
+			SDMaxCLFut numeric(10,6) null,SDRatePROFut numeric(10,6) null,SDMinPROFut numeric(10,6) null,SDMaxPROFut numeric(10,6) null,
+			SDRateCLOpt numeric(10,6) null,SDMinCLOpt numeric(10,6) null,SDMaxCLOpt numeric(10,6) null,SDRatePROOpt numeric(10,6) null,
+			SDMinPROOpt numeric(10,6) null,SDMaxPROOpt numeric(10,6) null,SDRateCLFS numeric(10,6) null,SDMinCLFS numeric(10,6) null,
+			SDMaxCLFS numeric(10,6) null,SDRatePROFS numeric(10,6) null,SDMinPROFS numeric(10,6) null,SDMaxPROFS numeric(10,6) null,
+			SDCntrSlabMultiple numeric(20,2) null,SDSlabAmount numeric(10,2) null,
+			SDMinCntr numeric(20,2) null,SDMaxCntr numeric(20,2) null,SDAmount numeric(12,2) null,
+			StaxRate numeric(10,6) null,EduCessRate numeric(10,6) null,HEduCEssRate numeric(10,6) null,
+			Premium numeric(22,2) null,MTM numeric(22,2) null,FutFinSettlement numeric(22,2) null,OptFinSettlement numeric(22,2) null,
+			RoundPattern tinyint null,GrossBillAmount numeric(22,2) null,RoundAmount numeric(6,2) null,NetBillAmount numeric(22,2) null,TotalBrokerage numeric(22,2) null,
+			ServTaxOnBrkg numeric(22,2) null,EduCessOnBrkg numeric(22,2) null,HEduCessOnBrkg numeric(22,2) null,Vrno varchar(7) null,CTTax numeric(18,2) null
+			)
+			------------------------------------------------------------------------------------------------------------------
+		Insert into #tmpCustomerTrades (	 CustomerID
+									,TrdDate
+									,SegID
+									,ProductSeriesID
+									,Series
+									,StrikePrice
+									,Lots
+									,Units
+									,MktValue
+									,Brokrg
+									,NetValue
+									,ExpiryDate
+									,ServTaxOnBrkg
+									,EduCessOnBrkg
+									,HEduCessOnBrkg
+									,ServTaxMode
+									,TradeCategory
+									,SettlePrice
+									,CustodialFlag)
+									
+			Select					 ComCustomerTrades_CustomerID
+									,ComCustomerTrades_TradeDate
+									,ComCustomerTrades_ExchangeSegment
+									,ComCustomerTrades_ProductSeriesID
+									,isnull(Commodity_TickerSeries,'FF')
+									,Commodity_StrikePrice
+									,ComCustomerTrades_QuantityLots
+									,ComCustomerTrades_UnitPriceQuantity
+									,ComCustomerTrades_MarketValue
+									,ComCustomerTrades_TotalBrokerage
+									,ComCustomerTrades_NetValue
+									,Commodity_ExpiryDate
+									,isnull(ComCustomerTrades_ServiceTaxOnBrkg,0)
+									,isnull(ComCustomerTrades_EduCessOnBrkg,0)
+									,isnull(ComCustomerTrades_HgrEduCessOnBrkg,0)
+									,ComCustomerTrades_ServiceTaxMode
+									,ComCustomerTrades_TradeCategory
+									,ComCustomerTrades_SettPrice
+									,isnull(ComCustomerTrades_CustodianTradeIdentifier,'N')
+
+			From	Trans_ComCustomerTrades,Master_Commodity
+			Where	ComCustomerTrades_ExchangeSegment=@segment
+					and ComCustomerTrades_SettlementNumber=@settlementnom
+					and ComCustomerTrades_SettlementType=@settlementtype
+					and ComCustomerTrades_TradeDate =@DATE
+					and ComCustomerTrades_ProductSeriesID=Commodity_ProductSeriesID
+					and ISNULL(ComCustomerTrades_TradeCategory,'NOR') not in ('ARS','ART','CFS','CFT','ASN','EXC','EXP')
+			--------------------------------------------------------------------------------------------------------------
+			Insert into #TmpCustomerSummary (CustomerID,TrDate,CustodialFlag)
+			Select distinct CustomerID,TrdDate,CustodialFlag from #tmpCustomerTrades
+				
+			
+			Update #TmpCustomerSummary	set	BrokGroup=ChargeGroupMembers_GroupCode
+										from Trans_ChargeGroupMembers 
+										where ChargeGroupMembers_SegmentID=@segment
+										and ChargeGroupMembers_CustomerID=CustomerID
+										and TrDate between ChargeGroupMembers_FromDate and isnull(ChargeGroupMembers_UntilDate,'2999-12-31')
+
+			Update #TmpCustomerSummary Set	TXChargeGroup=	ChargeSetup_ChargeGroup,
+											TXBasis=		ChargeSetup_ChargeBasis
+															from Config_ChargeSetup where ChargeSetup_ChargeType='TX'
+															and ChargeSetup_MainID=(
+															select BrokerageMain_ID from Config_BrokerageMain 
+															where BrokerageMain_SegmentID=@segment
+															and BrokerageMain_CustomerID=BrokGroup 
+															and TrDate between BrokerageMain_FromDate and isnull(BrokerageMain_UntilDate,'2999-12-31'))
+
+			Update #TmpCustomerSummary Set	CLChargeGroup=	ChargeSetup_ChargeGroup,
+											CLBasis=		ChargeSetup_ChargeBasis
+															from Config_ChargeSetup where ChargeSetup_ChargeType='CL'
+															and ChargeSetup_MainID=(
+															select BrokerageMain_ID from Config_BrokerageMain 
+															where BrokerageMain_SegmentID=@segment
+															and BrokerageMain_CustomerID=BrokGroup 
+															and TrDate between BrokerageMain_FromDate and isnull(BrokerageMain_UntilDate,'2999-12-31'))
+
+			Update #TmpCustomerSummary Set	TXStaxBasis=TranCharge_STApplicable,
+											TXRateFut=TranCharge_RateFut,
+											TXRateFutExp=TranCharge_RateFutExp,
+											TXRateOpt=TranCharge_RateOpt,
+											TXRateOptBasis=TranCharge_OptBasis,
+											TXRateOptFS=TranCharge_RateOptFS,
+											TXRateOptFSBasis=TranCharge_OptFSBasis
+											From Config_TranCharge where TranCharge_ExchangeSegmentID=@segment
+											and TranCharge_ChargeGroupID=TXChargeGroup
+											and TrDate between TranCharge_DateFrom and isnull(TranCharge_DateTo,'2999-12-31')
+
+			Update #TmpCustomerSummary Set	CLStaxBasis=ClearingCharge_STApplicable,
+											CLRateFut=ClearingCharge_RateFut,
+											CLRateFutExp=ClearingCharge_RateFutExp,
+											CLRateOpt=ClearingCharge_RateOpt,
+											CLRateOptBasis=ClearingCharge_OptBasis,
+											CLRateOptFS=ClearingCharge_RateOptFS,
+											CLRateOptFSBasis=ClearingCharge_OptFSBasis
+											From Config_ClearingCharge where ClearingCharge_ExchangeSegmentID=@segment
+											and ClearingCharge_ChargeGroupID=CLChargeGroup
+											and TrDate between ClearingCharge_DateFrom and isnull(ClearingCharge_DateTo,'2999-12-31')
+
+
+
+			----- Update values for various types of Turnover --------------------
+
+				Update #TmpCustomerSummary	Set	FutureTO=TurnOver.MktVal
+											From (
+											Select TrdDate As TDate,CustomerID As CustID,sum(abs(MktValue)) As MktVal
+											from #tmpCustomerTrades
+											where ISNULL(TradeCategory,'NOR')<>'EXP' and ISNULL(Series,'FF')='FF'
+											group by TrdDate,CustomerID) As TurnOver
+											where TrDate=TDate and CustomerID=CustID
+
+				Update #TmpCustomerSummary	Set	FutureEXPTO=TurnOver.MktVal
+											From (
+											Select TrdDate As TDate,CustomerID As CustID,sum(abs(MktValue)) As MktVal
+											from #tmpCustomerTrades
+											where ISNULL(TradeCategory,'NOR')='EXP' and ISNULL(Series,'FF')='FF'
+											group by TrdDate,CustomerID) As TurnOver
+											where TrDate=TDate and CustomerID=CustID
+
+				Update #TmpCustomerSummary	Set	OptionStrkTO=TurnOver.StkVal,
+											OptionPrmTO=TurnOver.MktVal
+											From (
+											Select TrdDate As TDate,CustomerID As CustID,
+											sum(abs(MktValue)) As MktVal,
+											sum(StrikePrice*abs(Units)) As StkVal
+											from #tmpCustomerTrades
+											where ISNULL(TradeCategory,'NOR') NOT IN ('EXC','ASN') and ISNULL(Series,'FF')<>'FF'
+											group by TrdDate,CustomerID) As TurnOver
+											where TrDate=TDate and CustomerID=CustID
+
+				Update #TmpCustomerSummary	Set	OptionFSStrkTO=TurnOver.StkVal,
+											OptionFSSpotTO=TurnOver.SptVal,
+											OptionFSTO=TurnOver.MktVal
+											From (
+											Select TrdDate As TDate,CustomerID As CustID,
+											sum(abs(MktValue)) As MktVal,
+											sum(StrikePrice*abs(Units)) As StkVal,
+											sum(SettlePrice*abs(Units)) As SptVal
+											from #tmpCustomerTrades
+											where ISNULL(TradeCategory,'NOR') IN ('EXC','ASN') and ISNULL(Series,'FF')<>'FF'
+											group by TrdDate,CustomerID) As TurnOver
+											where TrDate=TDate and CustomerID=CustID
+
+				Update #TmpCustomerSummary Set TXAmount=	isnull(FutureTO,0)*isnull(TXRateFut,0)/100+
+																Case when TXRateOptBasis='Premium' then isnull(OptionPrmTO,0)*isnull(TXRateOpt,0)/100
+																	when TXRateOptBasis='Strike' then isnull(OptionStrkTO,0)*isnull(TXRateOpt,0)/100
+																	when TXRateOptBasis='Premium And Strike' then (isnull(OptionStrkTO,0)+isnull(OptionPrmTO,0))*isnull(TXRateOpt,0)/100
+																	Else isnull(OptionPrmTO,0)*isnull(TXRateOpt,0)/100 End+
+																	isnull(FutureEXPTO,0)*isnull(TXRateFutExp,0)/100+
+																Case when TXRateOptFSBasis='Strike' then isnull(OptionFSStrkTO,0)*isnull(TXRateOptFS,0)/100
+																	when TXRateOptFSBasis='Spot' then isnull(OptionFSSpotTO,0)*isnull(TXRateOptFS,0)/100
+																	when TXRateOptFSBasis='Difference' then isnull(OptionFSTO,0)*isnull(TXRateOptFS,0)/100
+																	Else isnull(OptionFSTO,0)*isnull(TXRateOptFS,0)/100 End
+																where isnull(TXBasis,3)=2
+
+				Update #TmpCustomerSummary Set CLAmount=	isnull(FutureTO,0)*isnull(CLRateFut,0)/100+
+																Case when CLRateOptBasis='Premium' then isnull(OptionPrmTO,0)*isnull(CLRateOpt,0)/100
+																	when CLRateOptBasis='Strike' then isnull(OptionStrkTO,0)*isnull(CLRateOpt,0)/100
+																	when CLRateOptBasis='Premium And Strike' then (isnull(OptionStrkTO,0)+isnull(OptionPrmTO,0))*isnull(CLRateOpt,0)/100
+																	Else isnull(OptionPrmTO,0)*isnull(CLRateOpt,0)/100 End+
+																	isnull(FutureEXPTO,0)*isnull(CLRateFutExp,0)/100+
+																Case when CLRateOptFSBasis='Strike' then isnull(OptionFSStrkTO,0)*isnull(CLRateOptFS,0)/100
+																	when CLRateOptFSBasis='Spot' then isnull(OptionFSSpotTO,0)*isnull(CLRateOptFS,0)/100
+																	when CLRateOptFSBasis='Difference' then isnull(OptionFSTO,0)*isnull(CLRateOptFS,0)/100
+																	Else isnull(OptionFSTO,0)*isnull(CLRateOptFS,0)/100 End
+																where isnull(CLBasis,3)=2
+																
+				Update #TmpCustomerSummary	Set	StaxRate=		ServTax_Rate,
+											EduCessRate=		ServTax_EduCess,
+											HEduCEssRate=		ServTax_HgrEduCess
+					From Config_ServTax
+					where ServTax_ExchangeSegmentID=@segment
+							and ServTax_ChargeGroupID='DEFAULT'
+							and TrDate between ServTax_DateFrom and isnull(ServTax_DateTo,'2999-12-31')
+
+				Update #TmpCustomerSummary	Set	STaxOnTXAmount=isnull(TXAmount,0)*isnull(StaxRate,0)/100,
+											EduCessOnTXAmount=(isnull(TXAmount,0)*isnull(StaxRate,0)/100)*isnull(EduCessRate,0)/100,
+											HEduCessOnTXAmount=(isnull(TXAmount,0)*isnull(StaxRate,0)/100)*isnull(HEduCEssRate,0)/100
+											where TXStaxBasis='Yes'
+
+				Update #TmpCustomerSummary	Set	STaxOnCLAmount=isnull(CLAmount,0)*isnull(StaxRate,0)/100,
+											EduCessOnCLAmount=(isnull(CLAmount,0)*isnull(StaxRate,0)/100)*isnull(EduCessRate,0)/100,
+											HEduCessOnCLAmount=(isnull(CLAmount,0)*isnull(StaxRate,0)/100)*isnull(HEduCEssRate,0)/100
+											where CLStaxBasis='Yes'
+
+				Update #TmpCustomerSummary	Set CTTax=isnull(CttaxSummary_NetCTT,0.00) 
+											From Trans_CttaxSummary Where CttaxSummary_SegmentID=@segment
+											and CttaxSummary_SettlementNumber=@settlementnom and CttaxSummary_SettlementType=@settlementtype
+											and CttaxSummary_CTTDate=TrDate and CttaxSummary_CustomerID=CustomerID
+											
+				---------------------------------------------- Transaction Charge Calculation End ----------------------------------------			
+			----------FETCH BRKG PATTERN
+			SELECT @sql=''
+			SELECT @sql='SELECT DISTINCT	ChargeGroupMembers_CustomerID,BrokerageMain_ContractPattern,
+											BrokerageMain_ID,BrokerageMain_NetRoundPattern
+											FROM Trans_ChargeGroupMembers,Config_BrokerageMain,trans_COMCustomerTrades
+											WHERE BrokerageMain_ContractPattern IN (1,2)
+											AND ChargeGroupMembers_GroupCode=BrokerageMain_CustomerID 
+											AND cast('''+@DATE+''' as datetime) between cast(CONVERT(VARCHAR(11),BrokerageMain_FromDate,106) as datetime) 
+											AND cast(CONVERT(VARCHAR(11),isnull(BrokerageMain_UntilDate,''2100-01-01 00:00:00.000''),106) as datetime)
+											AND BrokerageMain_SegmentID='''+@segment+'''
+											AND BrokerageMain_CompanyID='''+@companyid+'''
+											AND COMCustomerTrades_customerid=ChargeGroupMembers_CustomerID
+											AND cast('''+@DATE+''' as datetime) between cast(CONVERT(VARCHAR(11),ChargeGroupMembers_FromDate,106) as datetime)
+											AND cast(CONVERT(VARCHAR(11),isnull(ChargeGroupMembers_UntilDate,''2100-01-01 00:00:00.000''),106) as datetime)
+											AND ChargeGroupMembers_SegmentID='''+@segment +'''
+											AND ChargeGroupMembers_CompanyID='''+@companyid+''''
+										 IF @clients<>'ALL'
+											BEGIN
+													Select @sql=@sql+ '  and COMCustomerTrades_customerid IN ('+@clients+') '	
+											END
+										  IF @instrument<>'ALL'
+											BEGIN
+												Select @sql=@sql+ '  and COMCustomerTrades_productseriesid IN('+@instrument+') '
+											END
+											Select @sql=@sql+ ' and COMCustomerTrades_ContractNoteNumber is null
+											AND COMCustomerTrades_SETTLEMENTNUMBER='''+@settlementnom+'''
+											AND COMCustomerTrades_SETTLEMENTTYPE='''+@settlementtype+'''
+											AND COMCustomerTrades_tradedate='''+@DATE+'''
+											AND COMCustomerTrades_EXCHANGESEGMENT='''+@segment+'''
+											AND COMCustomerTrades_COMPANYID='''+@companyid+'''
+											And ISNULL(ComCustomerTrades_TradeCategory,''NOR'') not in (''ARS'',''ART'',''CFS'',''CFT'',''ASN'',''EXC'',''EXP'')
+											'
+			INSERT INTO #TempCntrBRKGPATTERN (CLIENT,ContractPattern,BrokerageId,NETROUNDPATTERN)EXEC(@sql)
+			print (@sql)
+			--select * from #TempCntrBRKGPATTERN
+			-------------------SINGLE CONTRACT PATTERN
+			SELECT @sql='',@sql1='',@sql2='',@sql3='',@sql4='',@sql5='',@sql6='',@sql7='',@sql8=''
+			
+							SELECT @sql='SELECT CASE WHEN BUYCUSTOMERID IS NULL THEN SELLCUSTOMERID ELSE BUYCUSTOMERID END AS CUSTOMERID,
+										 1 AS ContractPattern,
+										 CASE WHEN BUYBRANCH IS NULL THEN SELLBRANCH ELSE BUYBRANCH END AS BRANCH,
+										 ISNULL(SELLNETVALUE,0)+ISNULL(BUYNETVALUE,0) AS NETVALUE,
+										 ISNULL(BUYServiceTaxOnBrkg,0)+ISNULL(SELLServiceTaxOnBrkg,0) AS SRVTAXONBRKG,
+										 ISNULL(BUYEduCessOnBrkg,0)+ISNULL(SELLEduCessOnBrkg,0) AS EDUCESSONBRKG,
+										 ISNULL(BUYHgrEduCessOnBrkg,0)+ISNULL(SELLHgrEduCessOnBrkg,0) AS HGREDUCESSONBRKG
+										 FROM '
+							SELECT @sql1='
+										(SELECT
+										COMCustomerTrades_customerid AS BUYCUSTOMERID,
+										COMCustomerTrades_BranchID AS BUYBRANCH,
+										sum(isnull(COMCustomerTrades_NetValue,0.0)) AS BUYNETVALUE,
+									    sum(isnull(COMCustomerTrades_ServiceTaxOnBrkg,0.0)) AS BUYServiceTaxOnBrkg,
+										sum(isnull(COMCustomerTrades_EduCessOnBrkg,0.0)) AS BUYEduCessOnBrkg,
+										sum(isnull(COMCustomerTrades_HgrEduCessOnBrkg,0.0)) as BUYHgrEduCessOnBrkg
+										from trans_COMCustomerTrades,master_commodity
+									    WHERE substring(commodity_Identifier,1,3)=''FUT''
+										AND COMCustomerTrades_ProductSeriesID=Commodity_ProductSeriesID'
+							
+							Select @sql2='  
+											AND COMCustomerTrades_customerid IN (SELECT DISTINCT CLIENT FROM #TempCntrBRKGPATTERN WHERE ContractPattern=1)'	
+										    IF @instrument<>'ALL'
+											BEGIN
+												Select @sql2=@sql2+ '  and COMCustomerTrades_productseriesid IN('+@instrument+') '
+											END
+											Select @sql2=@sql2+ ' and COMCustomerTrades_ContractNoteNumber is null
+											AND COMCustomerTrades_SETTLEMENTNUMBER='''+@settlementnom+'''
+											AND COMCustomerTrades_SETTLEMENTTYPE='''+@settlementtype+'''
+											AND COMCustomerTrades_tradedate='''+@DATE+'''
+											AND COMCustomerTrades_EXCHANGESEGMENT='''+@segment+'''
+											AND COMCustomerTrades_COMPANYID='''+@companyid+'''
+											And ISNULL(ComCustomerTrades_TradeCategory,''NOR'') not in (''ARS'',''ART'',''CFS'',''CFT'',''ASN'',''EXC'',''EXP'')'
+
+							SELECT @sqL3='group by COMCustomerTrades_customerid,COMCustomerTrades_BranchID) AS BUYTAB '
+
+							SELECT @sqL4='FULL OUTER JOIN
+										(SELECT
+										COMCustomerTrades_customerid AS SELLCUSTOMERID,
+										COMCustomerTrades_BranchID AS SELLBRANCH,
+										sum(isnull(COMCustomerTrades_NetValue,0.0)) AS SELLNETVALUE,
+									    sum(isnull(COMCustomerTrades_ServiceTaxOnBrkg,0.0)) AS SELLServiceTaxOnBrkg,
+										sum(isnull(COMCustomerTrades_EduCessOnBrkg,0.0)) AS SELLEduCessOnBrkg,
+										sum(isnull(COMCustomerTrades_HgrEduCessOnBrkg,0.0)) as SELLHgrEduCessOnBrkg
+										from trans_COMCustomerTrades,master_commodity
+									    WHERE substring(commodity_Identifier,1,3)=''OPT''
+										AND COMCustomerTrades_ProductSeriesID=Commodity_ProductSeriesID
+										And ISNULL(ComCustomerTrades_TradeCategory,''NOR'') not in (''ARS'',''ART'',''CFS'',''CFT'',''ASN'',''EXC'',''EXP'')'
+
+									
+							SELECT @sqL5='group by COMCustomerTrades_customerid,COMCustomerTrades_BranchID) AS SELLTAB'
+
+							SELECT @sql6=' ON(BUYCUSTOMERID=SELLCUSTOMERID
+												  AND BUYBRANCH=SELLBRANCH)'
+
+--							print @sql+@sql1+@sql2+@sql3+@sql4+@sql2+@sql5+@sql6
+							INSERT INTO #TAB (CUSTOMERID,ContractPattern,BRANCH,
+											 NetValue,ServiceTaxOnBrkg,EduCessOnBrkg,HgrEduCessOnBrkg)
+							EXEC(@sql+@sql1+@sql2+@sql3+@sql4+@sql2+@sql5+@sql6)
+
+			-------------------SHARE WISE CONTRACT PATTERN
+			SELECT @sql='',@sql1='',@sql2='',@sql3='',@sql4='',@sql5='',@sql6='',@sql7='',@sql8=''
+			
+							SELECT @sql='SELECT CASE WHEN BUYCUSTOMERID IS NULL THEN SELLCUSTOMERID ELSE BUYCUSTOMERID END AS CUSTOMERID,
+										 2 AS ContractPattern,
+										 CASE WHEN BUYBRANCH IS NULL THEN SELLBRANCH ELSE BUYBRANCH END AS BRANCH,
+										 ISNULL(SELLNETVALUE,0)+ISNULL(BUYNETVALUE,0) AS NETVALUE,
+										 ISNULL(BUYServiceTaxOnBrkg,0)+ISNULL(SELLServiceTaxOnBrkg,0) AS SRVTAXONBRKG,
+										 ISNULL(BUYEduCessOnBrkg,0)+ISNULL(SELLEduCessOnBrkg,0) AS EDUCESSONBRKG,
+										 ISNULL(BUYHgrEduCessOnBrkg,0)+ISNULL(SELLHgrEduCessOnBrkg,0) AS HGREDUCESSONBRKG,
+										 CASE WHEN BUYproductseriesid IS NULL THEN SELLproductseriesid ELSE BUYproductseriesid END AS PRODUCT
+										 FROM '
+							SELECT @sql1='
+										(SELECT
+										COMCustomerTrades_customerid AS BUYCUSTOMERID,
+										COMCustomerTrades_productseriesid AS BUYproductseriesid,
+										COMCustomerTrades_BranchID AS BUYBRANCH,
+										sum(isnull(COMCustomerTrades_NetValue,0.0)) AS BUYNETVALUE,
+									    sum(isnull(COMCustomerTrades_ServiceTaxOnBrkg,0.0)) AS BUYServiceTaxOnBrkg,
+										sum(isnull(COMCustomerTrades_EduCessOnBrkg,0.0)) AS BUYEduCessOnBrkg,
+										sum(isnull(COMCustomerTrades_HgrEduCessOnBrkg,0.0)) as BUYHgrEduCessOnBrkg
+										from trans_COMCustomerTrades,master_commodity
+									    WHERE substring(commodity_Identifier,1,3)=''FUT''
+										AND COMCustomerTrades_ProductSeriesID=Commodity_ProductSeriesID
+										And ISNULL(ComCustomerTrades_TradeCategory,''NOR'') not in (''ARS'',''ART'',''CFS'',''CFT'',''ASN'',''EXC'',''EXP'')'
+							
+							Select @sql2='  
+											AND COMCustomerTrades_customerid IN (SELECT DISTINCT CLIENT FROM #TempCntrBRKGPATTERN WHERE ContractPattern=2)'	
+										    IF @instrument<>'ALL'
+											BEGIN
+												Select @sql2=@sql2+ '  and COMCustomerTrades_productseriesid IN('+@instrument+') '
+											END
+											Select @sql2=@sql2+ ' and COMCustomerTrades_ContractNoteNumber is null
+											AND COMCustomerTrades_SETTLEMENTNUMBER='''+@settlementnom+'''
+											AND COMCustomerTrades_SETTLEMENTTYPE='''+@settlementtype+'''
+											AND COMCustomerTrades_tradedate='''+@DATE+'''
+											AND COMCustomerTrades_EXCHANGESEGMENT='''+@segment+'''
+											AND COMCustomerTrades_COMPANYID='''+@companyid+''''
+
+							SELECT @sqL3='group by COMCustomerTrades_customerid,COMCustomerTrades_BranchID,COMCustomerTrades_productseriesid) AS BUYTAB '
+
+							SELECT @sqL4='FULL OUTER JOIN
+										(SELECT
+										COMCustomerTrades_customerid AS SELLCUSTOMERID,
+										COMCustomerTrades_productseriesid AS SELLproductseriesid,
+										COMCustomerTrades_BranchID AS SELLBRANCH,
+										sum(isnull(COMCustomerTrades_NetValue,0.0)) AS SELLNETVALUE,
+									    sum(isnull(COMCustomerTrades_ServiceTaxOnBrkg,0.0)) AS SELLServiceTaxOnBrkg,
+										sum(isnull(COMCustomerTrades_EduCessOnBrkg,0.0)) AS SELLEduCessOnBrkg,
+										sum(isnull(COMCustomerTrades_HgrEduCessOnBrkg,0.0)) as SELLHgrEduCessOnBrkg
+										from trans_COMCustomerTrades,master_commodity
+									    WHERE substring(commodity_Identifier,1,3)=''OPT''
+										AND COMCustomerTrades_ProductSeriesID=Commodity_ProductSeriesID
+										And ISNULL(ComCustomerTrades_TradeCategory,''NOR'') not in (''ARS'',''ART'',''CFS'',''CFT'',''ASN'',''EXC'',''EXP'')'
+
+									
+							SELECT @sqL5='group by COMCustomerTrades_customerid,COMCustomerTrades_BranchID,COMCustomerTrades_productseriesid) AS SELLTAB'
+
+							SELECT @sql6=' ON(BUYCUSTOMERID=SELLCUSTOMERID
+												  AND BUYBRANCH=SELLBRANCH
+													AND BUYproductseriesid=SELLproductseriesid)'
+
+--							print @sql+@sql1+@sql2+@sql3+@sql4+@sql2+@sql5+@sql6
+							INSERT INTO #TAB (CUSTOMERID,ContractPattern,BRANCH,NetValue,ServiceTaxOnBrkg,EduCessOnBrkg,
+											 HgrEduCessOnBrkg,PRODUCTID)
+							EXEC(@sql+@sql1+@sql2+@sql3+@sql4+@sql2+@sql5+@sql6)
+
+							---------------ND AMNT(IF CONTRACT PATTER SINGLE)
+							SELECT @sql=''
+							SELECT @sql='UPDATE #TAB SET NetNDAmount=MKTVALUE FROM
+										 (SELECT SUM(ISNULL(COMCustomerTrades_MarketValue,0)) AS MKTVALUE,
+										 COMCustomerTrades_customerid AS CUSTID
+										 FROM trans_COMCustomerTrades WHERE
+										 COMCustomerTrades_NDIdentifier=''Y''
+										 AND COMCustomerTrades_customerid IN (SELECT DISTINCT CLIENT FROM #TempCntrBRKGPATTERN WHERE ContractPattern=1)'	
+										 IF @instrument<>'ALL'
+										 BEGIN
+											Select @sql=@sql+ '  and COMCustomerTrades_productseriesid IN('+@instrument+') '
+										 END
+											Select @sql=@sql+ ' and COMCustomerTrades_ContractNoteNumber is null
+											AND COMCustomerTrades_SETTLEMENTNUMBER='''+@settlementnom+'''
+											AND COMCustomerTrades_SETTLEMENTTYPE='''+@settlementtype+'''
+											AND COMCustomerTrades_tradedate='''+@DATE+'''
+											AND COMCustomerTrades_EXCHANGESEGMENT='''+@segment+'''
+											AND COMCustomerTrades_COMPANYID='''+@companyid+'''
+											And ISNULL(ComCustomerTrades_TradeCategory,''NOR'') not in (''ARS'',''ART'',''CFS'',''CFT'',''ASN'',''EXC'',''EXP'')
+										GROUP BY COMCustomerTrades_customerid) AS KK
+										WHERE CUSTOMERID=CUSTID'
+
+							EXEC(@sql)
+							---------------ND AMNT(IF CONTRACT PATTERN SHARE WISE)
+							SELECT @sql=''
+							SELECT @sql='UPDATE #TAB SET NetNDAmount=MKTVALUE FROM
+										 (SELECT SUM(ISNULL(COMCustomerTrades_MarketValue,0)) AS MKTVALUE,
+										 COMCustomerTrades_customerid AS CUSTID,COMCustomerTrades_productseriesid AS PRID
+										 FROM trans_COMCustomerTrades WHERE 
+										 COMCustomerTrades_NDIdentifier=''Y''
+										 AND COMCustomerTrades_customerid IN (SELECT DISTINCT CLIENT FROM #TempCntrBRKGPATTERN WHERE ContractPattern=1)'	
+										 IF @instrument<>'ALL'
+										 BEGIN
+											Select @sql=@sql+ '  and COMCustomerTrades_productseriesid IN('+@instrument+') '
+										 END
+											Select @sql=@sql+ ' and COMCustomerTrades_ContractNoteNumber is null
+											AND COMCustomerTrades_SETTLEMENTNUMBER='''+@settlementnom+'''
+											AND COMCustomerTrades_SETTLEMENTTYPE='''+@settlementtype+'''
+											AND COMCustomerTrades_tradedate='''+@DATE+'''
+											AND COMCustomerTrades_EXCHANGESEGMENT='''+@segment+'''
+											AND COMCustomerTrades_COMPANYID='''+@companyid+'''
+											And ISNULL(ComCustomerTrades_TradeCategory,''NOR'') not in (''ARS'',''ART'',''CFS'',''CFT'',''ASN'',''EXC'',''EXP'')
+										GROUP BY COMCustomerTrades_customerid,COMCustomerTrades_productseriesid) AS JJ
+										WHERE CUSTOMERID=CUSTID AND PRODUCTID=PRID'
+							EXEC(@sql)
+							---------CLIENT NAME AND UCC FETCH
+							UPDATE #TAB SET CLIENTNAME=isnull(rtrim(cnt_firstName),'') +' '+isnull(rtrim(cnt_middleName),' ')+' '+isnull(rtrim(cnt_lastName),' '),
+											UCC=isnull(rtrim(cnt_UCC),' '),
+											BRANCHCODE=BRANCH_CODE
+							FROM TBL_MASTER_CONTACT,TBL_MASTER_BRANCH WHERE CNT_INTERNALID=CUSTOMERID
+							AND BRANCH_ID=CNT_BRANCHID
+							--select * from #TAB
+
+									----------ORDER WISE CONTRACT NO GENERATE BEGIN
+									select * into #TempCntr  from #TAB
+									order by 
+									case when @ORDERTYPE=1 then BRANCHCODE+UCC
+									else BRANCHCODE+CLIENTNAME end
+									----------ORDER WISE CONTRACT NO GENERATE END
+
+								Declare @Temp_MAXId int,@Temp_MINId  int,@CUSTOMERID VARCHAR(50),
+								@ProductId VARCHAR(50),@conttractno VARCHAR(50),@CNTRPATTERN int
+
+							  ALTER TABLE #TempCntr add  TempId int identity(1,1),CNTRNO VARCHAR(50),
+							  TRANCHARGE NUMERIC(28,2),TRANCHARGEMODE VARCHAR(50),SRVTAXTRANCHARGE NUMERIC(28,2),
+							  EDUCESSONTRANCHARGE numeric(28,2),HGRONTRANCHARGE NUMERIC(28,2),
+							  CLRINGCHARGE NUMERIC(28,2),CLRINGCHARGEMODE VARCHAR(50),SRVTAXCLRINGCHARGE NUMERIC(28,2),
+							  EDUCESSONCLRINGCHARGE numeric(28,2),HGRONCLRINGCHARGE NUMERIC(28,2),
+							  STAMPCHARGE NUMERIC(28,2),STAMPCHARGEMODE VARCHAR(50),
+							  SEBICHARGE NUMERIC(28,2),SEBIMODE VARCHAR(50),
+							  BRKGCHARGE NUMERIC(28,2),BRKGMODE VARCHAR(20),
+							  DELIVERYCHARGE NUMERIC(28,2),SRVTAXDELIVERYCHARGE NUMERIC(28,2),
+							  EDUCESSONDELIVERYCHARGE NUMERIC(28,2),
+							  HGRCESSONDELIVERYCHARGE NUMERIC(28,2),NETPATTERN INT,
+							  DelFutTO NUMERIC(28,6),SqrOptPrmTO NUMERIC(28,6),FUTFINALSETTTO NUMERIC(28,6),ASCEXCTO NUMERIC(28,6),
+							  DelFutBrokerage NUMERIC(28,6),SqrOptBrokerage NUMERIC(28,6),
+							  FUTFINALSETTBrokerage NUMERIC(28,6),ASNEXCBRKG NUMERIC(28,6),
+							  OTHERCHARGECODE VARCHAR(50),OTHERCHARGE NUMERIC(28,6),
+							  SRVTAXOTHERCHARGE NUMERIC(28,6),SRVTAXEDUCESSOTHERCHARGE NUMERIC(28,6),
+							  SRVTAXHGREDUCESSOTHERCHARGE NUMERIC(28,6),CTTax numeric(18,2)
+
+								select @Temp_MAXId=MAX(TempId) from #TempCntr 
+								select @Temp_MINId=MIN(TempId) from #TempCntr
+
+								WHILE @Temp_MAXId>=@Temp_MINId
+									BEGIN
+											SELECT @conttractno=@MAXID+1+@Temp_MINId-1,
+												   @CUSTOMERID=CUSTOMERID,@ProductId=PRODUCTID,
+												   @CNTRPATTERN=ContractPattern 
+											FROM #TempCntr WHERE TempId=@Temp_MINId
+
+											UPDATE #TempCntr set CNTRNO=@conttractno  where TempId=@Temp_MINId
+											SELECT @sql=''
+											SELECT @sql='update Trans_COMCustomerTrades set 
+											COMCustomerTrades_ContractNoteNumber=CAST('''+@conttractno+''' AS VARCHAR)
+											where COMCustomerTrades_ContractNoteNumber is null'
+											IF @CNTRPATTERN='2'
+											BEGIN
+												Select @sql=@sql+ ' and COMCustomerTrades_productseriesid='''+@ProductId+''''
+											END
+											SELECT @sql=@sql+' 
+											AND COMCustomerTrades_customerid='''+@CUSTOMERID+'''
+											AND COMCustomerTrades_SETTLEMENTNUMBER='''+@settlementnom+'''
+											AND COMCustomerTrades_SETTLEMENTTYPE='''+@settlementtype+'''
+											AND COMCustomerTrades_tradedate='''+@DATE+'''
+											AND COMCustomerTrades_EXCHANGESEGMENT='''+@segment+'''
+											AND COMCustomerTrades_COMPANYID='''+@companyid+'''
+											And ISNULL(ComCustomerTrades_TradeCategory,''NOR'') not in (''ARS'',''ART'',''CFS'',''CFT'',''ASN'',''EXC'',''EXP'')'
+											
+											
+											EXEC(@sql)
+											print @sql
+											SELECT @Temp_MINId=@Temp_MINId+1 
+									END
+							
+					------------FOR CHARGES
+					CREATE TABLE #Charges (Temp_Clientsid varchar(50),BRKGCHARGESETUP VARCHAR(30),TEMP_CNTRNO VARCHAR(50),
+										   Temp_BrokerageId varchar(50),Temp_GroupCode varchar(50),Temp_STApplicable char(3),
+										   CHARGE_NETROUNDPATTERN INT,
+
+										   Temp_FUTMkt numeric(28,6),Temp_OPTMkt numeric(28,6),
+										   Temp_FUTEXPMkt numeric(28,6),Temp_OPTEXCASNMkt numeric(28,6),
+										   
+										   Temp_FUTQTYMkt numeric(28,6),Temp_OPTQTYMkt numeric(28,6),
+										   Temp_FUTEXPQTYMkt numeric(28,6),Temp_OPTEXCASNQTYMkt numeric(28,6),
+										  
+										   Temp_FUTBRKG numeric(28,6),Temp_OPTBRKG numeric(28,6),
+										   Temp_FUTEXPBRKG numeric(28,6),Temp_OPTEXCASNBRKG numeric(28,6))
+
+					insert into #Charges (Temp_Clientsid,Temp_BrokerageId,TEMP_CNTRNO,CHARGE_NETROUNDPATTERN)
+					SELECT DISTINCT CUSTOMERID,BrokerageId,CNTRNO,NETROUNDPATTERN 
+					FROM #TempCntr,#TempCntrBRKGPATTERN
+					WHERE CUSTOMERID=CLIENT
+
+					---------------MKTVALUE FETCH BEGIN
+					SELECT * INTO #TEMPCHARGE FROM
+					(select  COMCustomerTrades_CustomerID AS CustomerID,COMCustomerTrades_ContractNoteNumber AS ContractNoteNumber,
+					RTRIM(LTRIM(Commodity_Identifier)) AS Identifier,COMCustomerTrades_TradeCategory AS TradeCategory,
+					COMCustomerTrades_MarketValue AS MarketValue,COMCustomerTrades_TotalBrokerage AS BRKG,
+					(isnull(COMCustomerTrades_StrikePrice,0)*abs(isnull(COMCustomerTrades_UnitPriceQuantity,0))) AS QTY
+					from Trans_COMCustomerTrades,MASTER_COMMODITY
+					where COMCustomerTrades_CustomerID IN (SELECT DISTINCT Temp_Clientsid FROM #Charges)
+					and Commodity_ProductSeriesID=COMCustomerTrades_ProductSeriesID
+					AND COMCustomerTrades_SETTLEMENTTYPE=@settlementtype
+					AND COMCustomerTrades_SETTLEMENTNUMBER=@settlementnom
+					AND COMCustomerTrades_tradedate=@DATE
+					and COMCustomerTrades_ExchangeSegment=@Segment
+					and COMCustomerTrades_CompanyID=@Companyid) AS KK
+					
+					----------FUTSTK------
+					update #Charges set Temp_FUTMkt=summkt,Temp_FUTQTYMkt=Quantity,Temp_FUTBRKG=BRKG1 from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt,SUM(ISNULL(QTY,0)) AS Quantity,
+					SUM(ISNULL(BRKG,0)) AS BRKG1,CustomerID,ContractNoteNumber
+					from #TEMPCHARGE where TradeCategory is null
+					and Identifier LIKE 'FUT%'
+					group by CustomerID,ContractNoteNumber) as tb
+					where CustomerID=Temp_Clientsid AND TEMP_CNTRNO=ContractNoteNumber
+
+
+					----------OPTSTK------
+					update #Charges set Temp_OPTMkt=summkt,Temp_OPTQTYMkt=Quantity,Temp_OPTBRKG=BRKG1 from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					SUM(ISNULL(BRKG,0)) AS BRKG1,CustomerID,ContractNoteNumber
+				    from #TEMPCHARGE where TradeCategory is null
+					and Identifier LIKE 'OPT%'
+					group by CustomerID,ContractNoteNumber) as tb
+					where CustomerID=Temp_Clientsid   AND TEMP_CNTRNO=ContractNoteNumber
+													           
+
+					----------FUT(EXP)------
+					update #Charges set Temp_FUTEXPMkt=summkt,Temp_FUTEXPQTYMkt=Quantity,Temp_FUTEXPBRKG=BRKG1 from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					SUM(ISNULL(BRKG,0)) AS BRKG1,CustomerID,ContractNoteNumber
+				    from #TEMPCHARGE where TradeCategory='EXP'
+					and Identifier LIKE 'FUT%'
+					group by CustomerID,ContractNoteNumber) as tb
+					where CustomerID=Temp_Clientsid   AND TEMP_CNTRNO=ContractNoteNumber
+
+					----------OPT(EXC,ASN)------
+					update #Charges set Temp_OPTEXCASNMkt=summkt,Temp_OPTEXCASNQTYMkt=Quantity,Temp_OPTEXCASNBRKG=BRKG1 from
+					(select sum(abs(isnull(MarketValue,0.0))) as summkt, SUM(ISNULL(QTY,0)) AS Quantity,
+					SUM(ISNULL(BRKG,0)) AS BRKG1,CustomerID,ContractNoteNumber
+				    from #TEMPCHARGE where TradeCategory in('EXC','ASN')
+					and Identifier LIKE 'OPT%'
+					group by CustomerID,ContractNoteNumber) as tb
+					where CustomerID=Temp_Clientsid  AND TEMP_CNTRNO=ContractNoteNumber
+
+				   
+					-----------------MKTVALUE FETCH END
+
+					DECLARE @TRANCHARGES VARCHAR(50),@CLRINGCHARGES VARCHAR(50),@STAMPCHARGES VARCHAR(50),@SEBICHARGES VARCHAR(50),@OTHERCHARGES VARCHAR(50)
+					SELECT @TRANCHARGES='N'
+					SELECT @TRANCHARGES='Y' FROM Config_TranCharge WHERE TranCharge_COMPANYID=@companyid AND TranCharge_EXCHANGESEGMENTID=@segment AND cast(@DATE as datetime) BETWEEN TranCharge_DATEFROM AND isnull(TranCharge_DATETO,'2100-01-01 00:00:00.000')
+					SELECT @CLRINGCHARGES='N'
+					SELECT @CLRINGCHARGES='Y' FROM Config_ClearingCharge WHERE ClearingCharge_COMPANYID=@companyid AND ClearingCharge_EXCHANGESEGMENTID=@segment AND cast(@DATE as datetime) BETWEEN ClearingCharge_DATEFROM AND isnull(ClearingCharge_DATETO,'2100-01-01 00:00:00.000')
+					SELECT @STAMPCHARGES='N'
+					SELECT @STAMPCHARGES='Y' FROM Config_StampDuty WHERE StampDuty_COMPANYID=@companyid AND StampDuty_EXCHANGESEGMENTID=@segment AND cast(@DATE as datetime) BETWEEN StampDuty_DATEFROM AND isnull(StampDuty_DATETO,'2100-01-01 00:00:00.000') 
+					SELECT @SEBICHARGES='N'
+					SELECT @SEBICHARGES='Y' FROM Config_sebifee WHERE sebifee_COMPANYID=@companyid AND sebifee_EXCHANGESEGMENTID=@segment AND cast(@DATE as datetime) BETWEEN sebifee_DATEFROM AND isnull(sebifee_DATETO,'2100-01-01 00:00:00.000') and sebifee_Applicablefor not in('None','NA') 
+					SELECT @OTHERCHARGES='N'
+					SELECT @OTHERCHARGES='Y' FROM Trans_OtherChargeMember WHERE OtherChargeMember_CompanyID=@companyid AND OtherChargeMember_SegmentID=@segment AND cast(@DATE as datetime) BETWEEN OtherChargeMember_DateFrom AND isnull(OtherChargeMember_DateTo,'2100-01-01 00:00:00.000') 
+
+
+					IF((@TRANCHARGES='Y'))
+					BEGIN----------IF TRANSACTION CHARGES BEGIN
+							ALTER TABLE #Charges ADD Temp_TranChargeRate1 numeric(8,6),
+							Temp_ServiceTax numeric(8,6),Temp_ServTaxEduCess numeric(8,6),Temp_ServTaxHgrEduCess numeric(8,6),
+							Temp_TotalTrancharge numeric(28,6),
+							Temp_ServiceTaxOnTranCharge numeric(28,6),Temp_EduCessOnTranCharge numeric(28,6),
+							Temp_HgrEduCessOnTranCharge numeric(28,6),Temp_Tranchargemode varchar(50)
+
+							update #Charges SET
+							Temp_TranChargeRate1=CASE WHEN @MasterSegment=14 THEN TranCharge_Rate1 ELSE TranCharge_RateFut END ,
+							Temp_STApplicable =TranCharge_STApplicable,
+							Temp_GroupCode=ChargeSetup_ChargeGroup,
+							Temp_Tranchargemode=CASE WHEN ChargeSetup_ChargeBasis='2' THEN 'E'
+													 WHEN ChargeSetup_ChargeBasis='1' THEN 'I'
+													 ELSE NULL END
+							from Config_TranCharge,Config_ChargeSetup
+							WHERE ChargeSetup_ChargeType='TX'
+							AND ChargeSetup_MainID=Temp_BrokerageId
+							AND TranCharge_ChargeGroupID=ChargeSetup_ChargeGroup
+							AND cast(@DATE as datetime) between cast(CONVERT(VARCHAR(11),TranCharge_DateFrom,106) as datetime) 
+							AND cast(CONVERT(VARCHAR(11),isnull(TranCharge_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+							AND TranCharge_ExchangeSegmentID=@segment
+							AND TranCharge_CompanyID=@companyid	
+
+							update #Charges set	Temp_ServiceTax=ServTax_Rate,
+												Temp_ServTaxEduCess = ServTax_EduCess,
+												Temp_ServTaxHgrEduCess =ServTax_HgrEduCess
+							FROM Config_ServTax
+							WHERE ServTax_ChargeGroupID=Temp_GroupCode AND Temp_STApplicable='YES' and Temp_Tranchargemode='E'
+							AND cast(@DATE as datetime) between cast(CONVERT(VARCHAR(11),ServTax_DateFrom,106) as datetime)
+							AND cast(CONVERT(VARCHAR(11),isnull(ServTax_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+							AND ServTax_ExchangeSegmentID=@segment
+							AND ServTax_CompanyID=@companyid
+
+							----------------Calculate Transaction Charge FOR FUTSTK------------------
+							update #Charges set Temp_TotalTrancharge=
+																 round((((
+																		isnull(Temp_FUTMkt,0.0)+
+																		isnull(Temp_OPTMkt,0.0)+
+																		isnull(Temp_FUTEXPMkt,0.0)+
+																		isnull(Temp_OPTEXCASNMkt,0.0)
+																		)
+																		*isnull(Temp_TranChargeRate1,0))
+																		/100),2)
+							WHERE Temp_Tranchargemode='E'
+							-----------------Calculate Service Tax Of Transaction charge----
+							update #Charges set Temp_ServiceTaxOnTranCharge=round(((Temp_Totaltrancharge*Temp_ServiceTax)/100),2)
+							WHERE Temp_STApplicable='Yes' AND Temp_Tranchargemode='E'
+
+							update #Charges set Temp_EduCessOnTranCharge=round(((Temp_ServiceTaxOnTranCharge*Temp_ServTaxEduCess)/100),2),
+												Temp_HgrEduCessOnTranCharge=round(((Temp_ServiceTaxOnTranCharge*Temp_ServTaxHgrEduCess)/100),2) 
+							WHERE Temp_STApplicable='Yes' AND Temp_Tranchargemode='E'
+								 
+							----------MAIN TABLE UPDATE
+							Update #TempCntr Set TRANCHARGE=TXAmount,
+												SRVTAXTRANCHARGE=STaxOnTXAmount,
+												EDUCESSONTRANCHARGE=EduCessOnTXAmount,
+												HGRONTRANCHARGE=HEduCessOnTXAmount,
+												TRANCHARGEMODE=CASE WHEN TXBasis=2 THEN 'E' WHEN TXBasis=1 THEN 'I' ELSE 'N' END,
+												#TempCntr.CTTax=#TmpCustomerSummary.CTTax
+												from #TmpCustomerSummary
+												where #TempCntr.CUSTOMERID=#TmpCustomerSummary.CustomerID
+							
+							
+						
+					END----------IF TRANSACTION CHARGES END
+					IF((@CLRINGCHARGES='Y'))
+					BEGIN----------IF CLEARING CHARGES BEGIN
+							ALTER TABLE #Charges ADD Temp_ClearingChargeRate1 numeric(8,6),
+							Temp_ServiceTax numeric(8,6),Temp_ServTaxEduCess numeric(8,6),Temp_ServTaxHgrEduCess numeric(8,6),
+							Temp_TotalClearingcharge numeric(28,6),
+							Temp_ServiceTaxOnClearingCharge numeric(28,6),Temp_EduCessOnClearingCharge numeric(28,6),
+							Temp_HgrEduCessOnClearingCharge numeric(28,6),Temp_Clearingchargemode varchar(50)
+
+							update #Charges SET
+							Temp_ClearingChargeRate1=CASE WHEN @MasterSegment=14 THEN ClearingCharge_Rate1 ELSE ClearingCharge_RateFut END ,
+							Temp_STApplicable =ClearingCharge_STApplicable,
+							Temp_GroupCode=ChargeSetup_ChargeGroup,
+							Temp_Clearingchargemode=CASE WHEN ChargeSetup_ChargeBasis='2' THEN 'E'
+													 WHEN ChargeSetup_ChargeBasis='1' THEN 'I'
+													 ELSE NULL END
+							from Config_ClearingCharge,Config_ChargeSetup
+							WHERE ChargeSetup_ChargeType='CL'
+							AND ChargeSetup_MainID=Temp_BrokerageId
+							AND ClearingCharge_ChargeGroupID=ChargeSetup_ChargeGroup
+							AND cast(@DATE as datetime) between cast(CONVERT(VARCHAR(11),ClearingCharge_DateFrom,106) as datetime) 
+							AND cast(CONVERT(VARCHAR(11),isnull(ClearingCharge_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+							AND ClearingCharge_ExchangeSegmentID=@segment
+							AND ClearingCharge_CompanyID=@companyid	
+
+							update #Charges set	Temp_ServiceTax=ServTax_Rate,
+												Temp_ServTaxEduCess = ServTax_EduCess,
+												Temp_ServTaxHgrEduCess =ServTax_HgrEduCess
+							FROM Config_ServTax
+							WHERE ServTax_ChargeGroupID=Temp_GroupCode AND Temp_STApplicable='YES' and Temp_Clearingchargemode='E'
+							AND cast(@DATE as datetime) between cast(CONVERT(VARCHAR(11),ServTax_DateFrom,106) as datetime)
+							AND cast(CONVERT(VARCHAR(11),isnull(ServTax_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+							AND ServTax_ExchangeSegmentID=@segment
+							AND ServTax_CompanyID=@companyid
+
+							----------------Calculate Transaction Charge FOR FUTSTK------------------
+							update #Charges set Temp_TotalClearingcharge=
+																 round((((
+																		isnull(Temp_FUTMkt,0.0)+
+																		isnull(Temp_OPTMkt,0.0)+
+																		isnull(Temp_FUTEXPMkt,0.0)+
+																		isnull(Temp_OPTEXCASNMkt,0.0)
+																		)
+																		*isnull(Temp_ClearingChargeRate1,0))
+																		/100),2)
+							WHERE Temp_Clearingchargemode='E'
+							-----------------Calculate Service Tax Of Transaction charge----
+							update #Charges set Temp_ServiceTaxOnClearingCharge=round(((Temp_TotalClearingcharge*Temp_ServiceTax)/100),2)
+							WHERE Temp_STApplicable='Yes' AND Temp_Clearingchargemode='E'
+
+							update #Charges set Temp_EduCessOnClearingCharge=round(((Temp_ServiceTaxOnClearingCharge*Temp_ServTaxEduCess)/100),2),
+												Temp_HgrEduCessOnTranCharge=round(((Temp_ServiceTaxOnClearingCharge*Temp_ServTaxHgrEduCess)/100),2) 
+							WHERE Temp_STApplicable='Yes' AND Temp_Clearingchargemode='E'
+								 
+							----------MAIN TABLE UPDATE
+							Update #TempCntr Set CLRINGCHARGE=TXAmount,
+												SRVTAXCLRINGCHARGE=STaxOnTXAmount,
+												EDUCESSONCLRINGCHARGE=EduCessOnTXAmount,
+												HGRONCLRINGCHARGE=HEduCessOnTXAmount,
+												CLRINGCHARGEMODE=CASE WHEN CLBasis=2 THEN 'E' WHEN CLBasis=1 THEN 'I' ELSE 'N' END,
+												#TempCntr.CTTax=#TmpCustomerSummary.CTTax
+												from #TmpCustomerSummary
+												where #TempCntr.CUSTOMERID=#TmpCustomerSummary.CustomerID
+							
+							
+						
+					END----------IF CLEARING CHARGES END
+					IF @STAMPCHARGES='Y'
+					BEGIN----------IF STAMP CHARGES BEGIN
+
+						ALTER TABLE #Charges ADD Temp_State int,CalBasis varchar(50),CLIENTTYPE VARCHAR(50),
+						RateCLFut numeric(28,6),RateCLOpt numeric(28,6),RateCLFS numeric(28,6),
+						CntrSlabMultiple numeric(28,0),MinCntr numeric(28,6),SlabAmount numeric(28,6),
+						MaxCntr numeric(28,6),
+						Temp_FUTStamduty numeric(28,6),Temp_OPTStamduty numeric(28,6),Temp_FSStamduty numeric(28,6),
+						Temp_EXPStamduty numeric(28,6),Temp_TotalStamduty numeric(28,6),
+						OPTBasis VARCHAR(50),Temp_STAMPmode VARCHAR(50)
+
+
+						IF EXISTS(SELECT 'Y' FROM Config_StampDuty WHERE StampDuty_COMPANYID=@companyid AND StampDuty_ApplicableState<>0 AND StampDuty_EXCHANGESEGMENTID=@segment AND cast(@DATE as datetime) BETWEEN StampDuty_DATEFROM AND isnull(StampDuty_DATETO,'2100-01-01 00:00:00.000')) 
+						BEGIN
+																			 
+							UPDATE #Charges SET Temp_State=isnull(add_state,0)
+							FROM tbl_master_address
+							WHERE add_cntID=Temp_Clientsid AND add_entity='Customer/Client' AND 
+							add_addressType=(select top 1 add_addressType from 
+												(select add_addressType,
+												case when rtrim(ltrim(add_addressType))='Registered' then 1
+												when rtrim(ltrim(add_addressType))='Correspondence' then 2
+												when rtrim(ltrim(add_addressType))='Residence' then 3
+												else 4 end as addreorder
+												from tbl_master_address where 
+												add_cntID=Temp_Clientsid
+												and add_entity='Customer/Client') tb
+											order by addreorder)
+						END
+						UPDATE #Charges SET Temp_State=isnull(Temp_State,0)
+
+						update #Charges set 
+						CLIENTTYPE=ISNULL(CNT_CLIENTTYPE,'Retail'),
+						CalBasis=StampDuty_CalBasis,
+						RateCLFut=StampDuty_RateCLFut,
+						RateCLOpt=StampDuty_RateCLOpt,
+						RateCLFS=StampDuty_RateCLFS,
+						CntrSlabMultiple=StampDuty_CntrSlabMultiple,
+						SlabAmount=StampDuty_SlabAmount,
+						MinCntr=StampDuty_MinCntr,
+						MaxCntr=StampDuty_MaxCntr,
+						OPTBasis=StampDuty_OPTBasis,
+						Temp_STAMPmode=CASE WHEN ChargeSetup_ChargeBasis='2' THEN 'E'
+											WHEN ChargeSetup_ChargeBasis='1' THEN 'I'
+											ELSE NULL END
+						from Config_StampDuty,Config_ChargeSetup,TBL_MASTER_CONTACT
+						WHERE ChargeSetup_ChargeType='SD' 
+						AND CNT_INTERNALID=Temp_Clientsid
+						AND StampDuty_ApplicableState=isnull(Temp_State,0)
+						AND ChargeSetup_MainID=Temp_BrokerageId
+						AND StampDuty_ChargeGroupID=ChargeSetup_ChargeGroup
+						AND cast(@date as datetime) between cast(CONVERT(VARCHAR(11),StampDuty_DateFrom,106) as datetime) 
+						AND cast(CONVERT(VARCHAR(11),isnull(StampDuty_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+						AND StampDuty_ExchangeSegmentID=@segment
+						AND StampDuty_CompanyID=@companyid
+
+						update #Charges set  
+						CLIENTTYPE=ISNULL(CNT_CLIENTTYPE,'Retail'),
+						CalBasis=StampDuty_CalBasis,
+						RateCLFut=StampDuty_RateCLFut,
+						RateCLOpt=StampDuty_RateCLOpt,
+						RateCLFS=StampDuty_RateCLFS,
+						CntrSlabMultiple=StampDuty_CntrSlabMultiple,
+						SlabAmount=StampDuty_SlabAmount,
+						MinCntr=StampDuty_MinCntr,
+						MaxCntr=StampDuty_MaxCntr,
+						OPTBasis=StampDuty_OPTBasis,
+						Temp_STAMPmode=CASE WHEN ChargeSetup_ChargeBasis='2' THEN 'E'
+											WHEN ChargeSetup_ChargeBasis='1' THEN 'I'
+											ELSE NULL END
+						from Config_StampDuty,Config_ChargeSetup,TBL_MASTER_CONTACT
+						WHERE ChargeSetup_ChargeType='SD' 
+						AND CNT_INTERNALID=Temp_Clientsid AND StampDuty_ApplicableState=0 AND RateCLFut IS NULL
+						AND ChargeSetup_MainID=Temp_BrokerageId
+						AND StampDuty_ChargeGroupID=ChargeSetup_ChargeGroup
+						AND cast(@date as datetime) between cast(CONVERT(VARCHAR(11),StampDuty_DateFrom,106) as datetime) 
+						AND cast(CONVERT(VARCHAR(11),isnull(StampDuty_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+						AND StampDuty_ExchangeSegmentID=@segment
+						AND StampDuty_CompanyID=@companyid
+
+						update #Charges set 
+						Temp_FUTStamduty =round((((ISNULL(Temp_FUTMkt,0))*RateCLFut) /100),2),
+						Temp_OPTStamduty  =round((((ISNULL(Temp_OPTMkt,0))*RateCLOpt)  /100),2),
+						Temp_FSStamduty  =round((((ISNULL(Temp_OPTEXCASNMkt,0))*RateCLFS ) /100),2),
+						Temp_EXPStamduty=round((((ISNULL(Temp_FUTEXPMkt,0))*RateCLFS ) /100),2)
+						where CLIENTTYPE<>'Pro Trading'  and CalBasis='Market Turnover' AND OPTBasis='Premium' AND Temp_STAMPmode='E'
+
+						update #Charges set 
+						Temp_FUTStamduty =round((((ISNULL(Temp_FUTQTYMkt,0))*RateCLFut )/100),2),
+						Temp_OPTStamduty  =round((((ISNULL(Temp_OPTQTYMkt,0))*RateCLOpt ) /100),2),
+						Temp_FSStamduty  =round((((ISNULL(Temp_OPTEXCASNQTYMkt,0) )*RateCLFS ) /100),2),
+						Temp_EXPStamduty=round((((ISNULL(Temp_FUTEXPQTYMkt,0))*RateCLFS ) /100),2)
+						where CLIENTTYPE<>'Pro Trading'  and CalBasis='Market Turnover' AND OPTBasis='Strike'  AND Temp_STAMPmode='E'
+
+						update #Charges set 
+						Temp_FUTStamduty =round((((ISNULL(Temp_FUTMkt,0)+ISNULL(Temp_FUTQTYMkt,0))*RateCLFut) /100),2),
+						Temp_OPTStamduty  =round((((ISNULL(Temp_OPTMkt,0)+ISNULL(Temp_OPTQTYMkt,0))*RateCLOpt ) /100),2),
+						Temp_FSStamduty  =round((((ISNULL(Temp_OPTEXCASNMkt,0)+ISNULL(Temp_OPTEXCASNQTYMkt,0))*RateCLFS)  /100),2),
+						Temp_EXPStamduty=round((((ISNULL(Temp_FUTEXPMkt,0)+ISNULL(Temp_FUTEXPQTYMkt,0))*RateCLFS)  /100),2)
+						where CLIENTTYPE<>'Pro Trading'  and CalBasis='Market Turnover' AND OPTBasis='Premium And Strike'  AND Temp_STAMPmode='E'
+
+						update #Charges set Temp_TotalStamduty=(ISNULL(Temp_FUTStamduty,0)+ISNULL(Temp_OPTStamduty,0)+ISNULL(Temp_FSStamduty,0)+ISNULL(Temp_EXPStamduty,0))
+						where CalBasis='Market Turnover'  AND Temp_STAMPmode='E'
+						------***********************
+--						update #Charges set Temp_TotalStamduty=(ISNULL(Temp_FUTSTKMkt,0)+ISNULL(Temp_FUTIDXMkt,0) +
+--																ISNULL(Temp_OPTSTKMkt,0) +ISNULL(Temp_OPTIDXMkt,0) +
+--																ISNULL(Temp_OPTSTKEXCASNMkt,0) +ISNULL(Temp_OPTIDXEXCASNMkt,0)+
+--																ISNULL(Temp_FUTEXPMkt,0) )
+--						where CalBasis='Contract Value' AND OPTBasis='Premium'  AND Temp_STAMPmode='E'
+
+						update #Charges set Temp_TotalStamduty=(ISNULL(Temp_FUTQTYMkt,0)+ISNULL(Temp_FUTMkt,0)+
+																ISNULL(Temp_OPTQTYMkt,0) +ISNULL(Temp_OPTMkt,0) +
+																ISNULL(Temp_OPTEXCASNQTYMkt,0)+ISNULL(Temp_OPTEXCASNMkt,0)+
+																ISNULL(Temp_FUTEXPQTYMkt,0)+ISNULL(Temp_FUTEXPMkt,0) )
+						where CalBasis='Contract Value' AND OPTBasis='Premium And Strike'  AND Temp_STAMPmode='E'
+
+						update #Charges set Temp_TotalStamduty=(ISNULL(Temp_FUTQTYMkt,0)+
+																ISNULL(Temp_OPTQTYMkt,0)+
+																ISNULL(Temp_OPTEXCASNQTYMkt,0)+
+																ISNULL(Temp_FUTEXPQTYMkt,0) )
+						where CalBasis='Contract Value' AND OPTBasis='Strike'  AND Temp_STAMPmode='E'
+
+						update #Charges set Temp_TotalStamduty=case when MinCntr>[dbo].[fn_NSECMChargesRoundOffFORNETAMOUNT]
+																(3,((SlabAmount)/CntrSlabMultiple)) and MinCntr<>0 then MinCntr
+
+																when MaxCntr>[dbo].[fn_NSECMChargesRoundOffFORNETAMOUNT]
+																(3,((SlabAmount)/CntrSlabMultiple))  and MaxCntr<>0 then MaxCntr 
+
+																else [dbo].[fn_NSECMChargesRoundOffFORNETAMOUNT]
+																(3,((SlabAmount)/CntrSlabMultiple)) end
+
+					   where CLIENTTYPE<>'Pro Trading'  and CalBasis='Contract Value'  AND Temp_STAMPmode='E'
+
+						----------MAIN TABLE FETCH
+						UPDATE #TempCntr SET STAMPCHARGE=Temp_TotalStamduty,STAMPCHARGEMODE=Temp_STAMPmode
+						FROM #Charges WHERE CustomerID=Temp_Clientsid AND CNTRNO=TEMP_CNTRNO		
+
+		
+					END----------IF STAMP CHARGES END
+					IF @SEBICHARGES='Y'
+					BEGIN----------IF SEBI CHARGES BEGIN
+							ALTER TABLE #Charges ADD 
+							Temp_sebifeerate numeric(28,6),Temp_sebifeerateOpt numeric(28,6),Temp_applicabel varchar(20),Temp_sebifee numeric(28,6),
+							TEMP_SEBIMODE VARCHAR(50)	
+
+							update #Charges set Temp_sebifeerate=isnull(sebifee_rate,0),
+												Temp_sebifeerateOpt=isnull(SebiFee_RateOPT,0),
+												Temp_applicabel=sebifee_Applicablefor,
+												TEMP_SEBIMODE=CASE WHEN ChargeSetup_ChargeBasis='2' THEN 'E'
+																   WHEN ChargeSetup_ChargeBasis='1' THEN 'I'
+															  ELSE NULL END
+							from config_sebifee,Config_ChargeSetup
+							where ChargeSetup_ChargeType='SF'
+							and sebifee_Applicablefor not in('None','NA')
+							and ChargeSetup_MainID=Temp_BrokerageId
+							and sebifee_ChargeGroupID=ChargeSetup_ChargeGroup
+							and cast(@DATE as datetime) between cast(CONVERT(VARCHAR(11),sebifee_DateFrom,106) as datetime)
+							and cast(CONVERT(VARCHAR(11),isnull(sebifee_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+							and sebifee_ExchangeSegmentID=@segment
+							and sebifee_CompanyID=@companyid
+
+																					
+							update #Charges set Temp_sebifee=round((   ((
+																		(isnull(Temp_FUTMkt,0.0)*(Temp_sebifeerate) /100)+
+																		(isnull(Temp_OPTMkt,0.0)*(Temp_sebifeerateOpt) /100)
+																		))),2) 
+							WHERE TEMP_SEBIMODE='E'
+																			
+							UPDATE #TempCntr SET SEBICHARGE=Temp_sebifee,SEBIMODE=TEMP_SEBIMODE 
+							FROM #Charges WHERE CustomerID=Temp_Clientsid  AND CNTRNO=TEMP_CNTRNO
+
+						END----------IF SEBI CHARGES END
+					IF @OTHERCHARGES='Y'
+					BEGIN---------OTHER CHARGES BEGIN
+								
+							ALTER TABLE #Charges ADD Temp_OtherChargID int,Temp_OtherChargOn varchar(200),Temp_OtherchargesName varchar(50),
+							Temp_OtherChargesRate numeric(28,6),Temp_ChargeGroup varchar(100),Temp_OtherChargCode varchar(50),
+							Temp_OTHERServiceTax numeric(8,6),Temp_OTHERServTaxEduCess numeric(8,6),Temp_OTHERServTaxHgrEduCess numeric(8,6),
+							Temp_OtherchargesResult numeric(28,6),Temp_OTHERServiceTaxOnCharge numeric(18,6),
+							Temp_OTHEREduCessOnCharge numeric(18,6),Temp_OTHERHgrEduCessOnCharge numeric(18,6),
+							Temp_OTHERTotalCharge numeric(18,6),STApplicable VARCHAR(50)
+
+							update #Charges set Temp_OtherChargCode=OtherChargeMember_OtherChargeCode 
+							from Trans_OtherChargeMember
+							where cast(@date as datetime) between 
+							cast(CONVERT(VARCHAR(11),OtherChargeMember_DateFrom,106) as datetime) 
+							AND cast(CONVERT(VARCHAR(11),isnull(OtherChargeMember_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+							AND OtherChargeMember_SegmentID=@Segment
+							AND OtherChargeMember_CompanyID=@Companyid
+							AND OtherChargeMember_CustomerID=Temp_Clientsid
+
+							update #Charges set  Temp_OtherChargID=OtherCharges_ID,
+							Temp_OtherChargOn=OtherCharges_ChargeOn,
+							Temp_OtherchargesName=OtherCharges_Name from
+							Master_OtherCharges where
+							OtherCharges_Code=Temp_OtherChargCode
+
+							update #Charges set  Temp_OtherChargesRate=OtherCharge_Rate,
+												  Temp_ChargeGroup=OtherCharge_ChargeGroupID,
+												  STApplicable=OtherCharge_STApplicable
+ 
+							 from Config_OtherChargeRates
+							 where OtherCharge_MasterID=Temp_OtherChargID
+							 and cast(@date as datetime) between 
+							 cast(CONVERT(VARCHAR(11),OtherCharge_ApplicableFrom,106) as datetime) 
+							 and cast(CONVERT(VARCHAR(11),isnull(OtherCharge_ApplicableUntil,'2100-01-01 00:00:00.000'),106) as datetime)
+							 and OtherCharge_ExchangeSegmentID=@Segment
+							 and OtherCharge_CompanyID=@Companyid
+									
+							update #Charges set	        Temp_OTHERServiceTax=ServTax_Rate,Temp_OTHERServTaxEduCess = ServTax_EduCess,  
+															Temp_OTHERServTaxHgrEduCess =ServTax_HgrEduCess from Config_ServTax
+															where ServTax_ChargeGroupID=Temp_ChargeGroup
+															and cast(@date as datetime) between cast(CONVERT(VARCHAR(11),ServTax_DateFrom,106) as datetime)
+															and cast(CONVERT(VARCHAR(11),isnull(ServTax_DateTo,'2100-01-01 00:00:00.000'),106) as datetime)
+															and ServTax_ExchangeSegmentID=@segment
+															and ServTax_CompanyID=@companyid
+
+						    update #Charges set Temp_OtherchargesResult=
+														round((((ISNULL(Temp_FUTMkt,0)+ISNULL(Temp_OPTMkt,0))*Temp_OtherChargesRate) /100),2)
+							where Temp_OtherChargOn='Turnover'
+
+						    update #Charges set Temp_OTHERServiceTaxOnCharge=
+														round((Temp_OtherchargesResult*Temp_OTHERServiceTax /100),2)
+						    where Temp_OtherChargOn='Turnover'
+											 
+						    update #Charges set Temp_OTHEREduCessOnCharge=round((Temp_OTHERServiceTaxOnCharge*Temp_OTHERServTaxEduCess /100),2),
+													 Temp_OTHERHgrEduCessOnCharge=round((Temp_OTHERServiceTaxOnCharge*Temp_OTHERServTaxHgrEduCess /100),2)
+							where Temp_OtherChargOn='Turnover'
+
+							UPDATE #TempCntr SET OTHERCHARGECODE=Temp_OtherChargCode,
+											OTHERCHARGE=ISNULL(Temp_OtherchargesResult,0),
+											SRVTAXOTHERCHARGE=ISNULL(Temp_OTHERServiceTaxOnCharge,0),
+											SRVTAXEDUCESSOTHERCHARGE=ISNULL(Temp_OTHEREduCessOnCharge,0),
+											SRVTAXHGREDUCESSOTHERCHARGE=ISNULL(Temp_OTHERHgrEduCessOnCharge,0)
+							FROM #Charges WHERE CustomerID=Temp_Clientsid 
+
+					END---------OTHER CHARGES END
+	
+						
+					------------BRKG FETCH
+					update #Charges set BRKGCHARGESETUP=CASE WHEN ChargeSetup_ChargeBasis='2' THEN 'E'
+															 WHEN ChargeSetup_ChargeBasis='1' THEN 'I'
+														ELSE NULL END
+					from Config_ChargeSetup 
+					where ChargeSetup_MainID=Temp_BrokerageId and  ChargeSetup_ChargeType='ST'
+
+					UPDATE #TempCntr SET BRKGMODE=BRKGCHARGESETUP FROM #Charges 
+					WHERE CustomerID=Temp_Clientsid 
+
+					UPDATE #TempCntr SET NETPATTERN=CHARGE_NETROUNDPATTERN FROM #Charges 
+					WHERE CustomerID=Temp_Clientsid 
+
+
+					-----------------UPDATE MKT VALUE AND BRKG IN MAIN TABLE
+					UPDATE #TempCntr SET     DelFutTO=ISNULL(Temp_FUTMkt,0),
+											 SqrOptPrmTO=ISNULL(Temp_OPTMkt,0),
+											 FUTFINALSETTTO=ISNULL(Temp_FUTEXPMkt,0),
+											 ASCEXCTO=ISNULL(Temp_OPTEXCASNMkt,0),
+											 DelFutBrokerage=ISNULL(Temp_FUTBRKG,0),
+											 SqrOptBrokerage=ISNULL(Temp_OPTBRKG,0),
+											 FUTFINALSETTBrokerage=ISNULL(Temp_FUTEXPBRKG,0),
+											 ASNEXCBRKG=ISNULL(Temp_OPTEXCASNBRKG,0)
+					FROM #Charges WHERE CustomerID=Temp_Clientsid AND CNTRNO=TEMP_CNTRNO
+
+
+					----------CHARGES FETCH
+					update #TempCntr set NetValue=case when BRKGMODE='E' then (isnull(NetValue,0)-isnull(ServiceTaxOnBrkg,0)-isnull(EduCessOnBrkg,0)-isnull(HgrEduCessOnBrkg,0)) else isnull(NetValue,0) end
+					update #TempCntr set NetValue=isnull(NetValue,0)-isnull(TRANCHARGE,0)-ISNULL(SRVTAXTRANCHARGE,0)-isnull(EDUCESSONTRANCHARGE,0)-isnull(HGRONTRANCHARGE,0)
+					update #TempCntr set NetValue=isnull(NetValue,0)-isnull(CLRINGCHARGE,0)-ISNULL(SRVTAXCLRINGCHARGE,0)-isnull(EDUCESSONCLRINGCHARGE,0)-isnull(HGRONCLRINGCHARGE,0)
+					update #TempCntr set NetValue=isnull(NetValue,0)-isnull(STAMPCHARGE,0)
+					update #TempCntr set NetValue=isnull(NetValue,0)-isnull(SEBICHARGE,0)
+					update #TempCntr set NetValue=isnull(NetValue,0)-isnull(OTHERCHARGE,0)-ISNULL(SRVTAXOTHERCHARGE,0)-ISNULL(SRVTAXEDUCESSOTHERCHARGE,0)-ISNULL(SRVTAXHGREDUCESSOTHERCHARGE,0) 
+
+------------INSERT INTO MAIN TABLE
+Insert into Trans_ContractNotes
+(ContractNotes_CompanyID,ContractNotes_BranchID,ContractNotes_SegmentID,ContractNotes_FinYear,
+ContractNotes_TradeDate,ContractNotes_SettlementNumber,ContractNotes_SettlementType,
+ContractNotes_Number,ContractNotes_CustomerID,
+ContractNotes_DelFutTO,ContractNotes_SqrOptPrmTO,ContractNotes_FutFinalSettlementTO,ContractNotes_ExcAsnTO,ContractNotes_TotalTO,
+ContractNotes_GeneratedBy,ContractNotes_GenerateDateTime,
+ContractNotes_DelFutBrokerage,ContractNotes_SqrOptBrokerage,ContractNotes_FutFinalSettlementBrokerage,ContractNotes_ExcAsnBrkg,ContractNotes_TotalBrokerage,
+ContractNotes_ServiceTaxMode,ContractNotes_TranChargeMode,ContractNotes_StampDutyMode,ContractNotes_SEBIFeeMode,
+ContractNotes_TransactionCharges,ContractNotes_ServiceTaxOnTranCharge,ContractNotes_EduCessOnTranCharge,
+ContractNotes_HgrEduCessOnTranCharge,
+ContractNotes_ServiceTaxOnBrkg,ContractNotes_EduCessOnBrkg,ContractNotes_HgrEduCessOnBrkg,
+ContractNotes_StampDuty,
+ContractNotes_TotalServiceTax,
+ContractNotes_TotalEduCess,
+ContractNotes_TotalHgrEduCess,
+ContractNotes_GrossAmount,ContractNotes_RoundAmount,ContractNotes_NetAmount,
+ContractNotes_NetNDAmount,ContractNotes_SEBIFee,
+ContractNotes_OtherCharges,ContractNotes_ServiceTaxOnOtherCharges,
+ContractNotes_EduCessOnOtherCharges,ContractNotes_HgrEduCessOnOtherCharges,
+ContractNotes_STTAmount
+,ContractNotes_ClearingCharges,ContractNotes_ServTaxOnClearingCharges,ContractNotes_EduCessOnClearingCharges
+,ContractNotes_HgrEduCessOnClearingCharges,ContractNotes_ClearingChargesMode)
+										 
+Select @companyid ,BRANCH,@segment,@FINYEAR,CAST(@DATE AS DATETIME),
+		@settlementnom,@settlementtype,
+		CNTRNO,CUSTOMERID,
+		DelFutTO,SqrOptPrmTO,FUTFINALSETTTO,ASCEXCTO,(isnull(DelFutTO,0)+isnull(SqrOptPrmTO,0)+ISNULL(FUTFINALSETTTO,0)+ISNULL(ASCEXCTO,0)),
+		@CreateUser,GETDATE() ,
+		DelFutBrokerage,SqrOptBrokerage,FUTFINALSETTBrokerage,ASNEXCBRKG,(isnull(DelFutBrokerage,0)+isnull(SqrOptBrokerage,0)+ISNULL(FUTFINALSETTBrokerage,0)+ISNULL(ASNEXCBRKG,0)),
+		BRKGMODE,TRANCHARGEMODE,STAMPCHARGEMODE,SEBIMODE,
+		TRANCHARGE,SRVTAXTRANCHARGE,EDUCESSONTRANCHARGE ,HGRONTRANCHARGE ,
+		ServiceTaxOnBrkg,EduCessOnBrkg,HgrEduCessOnBrkg,
+		STAMPCHARGE,
+		(isnull(ServiceTaxOnBrkg,0)+isnull(SRVTAXTRANCHARGE,0)+ISNULL(SRVTAXOTHERCHARGE,0)),
+		(isnull(EduCessOnBrkg,0)+isnull(EDUCESSONTRANCHARGE,0)+ISNULL(SRVTAXEDUCESSOTHERCHARGE,0)),
+		(isnull(HgrEduCessOnBrkg,0)+isnull(HGRONTRANCHARGE,0)+ISNULL(SRVTAXHGREDUCESSOTHERCHARGE,0)),
+		NetValue,
+		(NetValue-(dbo.fn_NSECMChargesRoundOffFORNETAMOUNT(NETPATTERN,NetValue))),
+		(NetValue-(NetValue-(dbo.fn_NSECMChargesRoundOffFORNETAMOUNT(NETPATTERN,NetValue)))),
+		NetNDAmount,SEBICHARGE,
+		OTHERCHARGE,SRVTAXOTHERCHARGE,SRVTAXEDUCESSOTHERCHARGE,SRVTAXHGREDUCESSOTHERCHARGE
+		,CTTax
+		,CLRINGCHARGE,SRVTAXCLRINGCHARGE,EDUCESSONCLRINGCHARGE,HGRONCLRINGCHARGE,CLRINGCHARGEMODE 
+from #TempCntr
+
+
+DROP TABLE #TempCntrBRKGPATTERN
+DROP TABLE #TempCntr
+DROP TABLE #TEMPCHARGE
+DROP TABLE #TAB
+DROP TABLE #Charges
+DROP TABLE #TmpCustomerSummary
+DROP TABLE #tmpCustomerTrades
+END---------MAIN SP END
+
+
+

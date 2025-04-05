@@ -1,0 +1,19 @@
+name: Sync Local Folder
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 * * * *'  # Optional: Hourly sync
+
+jobs:
+  sync:
+    runs-on: self-hosted  # Targets your Windows server
+    steps:
+      - name: Sync Local Folder
+        run: |
+          cd "C:\FitOffice-AI\Published"
+          git pull origin main
+          echo "Local folder synced with remote repository"
+        shell: cmd  # Use Windows CMD shell
